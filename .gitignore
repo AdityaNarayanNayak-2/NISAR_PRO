@@ -1,0 +1,20 @@
+# Documentation
+Docs/
+
+# Rust Build Artifacts
+target/
+**/*.rs.bk
+
+# Node/React Build Artifacts
+node_modules/
+sar-dashboard-v2/node_modules/
+sar-dashboard-v2/build/
+
+# Docker Archives
+*.tar
+
+# System & IDE
+.DS_Store
+.vscode/
+.idea/
+.tar
