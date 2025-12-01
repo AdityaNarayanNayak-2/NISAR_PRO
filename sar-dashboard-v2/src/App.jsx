@@ -17,6 +17,13 @@ const mockJobs = [
 function App() {
     const [jobs, setJobs] = useState(mockJobs);
 
+    const handleSearchResults = (newJobs) => {
+        // Prepend new search results to the job list
+        setJobs(prev => [...newJobs, ...prev]);
+        // Scroll to live feed
+        document.getElementById('live-data').scrollIntoView({ behavior: 'smooth' });
+    };
+
     useEffect(() => {
         const interval = setInterval(() => {
             setJobs(prevJobs =>
@@ -36,7 +43,7 @@ function App() {
     return (
         <div className="app-container">
             <Navbar />
-            <Hero />
+            <Hero onSearchResults={handleSearchResults} />
             <LiveFeed jobs={jobs} />
             <Footer />
         </div>

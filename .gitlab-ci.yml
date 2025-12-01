@@ -1,10 +1,15 @@
 stages:
   - build
   - test
+  - package
   - security
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  # Use the overlay driver for better performance
+  DOCKER_DRIVER: overlay2
+  # Disable TLS verification for simple setups (optional, but good for some envs)
+  DOCKER_TLS_CERTDIR: ""
 
 # Cache configuration for Rust
 .rust_cache: &rust_cache
@@ -65,7 +70,7 @@ audit_rust:
 
 # --- Node.js Jobs ---
 
-build_dashboard:
+build_dashboard_code:
   stage: build
   image: node:18
   <<: *node_cache
@@ -76,3 +81,31 @@ build_dashboard:
   artifacts:
     paths:
       - sar-dashboard-v2/build/
+
+# --- Docker Build & Push (GitLab Registry) ---
+
+docker_build_gateway:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  script:
+    - cd sar-gateway
+    - docker build -t $CI_REGISTRY_IMAGE/sar-gateway:latest .
+    - docker push $CI_REGISTRY_IMAGE/sar-gateway:latest
+
+docker_build_dashboard:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  dependencies:
+    - build_dashboard_code
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  script:
+    - cd sar-dashboard-v2
+    - docker build -t $CI_REGISTRY_IMAGE/sar-dashboard:latest .
+    - docker push $CI_REGISTRY_IMAGE/sar-dashboard:latest
