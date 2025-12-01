@@ -1,0 +1,78 @@
+stages:
+  - build
+  - test
+  - security
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+
+# Cache configuration for Rust
+.rust_cache: &rust_cache
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}-rust
+    paths:
+      - .cargo/
+      - target/
+      - sar_processor/target/
+      - sar_operator_v2/target/
+      - sar-gateway/target/
+
+# Cache configuration for Node
+.node_cache: &node_cache
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}-node
+    paths:
+      - sar-dashboard-v2/node_modules/
+
+# --- Rust Jobs ---
+
+build_rust:
+  stage: build
+  image: rust:latest
+  <<: *rust_cache
+  script:
+    - echo "Building SAR Processor..."
+    - cd sar_processor && cargo build --release && cd ..
+    - echo "Building SAR Operator..."
+    - cd sar_operator_v2 && cargo build --release && cd ..
+    - echo "Building SAR Gateway..."
+    - cd sar-gateway && cargo build --release && cd ..
+  artifacts:
+    paths:
+      - sar_processor/target/release/sar_processor
+      - sar_operator_v2/target/release/sar_operator_v2
+      - sar-gateway/target/release/sar-gateway
+
+test_rust:
+  stage: test
+  image: rust:latest
+  <<: *rust_cache
+  script:
+    - echo "Testing Rust Components..."
+    - cd sar_processor && cargo test && cd ..
+    - cd sar_operator_v2 && cargo test && cd ..
+    - cd sar-gateway && cargo test && cd ..
+
+audit_rust:
+  stage: security
+  image: rust:latest
+  allow_failure: true
+  script:
+    - cargo install cargo-audit
+    - cd sar_processor && cargo audit
+    - cd ../sar_operator_v2 && cargo audit
+    - cd ../sar-gateway && cargo audit
+
+# --- Node.js Jobs ---
+
+build_dashboard:
+  stage: build
+  image: node:18
+  <<: *node_cache
+  script:
+    - cd sar-dashboard-v2
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - sar-dashboard-v2/build/
