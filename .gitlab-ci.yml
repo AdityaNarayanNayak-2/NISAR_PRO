@@ -76,7 +76,7 @@ build_dashboard_code:
   <<: *node_cache
   script:
     - cd sar-dashboard-v2
-    - npm ci
+    - npm install
     - npm run build
   artifacts:
     paths:
