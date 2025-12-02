@@ -2,24 +2,25 @@
 
 Welcome to the SAR Analyzer project! This guide is designed to help you understand the system, set up your development environment, and start contributing code—even if you are new to Rust or Kubernetes.
 
-## 1. System Overview
+### 1. System Overview
+The SAR Analyzer is a distributed system designed for processing Sentinel-1 and NISAR data.
+It consists of four main components:
 
-The SAR Analyzer is a cloud-native application designed to process Synthetic Aperture Radar (SAR) data at scale. It consists of three main components:
+1.  **SAR Dashboard (`sar-dashboard-v2`)**: A React-based "Space Agency" style web interface. It uses Nginx as a reverse proxy to route API requests.
+2.  **SAR Gateway (`sar-gateway`)**: A Rust microservice that acts as a unified search interface for ESA, Bhoonidhi, and NASA APIs. It handles authentication and OData queries.
+3.  **SAR Operator (`sar_operator_v2`)**: A Kubernetes Operator (Rust) that watches for `SarJob` CRDs and orchestrates processing jobs.
+4.  **SAR Processor (`sar_processor`)**: The worker unit (Rust) that performs the actual data analysis. It includes a **Smart Downloader** for fetching specific byte ranges (10km chunks) of large GeoTIFFs.
 
+### 2. Architecture Diagram
 ```mermaid
 graph TD
-    User[User] -->|View Status| Dashboard[SAR Dashboard (React)]
-    User -->|Submit Job| K8s[Kubernetes API]
-    Operator[SAR Operator (Rust)] -->|Watches| K8s
-    Operator -->|Creates| Job[SAR Processor Job (Rust)]
-    Job -->|Reads Data| Storage[Data Storage]
-    Job -->|Writes Output| Storage
+    User[User] -->|Browser| Dashboard[SAR Dashboard (Nginx)]
+    Dashboard -->|/api| Gateway[SAR Gateway]
+    Gateway -->|OData| ESA[ESA API]
+    Dashboard -->|K8s API| Operator[SAR Operator]
+    Operator -->|Spawns| Processor[SAR Processor Pod]
+    Processor -->|Range Request| ESA_Data[ESA Data Archive]
 ```
-
-### Components
-1.  **SAR Processor (`sar_processor`)**: The "engine". A high-performance Rust binary that performs the actual signal processing (currently simulated).
-2.  **SAR Operator (`sar_operator_v2`)**: The "manager". A Kubernetes Operator written in Rust that watches for `SarJob` custom resources and orchestrates the processing jobs.
-3.  **SAR Dashboard (`sar-dashboard-v2`)**: The "control room". A React-based web UI to visualize job status.
 
 ---
 

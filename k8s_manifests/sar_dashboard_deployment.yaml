@@ -13,6 +13,8 @@ spec:
       labels:
         app: sar-dashboard
     spec:
+      imagePullSecrets:
+        - name: regcred
       containers:
         - name: sar-dashboard
           image: registry.gitlab.com/aditya-narayan-nayak/nisar_pro/sar-dashboard:latest

@@ -12,6 +12,8 @@ spec:
       labels:
         app: sar-gateway
     spec:
+      imagePullSecrets:
+        - name: regcred
       containers:
         - name: sar-gateway
           image: registry.gitlab.com/aditya-narayan-nayak/nisar_pro/sar-gateway:latest

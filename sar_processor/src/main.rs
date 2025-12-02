@@ -1,6 +1,7 @@
 mod algorithm;
 mod errors;
 mod io;
+mod smart_downloader;
 
 use crate::errors::{ProcessorError, Result};
 use log::info;
