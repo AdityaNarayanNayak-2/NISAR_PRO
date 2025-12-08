@@ -18,3 +18,9 @@ sar-dashboard-v2/build/
 .vscode/
 .idea/
 .tar
+
+# Secrets & Env Vars
+k8s_manifests/esa_secret.yaml
+**/*.env
+.env
+*.secret.yaml

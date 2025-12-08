@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Spline from '@splinetool/react-spline';
 import { motion } from 'framer-motion';
 import '../App.css';
 
@@ -14,13 +15,13 @@ const Hero = ({ onSearchResults }) => {
                 const lat = 12.97;
                 const lon = 77.59;
 
-                const response = await fetch(`/ api / search ? lat = ${lat}& lon=${lon} `);
+                const response = await fetch(`/api/search?lat=${lat}&lon=${lon}`);
                 const data = await response.json();
 
                 // Transform ESA data to our Job format
                 const jobs = data.map((scene, index) => ({
                     id: index + 100,
-                    name: `${scene.platform} -${scene.date.substring(0, 10)} `,
+                    name: `${scene.platform} - ${scene.date.substring(0, 10)}`,
                     status: 'Queued',
                     progress: 0
                 }));
@@ -37,21 +38,7 @@ const Hero = ({ onSearchResults }) => {
     return (
         <section className="hero-section" id="home">
             <div className="spline-background">
-                <iframe
-                    src="https://eyes.nasa.gov/apps/solar-system/#/sc_nisar?rate=3&time=2025-12-08T16%3A47%3A25.675+00%3A00&featured=false&detailPanel=false&logo=false&search=false&shareButton=false&menu=false&collapseSettingsOptions=true&hideFullScreenToggle=true&locked=true&hideExternalLinks=true&surfaceMapTiling=true"
-                    allowFullScreen
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        border: 'none',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        zIndex: 0,
-                        pointerEvents: 'none' // Ensure clicks pass through to search bar if needed, or set to 'auto' if interaction is desired
-                    }}
-                    title="NASA Eyes NISAR"
-                ></iframe>
+                <Spline scene="https://prod.spline.design/WRWIO0kZesOjUzTW/scene.splinecode" />
             </div>
 
             <div className="hero-overlay">

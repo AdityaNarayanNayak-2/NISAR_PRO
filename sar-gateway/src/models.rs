@@ -9,6 +9,7 @@ pub struct SearchQuery {
 }
 
 #[derive(Serialize, Debug)]
+#[allow(dead_code)]
 pub struct SarScene {
     pub id: String,
     pub platform: String,
@@ -18,12 +19,14 @@ pub struct SarScene {
 }
 
 // ESA OData Response Models (Simplified)
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct EsaODataResponse {
     pub value: Vec<EsaProduct>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct EsaProduct {
     #[serde(rename = "Id")]
     pub id: String,
@@ -34,7 +37,8 @@ pub struct EsaProduct {
     // Add other fields as needed
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct ContentDate {
     #[serde(rename = "Start")]
     pub start: String,
