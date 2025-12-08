@@ -35,6 +35,14 @@ build_rust:
   stage: build
   image: rust:latest
   <<: *rust_cache
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - sar_processor/**/*
+        - sar_operator_v2/**/*
+        - sar-gateway/**/*
+        - Cargo.toml
+        - Cargo.lock
   script:
     - echo "Building SAR Processor..."
     - cd sar_processor && cargo build --release && cd ..
@@ -52,6 +60,14 @@ test_rust:
   stage: test
   image: rust:latest
   <<: *rust_cache
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - sar_processor/**/*
+        - sar_operator_v2/**/*
+        - sar-gateway/**/*
+        - Cargo.toml
+        - Cargo.lock
   script:
     - echo "Testing Rust Components..."
     - cd sar_processor && cargo test && cd ..
@@ -62,6 +78,14 @@ audit_rust:
   stage: security
   image: rust:latest
   allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - sar_processor/**/*
+        - sar_operator_v2/**/*
+        - sar-gateway/**/*
+        - Cargo.toml
+        - Cargo.lock
   script:
     - cargo install cargo-audit
     - cd sar_processor && cargo audit
@@ -74,6 +98,10 @@ build_dashboard_code:
   stage: build
   image: node:18
   <<: *node_cache
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - sar-dashboard-v2/**/*
   script:
     - cd sar-dashboard-v2
     - npm install
@@ -89,6 +117,10 @@ docker_build_gateway:
   image: docker:latest
   services:
     - docker:dind
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - sar-gateway/**/*
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
@@ -103,6 +135,10 @@ docker_build_dashboard:
     - docker:dind
   dependencies:
     - build_dashboard_code
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - sar-dashboard-v2/**/*
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
