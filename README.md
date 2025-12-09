@@ -1,93 +1,206 @@
 # nisar_pro
 
+# SAR Analyzer Documentation
 
+Welcome to the SAR Analyzer documentation. This platform processes Synthetic Aperture Radar (SAR) data from multiple space agencies (ESA, ISRO, NASA) for Earth observation and analysis.
 
-## Getting started
+## 📚 Documentation Index
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+| Document | Description |
+|----------|-------------|
+| [Getting Started](./getting-started.md) | Setup your development environment |
+| [Architecture](./architecture.md) | System design and component overview |
+| [API Reference](./api-reference.md) | Gateway API endpoints |
+| [Deployment Guide](./deployment.md) | Deploy to Kubernetes |
+| [Contributing](./contributing.md) | How to contribute to this project |
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## 🏗️ Project Structure
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro.git
-git branch -M main
-git push -uf origin main
+sar_analyzer/
+├── sar-dashboard-v3/     # Frontend (React + Vite + Spline 3D)
+├── sar-gateway/          # API Gateway (Rust + Axum)
+├── sar_processor/        # SAR Data Processor (Rust)
+├── sar_operator_v2/      # Kubernetes Operator (Rust + kube-rs)
+├── k8s_manifests/        # Kubernetes YAML files
+├── clusters/             # Flux CD GitOps config
+└── Docs/                 # You are here
 ```
 
-## Integrate with your tools
+## 🛠️ Tech Stack
 
-- [ ] [Set up project integrations](https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro/-/settings/integrations)
+| Layer | Technology |
+|-------|------------|
+| Frontend | React, Vite, Spline 3D, Framer Motion |
+| Backend | Rust, Axum, Tokio |
+| Container | Podman, Docker |
+| Orchestration | Kubernetes (Kind for local) |
+| GitOps | Flux CD |
+| CI/CD | GitLab CI |
+| Registry | GitLab Container Registry |
 
-## Collaborate with your team
+## 🔗 Quick Links
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+- **GitLab Repository**: [gitlab.com/Aditya-Narayan-Nayak/nisar_pro](https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro)
+- **ESA Copernicus**: [dataspace.copernicus.eu](https://dataspace.copernicus.eu)
 
-## Test and Deploy
 
-Use the built-in continuous integration in GitLab.
+# Getting Started
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+This guide will help you set up your local development environment.
 
-***
+## Prerequisites
 
-# Editing this README
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Rust | 1.70+ | Backend development |
+| Node.js | 20+ | Frontend development |
+| Podman/Docker | Latest | Container builds |
+| Kind | Latest | Local Kubernetes |
+| kubectl | Latest | Cluster management |
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## 1. Clone the Repository
 
-## Suggestions for a good README
+```bash
+git clone https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro.git
+cd nisar_pro
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## 2. Start the Frontend (Dashboard)
 
-## Name
-Choose a self-explaining name for your project.
+```bash
+cd sar-dashboard-v3
+npm install
+npm run dev
+```
+Open [http://localhost:5173](http://localhost:5173)
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## 3. Start the Backend (Gateway)
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+cd sar-gateway
+cargo run
+```
+API available at [http://localhost:3000](http://localhost:3000)
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## 4. Local Kubernetes Cluster
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```bash
+# Create cluster
+./kind create cluster --name sar-cluster
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# Load images
+podman build -t localhost/sar-dashboard:latest sar-dashboard-v3/
+podman save localhost/sar-dashboard:latest -o /tmp/dash.tar
+./kind load image-archive /tmp/dash.tar --name sar-cluster
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+# Deploy
+kubectl apply -k k8s_manifests/
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# Access dashboard
+kubectl port-forward svc/sar-dashboard-svc 8080:80
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## 5. Environment Variables
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Create `sar-gateway/.env`:
+```env
+ESA_USERNAME=your_esa_email
+ESA_PASSWORD=your_esa_password
+RUST_LOG=info
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## Next Steps
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+- Read the [Architecture](./architecture.md) to understand the system
+- Check [API Reference](./api-reference.md) for endpoint details
+- See [Contributing](./contributing.md) to submit your first PR
 
-## License
-For open source projects, say how it is licensed.
+# System Architecture
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## High-Level Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         User Browser                            │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │ HTTP :8080
+┌─────────────────────────────▼───────────────────────────────────┐
+│                    Kubernetes Cluster                           │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  sar-dashboard (Nginx + React)                          │    │
+│  │  - Serves static frontend                               │    │
+│  │  - Proxies /api/* to Gateway                            │    │
+│  └─────────────────────────┬───────────────────────────────┘    │
+│                            │ /api/*                              │
+│  ┌─────────────────────────▼───────────────────────────────┐    │
+│  │  sar-gateway (Rust + Axum)                              │    │
+│  │  - OAuth2 authentication with ESA                       │    │
+│  │  - Unified API for multiple data sources                │    │
+│  └─────────────────────────┬───────────────────────────────┘    │
+│                            │                                     │
+│  ┌─────────────────────────▼───────────────────────────────┐    │
+│  │  sar-operator (Kubernetes Operator)                     │    │
+│  │  - Watches SARJob CRDs                                  │    │
+│  │  - Spawns sar-processor pods                            │    │
+│  └─────────────────────────┬───────────────────────────────┘    │
+│                            │                                     │
+│  ┌─────────────────────────▼───────────────────────────────┐    │
+│  │  sar-processor (Job Pod)                                │    │
+│  │  - Downloads SAR data (HTTP Range)                      │    │
+│  │  - Processes GeoTIFF/HDF5                               │    │
+│  │  - Outputs analysis results                             │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────▼───────────────────────────────────┐
+│                    External APIs                                 │
+│  - ESA Copernicus (Sentinel-1)                                  │
+│  - ISRO Bhoonidhi (RISAT)                                       │
+│  - NASA Earthdata (NISAR)                                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Component Details
+
+### 1. sar-dashboard-v3
+- **Tech**: React + Vite + Spline 3D
+- **Purpose**: User interface for searching and viewing SAR data
+- **Key Files**:
+  - `src/components/Hero.jsx` - Search UI with 3D background
+  - `src/components/LiveFeed.jsx` - Job status cards
+  - `nginx.conf` - Reverse proxy config
+
+### 2. sar-gateway
+- **Tech**: Rust + Axum + Tokio
+- **Purpose**: Secure API gateway with OAuth2
+- **Key Files**:
+  - `src/main.rs` - Server setup
+  - `src/handlers.rs` - API endpoints
+  - `src/esa_client.rs` - ESA API integration
+
+### 3. sar-operator
+- **Tech**: Rust + kube-rs
+- **Purpose**: Kubernetes operator for job management
+- **CRD**: `SARJob` custom resource
+
+### 4. sar-processor
+- **Tech**: Rust + GDAL bindings
+- **Purpose**: Actual SAR data processing
+- **Features**:
+  - Smart Downloader (HTTP Range requests)
+  - GeoTIFF/HDF5 parsing
+  - Ship detection, flood mapping
+
+## Data Flow
+
+1. User searches for location in Dashboard
+2. Dashboard calls `/api/search?lat=X&lon=Y`
+3. Nginx proxies to Gateway
+4. Gateway authenticates with ESA OAuth2
+5. Gateway queries Copernicus OData API
+6. Results returned to Dashboard
+7. User clicks "Process"
+8. Gateway creates SARJob CR
+9. Operator detects CR, spawns Processor
+10. Processor downloads and analyzes data
