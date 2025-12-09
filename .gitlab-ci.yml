@@ -96,19 +96,19 @@ audit_rust:
 
 build_dashboard_code:
   stage: build
-  image: node:18
+  image: node:20
   <<: *node_cache
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
       changes:
-        - sar-dashboard-v2/**/*
+        - sar-dashboard-v3/**/*
   script:
-    - cd sar-dashboard-v2
+    - cd sar-dashboard-v3
     - npm install
     - npm run build
   artifacts:
     paths:
-      - sar-dashboard-v2/build/
+      - sar-dashboard-v3/dist/
 
 # --- Docker Build & Push (GitLab Registry) ---
 
@@ -138,10 +138,10 @@ docker_build_dashboard:
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
       changes:
-        - sar-dashboard-v2/**/*
+        - sar-dashboard-v3/**/*
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - cd sar-dashboard-v2
+    - cd sar-dashboard-v3
     - docker build -t $CI_REGISTRY_IMAGE/sar-dashboard:latest .
     - docker push $CI_REGISTRY_IMAGE/sar-dashboard:latest
