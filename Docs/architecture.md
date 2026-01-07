@@ -67,12 +67,22 @@
 - **CRD**: `SARJob` custom resource
 
 ### 4. sar-processor
-- **Tech**: Rust + GDAL bindings
-- **Purpose**: Actual SAR data processing
-- **Features**:
-  - Smart Downloader (HTTP Range requests)
-  - GeoTIFF/HDF5 parsing
-  - Ship detection, flood mapping
+- **Tech**: Rust + rustfft + ndarray (Pure Rust, No Python Dependencies)
+- **Purpose**: **Sovereign SAR data processing** - Independent L0→L1→L2 pipeline
+- **Core Algorithms**:
+  - **Range-Doppler Algorithm (RDA)** - Converts raw radar echoes into focused images
+  - **Range Compression** - FFT-based matched filtering
+  - **Azimuth Compression** - Doppler focusing along flight path
+- **NISAR Support**:
+  - L0B (Raw Signal) → L1 (SLC) → L2 (Geocoded) processing chain
+  - L-band and S-band support
+  - Multi-polarization (Single, Dual, Quad)
+- **Key Files**:
+  - `src/rda.rs` - Range-Doppler Algorithm implementation
+  - `src/radar_utils.rs` - Chirp generation, FFT planning
+  - `src/smart_downloader.rs` - HTTP Range requests for partial downloads
+  - `src/algorithm.rs` - AMTAD ship detection
+
 
 ## Data Flow
 

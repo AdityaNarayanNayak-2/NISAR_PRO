@@ -31,6 +31,7 @@ sar_analyzer/
 |-------|------------|
 | Frontend | React, Vite, Spline 3D, Framer Motion |
 | Backend | Rust, Axum, Tokio |
+| SAR Science | rustfft, ndarray, num-complex (Pure Rust math)|
 | Container | Podman, Docker |
 | Orchestration | Kubernetes (Kind for local) |
 | GitOps | Flux CD |
