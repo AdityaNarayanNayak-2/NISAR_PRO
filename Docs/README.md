@@ -10,6 +10,7 @@ Welcome to the SAR Analyzer documentation. This platform processes Synthetic Ape
 | [Architecture](./architecture.md) | System design and component overview |
 | [API Reference](./api-reference.md) | Gateway API endpoints |
 | [Deployment Guide](./deployment.md) | Deploy to Kubernetes |
+| [Verification Guide](./verification-guide.md) | Test all system components |
 | [Contributing](./contributing.md) | How to contribute to this project |
 
 ## 🏗️ Project Structure
