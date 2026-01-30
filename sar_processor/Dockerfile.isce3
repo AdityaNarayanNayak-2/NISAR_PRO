@@ -1,0 +1,124 @@
+# ============================================================================
+# ISCE3 Build Container
+# Multi-stage build for SAR Processor with ISCE3 C++ library
+# ============================================================================
+
+# Stage 1: Build ISCE3 from source
+FROM ubuntu:22.04 AS isce3-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libfftw3-dev \
+    libhdf5-dev \
+    libeigen3-dev \
+    libgdal-dev \
+    pybind11-dev \
+    python3-dev \
+    python3-numpy \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone ISCE3 (develop branch)
+WORKDIR /opt
+RUN git clone --depth 1 --branch develop https://github.com/isce-framework/isce3.git
+
+# Build ISCE3
+WORKDIR /opt/isce3/build
+RUN cmake .. \
+    -DCMAKE_INSTALL_PREFIX=/opt/isce3-install \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DWITH_CUDA=OFF \
+    -DBUILD_TESTING=OFF \
+    && make -j$(nproc) \
+    && make install
+
+# ============================================================================
+# Stage 2: Build the C++ facade
+FROM ubuntu:22.04 AS facade-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime and build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    libfftw3-dev \
+    libhdf5-dev \
+    libeigen3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy ISCE3 installation from previous stage
+COPY --from=isce3-builder /opt/isce3-install /opt/isce3-install
+ENV ISCE3_ROOT=/opt/isce3-install
+ENV CMAKE_PREFIX_PATH=/opt/isce3-install
+
+# Copy facade source
+WORKDIR /build/facade
+COPY cxx_iface/ .
+
+# Build facade with ISCE3
+RUN mkdir build && cd build \
+    && cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DWITH_ISCE3=ON \
+    -DWITH_HDF5=ON \
+    && make -j$(nproc) \
+    && make install DESTDIR=/opt/facade-install
+
+# ============================================================================
+# Stage 3: Build Rust SAR Processor with ISCE3
+FROM rust:1.75-slim AS rust-builder
+
+# Install runtime dependencies for linking
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libfftw3-dev \
+    libhdf5-dev \
+    libeigen3-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy ISCE3 and facade libraries
+COPY --from=isce3-builder /opt/isce3-install /opt/isce3-install
+COPY --from=facade-builder /opt/facade-install/usr/local /usr/local
+
+# Set library paths
+ENV LD_LIBRARY_PATH=/opt/isce3-install/lib:/usr/local/lib:$LD_LIBRARY_PATH
+ENV ISCE3_LIB_PATH=/opt/isce3-install/lib
+
+WORKDIR /build/sar_processor
+COPY Cargo.toml Cargo.lock build.rs ./
+COPY src/ src/
+COPY cxx_iface/ cxx_iface/
+
+# Build with ISCE3 feature
+RUN cargo build --release --features isce3
+
+# ============================================================================
+# Stage 4: Runtime image (minimal)
+FROM ubuntu:22.04 AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install only runtime libraries
+RUN apt-get update && apt-get install -y \
+    libfftw3-3 \
+    libhdf5-103 \
+    libgomp1 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy libraries
+COPY --from=isce3-builder /opt/isce3-install/lib /opt/isce3/lib
+COPY --from=facade-builder /opt/facade-install/usr/local/lib /usr/local/lib
+COPY --from=rust-builder /build/sar_processor/target/release/sar_processor /usr/local/bin/
+
+ENV LD_LIBRARY_PATH=/opt/isce3/lib:/usr/local/lib:$LD_LIBRARY_PATH
+
+# Default command
+ENTRYPOINT ["/usr/local/bin/sar_processor"]
