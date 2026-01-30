@@ -43,9 +43,10 @@ impl SARProcessor {
         let fft_proc = FFTProcessor::new(fft_len);
 
         // 3. Create the Matched Filter in Frequency Domain
-        // Pad chirp to line length
+        // Pad chirp to line length (clamp if chirp is longer than data)
         let mut padded_chirp = vec![Complex32::zero(); fft_len];
-        for i in 0..chirp_len {
+        let copy_len = chirp_len.min(fft_len); // Prevent index out of bounds
+        for i in 0..copy_len {
             padded_chirp[i] = chirp[i];
         }
 

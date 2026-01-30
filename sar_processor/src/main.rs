@@ -1,16 +1,9 @@
-mod algorithm;
-mod errors;
-mod io;
-mod isce3_ffi;
-mod radar_utils;
-mod rda;
-mod smart_downloader;
-
-use crate::errors::{ProcessorError, Result};
-use crate::rda::SARProcessor;
 use log::info;
 use ndarray::Array2;
 use num_complex::Complex32;
+use sar_processor::errors::{ProcessorError, Result};
+use sar_processor::isce3_ffi;
+use sar_processor::rda::SARProcessor;
 use std::env;
 
 #[tokio::main]
@@ -49,11 +42,6 @@ async fn main() -> Result<()> {
         fully_focused.dim()
     );
     // -----------------------------------
-
-    // TODO: Connect anomaly detection to focused output
-    // Currently disabled - sar_image needs to be derived from fully_focused
-    // let anomaly_map = algorithm::amtad_algorithm(sar_image.view());
-    // io::save_anomaly_map_as_png(anomaly_map.view(), "anomaly_map.png")?;
 
     info!("Processing complete. Output: {}", output_path);
     Ok(())
