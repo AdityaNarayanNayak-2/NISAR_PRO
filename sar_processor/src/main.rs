@@ -1,6 +1,7 @@
 mod algorithm;
 mod errors;
 mod io;
+mod isce3_ffi;
 mod radar_utils;
 mod rda;
 mod smart_downloader;
@@ -22,8 +23,9 @@ async fn main() -> Result<()> {
         .map_err(|_| ProcessorError::MissingEnvVar("SAR_OUTPUT_PATH".to_string()))?;
 
     info!("Starting SAR Processor for Scene: {}", scene_id);
+    info!("ISCE3 Backend: {}", isce3_ffi::isce3_version());
 
-    // --- NEW: Core Science Execution ---
+    // --- Core Science Execution ---
     info!("Initializing SAR Processor Engine...");
 
     // Sentinel-1 Parameters (Example)
@@ -48,8 +50,10 @@ async fn main() -> Result<()> {
     );
     // -----------------------------------
 
-    let anomaly_map = algorithm::amtad_algorithm(sar_image.view());
-    io::save_anomaly_map_as_png(anomaly_map.view(), "anomaly_map.png")?;
+    // TODO: Connect anomaly detection to focused output
+    // Currently disabled - sar_image needs to be derived from fully_focused
+    // let anomaly_map = algorithm::amtad_algorithm(sar_image.view());
+    // io::save_anomaly_map_as_png(anomaly_map.view(), "anomaly_map.png")?;
 
     info!("Processing complete. Output: {}", output_path);
     Ok(())
