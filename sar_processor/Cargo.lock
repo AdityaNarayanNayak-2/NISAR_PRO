@@ -1275,6 +1275,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "tiff",
  "tokio",
 ]
 

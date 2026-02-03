@@ -4,19 +4,16 @@
 //! through our Rust SAR processor pipeline.
 //!
 //! Usage:
-//!   cargo run --bin demo_real_data -- --input /path/to/S1A_*.SAFE --output output.png
+//!   cargo run --bin demo_real_data -- /path/to/S1A_*.SAFE
 
 use log::{info, warn};
-use ndarray::Array2;
-use num_complex::Complex32;
 use sar_processor::rda::SARProcessor;
-use sar_processor::safe_parser::{parse_safe_directory, S1Product};
+use sar_processor::safe_parser::{parse_safe_directory, read_slc_tiff};
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    // Parse command line args (simple)
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
@@ -73,24 +70,40 @@ fn main() -> anyhow::Result<()> {
     println!("   Selected: {} {}", swath.swath_id, swath.polarisation);
     println!("   TIFF: {:?}", swath.measurement_path);
 
-    // Step 3: Process with RDA (using synthetic data for now)
-    // Real TIFF parsing would go here
+    // Step 3: Read TIFF and process with RDA
     info!("\n=== Step 3: Running RDA ===");
 
-    // Create synthetic data matching typical Sentinel-1 dimensions
-    let rows = 256; // Would be from actual TIFF
-    let cols = 512;
-
-    println!("   Creating test array: {}x{}", rows, cols);
-
-    // Generate a test pattern
-    let mut raw_data = Array2::<Complex32>::zeros((rows, cols));
-    for i in 0..rows {
-        for j in 0..cols {
-            let phase = (i as f32 * 0.1 + j as f32 * 0.05).sin();
-            raw_data[[i, j]] = Complex32::from_polar(1.0, phase);
+    // Try to read the actual TIFF data
+    let raw_data = match read_slc_tiff(&swath.measurement_path) {
+        Ok(slc_data) => {
+            println!(
+                "   ✅ Loaded real SLC data: {}x{}",
+                slc_data.width, slc_data.height
+            );
+            slc_data.to_complex_array()
         }
-    }
+        Err(e) => {
+            warn!("Could not read TIFF ({}), using synthetic data", e);
+            println!("   ⚠️  Using synthetic test data (TIFF read failed)");
+
+            // Fallback to synthetic data
+            use ndarray::Array2;
+            use num_complex::Complex32;
+
+            let rows = 256;
+            let cols = 512;
+            let mut data = Array2::<Complex32>::zeros((rows, cols));
+            for i in 0..rows {
+                for j in 0..cols {
+                    let phase = (i as f32 * 0.1 + j as f32 * 0.05).sin();
+                    data[[i, j]] = Complex32::from_polar(1.0, phase);
+                }
+            }
+            data
+        }
+    };
+
+    println!("   Input dimensions: {:?}", raw_data.dim());
 
     // Sentinel-1 typical parameters
     let processor = SARProcessor::new(
@@ -117,19 +130,35 @@ fn main() -> anyhow::Result<()> {
 
     println!("   Magnitude range: {:.2} - {:.2}", min_val, max_val);
 
-    // Save as grayscale PNG
+    // Save as grayscale PNG with dB scaling
     let output_path = "output_sar.png";
     let (out_rows, out_cols) = fully_focused.dim();
 
     let mut img = image::GrayImage::new(out_cols as u32, out_rows as u32);
-    for (i, pixel) in magnitude.iter().enumerate() {
+
+    // Convert to dB scale for better visualization
+    let db_values: Vec<f32> = magnitude
+        .iter()
+        .map(|m| if *m > 0.0 { 20.0 * m.log10() } else { -100.0 })
+        .collect();
+
+    let db_max = db_values.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let db_min = db_values
+        .iter()
+        .cloned()
+        .filter(|v| *v > -100.0)
+        .fold(f32::INFINITY, f32::min);
+    let db_range = db_max - db_min;
+
+    println!("   dB range: {:.2} to {:.2} dB", db_min, db_max);
+
+    for (i, db_val) in db_values.iter().enumerate() {
         let row = i / out_cols;
         let col = i % out_cols;
-        // Log scale for better visualization
-        let normalized = if max_val > 0.0 {
-            ((pixel / max_val).ln() / 10.0f32.ln() * 255.0).clamp(0.0, 255.0)
+        let normalized = if db_range > 0.0 {
+            ((*db_val - db_min) / db_range * 255.0).clamp(0.0, 255.0)
         } else {
-            0.0
+            128.0
         };
         img.put_pixel(col as u32, row as u32, image::Luma([normalized as u8]));
     }
@@ -138,8 +167,6 @@ fn main() -> anyhow::Result<()> {
     println!("   ✅ Saved to: {}", output_path);
 
     println!("\n🎉 Processing Complete!");
-    println!("   Note: Currently using synthetic test data.");
-    println!("   Full TIFF parsing will be added next.");
 
     Ok(())
 }

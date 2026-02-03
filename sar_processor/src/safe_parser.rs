@@ -117,25 +117,120 @@ pub fn parse_safe_directory(safe_path: &Path) -> Result<S1Product> {
 
 /// Read SLC data from a measurement TIFF file
 /// Returns complex data as (I, Q) pairs
-pub fn read_slc_tiff(tiff_path: &Path) -> Result<Vec<(i16, i16)>> {
+///
+/// Sentinel-1 SLC TIFFs store complex data as 2-band int16:
+/// - Band 1: Real (I) component
+/// - Band 2: Imaginary (Q) component
+pub fn read_slc_tiff(tiff_path: &Path) -> Result<SlcData> {
+    use std::io::BufReader;
+    use tiff::decoder::{Decoder, DecodingResult};
+
     info!("Reading SLC TIFF: {:?}", tiff_path);
 
-    // Sentinel-1 SLC TIFFs are complex int16 (I/Q interleaved)
-    // For now, return placeholder - actual implementation would use tiff crate
-
-    // Check file exists
     if !tiff_path.exists() {
         bail!("TIFF file not found: {:?}", tiff_path);
     }
 
     let file = File::open(tiff_path)?;
     let file_size = file.metadata()?.len();
-
     info!("TIFF file size: {} MB", file_size / 1024 / 1024);
 
-    // Placeholder: return empty for now
-    // Real implementation would parse TIFF structure and extract I/Q data
-    Ok(Vec::new())
+    let reader = BufReader::new(file);
+    let mut decoder = Decoder::new(reader).context("Failed to create TIFF decoder")?;
+
+    // Get image dimensions
+    let (width, height) = decoder.dimensions()?;
+    info!("TIFF dimensions: {}x{} pixels", width, height);
+
+    // Read the image data
+    let decode_result = decoder.read_image()?;
+
+    // Process based on data type
+    let iq_pairs: Vec<(i16, i16)> = match decode_result {
+        DecodingResult::I16(data) => {
+            // Sentinel-1 SLC: interleaved I/Q as consecutive i16 values
+            // or 2-band: first half is I, second half is Q
+            info!("Read {} i16 values", data.len());
+
+            let num_pixels = (width * height) as usize;
+
+            if data.len() == num_pixels * 2 {
+                // Interleaved I/Q
+                data.chunks(2)
+                    .map(|chunk| (chunk[0], chunk.get(1).copied().unwrap_or(0)))
+                    .collect()
+            } else if data.len() == num_pixels {
+                // Single band - treat as magnitude only
+                data.into_iter().map(|v| (v, 0i16)).collect()
+            } else {
+                bail!(
+                    "Unexpected data length: {} (expected {} or {})",
+                    data.len(),
+                    num_pixels,
+                    num_pixels * 2
+                );
+            }
+        }
+        DecodingResult::U16(data) => {
+            // Sometimes stored as u16, convert to i16
+            info!("Read {} u16 values, converting to i16", data.len());
+            let num_pixels = (width * height) as usize;
+
+            if data.len() == num_pixels * 2 {
+                data.chunks(2)
+                    .map(|chunk| {
+                        (
+                            chunk[0] as i16,
+                            chunk.get(1).map(|&v| v as i16).unwrap_or(0),
+                        )
+                    })
+                    .collect()
+            } else {
+                data.into_iter().map(|v| (v as i16, 0i16)).collect()
+            }
+        }
+        _ => {
+            bail!("Unsupported TIFF data type. Expected i16 or u16 for Sentinel-1 SLC.");
+        }
+    };
+
+    info!("Extracted {} complex pixels", iq_pairs.len());
+
+    Ok(SlcData {
+        width: width as usize,
+        height: height as usize,
+        iq_data: iq_pairs,
+    })
+}
+
+/// SLC data container with dimensions
+#[derive(Debug, Clone)]
+pub struct SlcData {
+    pub width: usize,
+    pub height: usize,
+    pub iq_data: Vec<(i16, i16)>,
+}
+
+impl SlcData {
+    /// Convert to ndarray of Complex32
+    pub fn to_complex_array(&self) -> ndarray::Array2<num_complex::Complex32> {
+        let complex_vec: Vec<num_complex::Complex32> = self
+            .iq_data
+            .iter()
+            .map(|(i, q)| num_complex::Complex32::new(*i as f32, *q as f32))
+            .collect();
+
+        ndarray::Array2::from_shape_vec((self.height, self.width), complex_vec)
+            .expect("Shape mismatch in SLC data conversion")
+    }
+
+    /// Get magnitude image for display
+    pub fn magnitude_image(&self) -> Vec<f32> {
+        self.iq_data
+            .iter()
+            .map(|(i, q)| ((*i as f32).powi(2) + (*q as f32).powi(2)).sqrt())
+            .collect()
+    }
 }
 
 /// Convert I/Q int16 pairs to Complex32
