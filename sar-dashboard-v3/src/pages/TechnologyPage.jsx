@@ -1,117 +1,131 @@
 import { motion } from 'framer-motion'
 
-const pageVariants = {
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -20 }
-}
-
 const technologies = [
     {
         category: 'Core Processing',
+        description: 'High-performance SAR signal processing',
         items: [
-            { name: 'Rust', logo: '🦀', description: 'Memory-safe, blazingly fast SAR processing engine' },
-            { name: 'ISCE3', logo: '🛰️', description: 'NASA JPL\'s InSAR Scientific Computing Environment' },
-            { name: 'RCMC', logo: '📡', description: 'Range Cell Migration Correction for sharp imagery' },
+            { name: 'Rust', description: 'Memory-safe, zero-cost abstractions for real-time processing' },
+            { name: 'ISCE3', description: 'NASA JPL InSAR Scientific Computing Environment integration' },
+            { name: 'NumPy/SciPy', description: 'Scientific computing for validation and prototyping' }
         ]
     },
     {
-        category: 'Cloud Infrastructure',
+        category: 'Infrastructure',
+        description: 'Enterprise-grade deployment stack',
         items: [
-            { name: 'Kubernetes', logo: '☸️', description: 'Container orchestration for scalable processing' },
-            { name: 'AWS/GCP', logo: '☁️', description: 'Multi-cloud deployment with Terraform' },
-            { name: 'FluxCD', logo: '🔄', description: 'GitOps continuous delivery' },
+            { name: 'Red Hat Enterprise Linux 10', description: 'Production-grade OS with extended lifecycle support' },
+            { name: 'Podman', description: 'Rootless container runtime for secure workloads' },
+            { name: 'Kubernetes', description: 'Container orchestration for distributed processing' }
+        ]
+    },
+    {
+        category: 'Infrastructure as Code',
+        description: 'Reproducible, auditable deployments',
+        items: [
+            { name: 'OpenTofu', description: 'Open-source infrastructure provisioning' },
+            { name: 'Helm', description: 'Kubernetes package management' },
+            { name: 'FluxCD', description: 'GitOps continuous delivery and reconciliation' }
+        ]
+    },
+    {
+        category: 'DevOps & CI/CD',
+        description: 'Automated build and deployment pipeline',
+        items: [
+            { name: 'GitLab', description: 'Source control, CI/CD pipelines, container registry' },
+            { name: 'Renovate', description: 'Automated dependency updates' },
+            { name: 'Trivy', description: 'Container and infrastructure security scanning' }
         ]
     },
     {
         category: 'Data Pipeline',
+        description: 'Multi-source SAR data ingestion',
         items: [
-            { name: 'Sentinel-1', logo: '🌍', description: 'ESA SAFE format parsing & processing' },
-            { name: 'NISAR', logo: '🚀', description: 'Ready for NASA-ISRO L1/L2 products' },
-            { name: 'S3/GCS', logo: '💾', description: 'Petabyte-scale data lake architecture' },
+            { name: 'NISAR', description: 'NASA-ISRO L-band/S-band L1/L2 products' },
+            { name: 'Sentinel-1', description: 'ESA SAFE format C-band SAR data' },
+            { name: 'S3 Compatible Storage', description: 'Petabyte-scale object storage' }
         ]
     }
 ]
 
 const metrics = [
-    { value: '10x', label: 'Faster Processing', description: 'vs Python implementations' },
-    { value: '< 13dB', label: 'PSLR Target', description: 'Production-quality focus' },
-    { value: '99.9%', label: 'Uptime', description: 'Cloud-native reliability' },
-    { value: '0', label: 'Memory Leaks', description: 'Rust\'s ownership model' },
+    { value: '10x', label: 'Faster', sublabel: 'vs Python implementations' },
+    { value: '<13dB', label: 'PSLR', sublabel: 'Production quality focus' },
+    { value: '99.9%', label: 'Uptime', sublabel: 'Cloud-native reliability' },
+    { value: '0', label: 'Memory Leaks', sublabel: 'Rust ownership model' }
 ]
 
 function TechnologyPage() {
     return (
         <motion.main
-            variants={pageVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={{ duration: 0.5 }}
-            style={{ paddingTop: '120px' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ paddingTop: '100px', paddingBottom: 'var(--space-3xl)' }}
         >
-            {/* Hero Section */}
-            <section className="section">
+            {/* Header */}
+            <section style={{ paddingBottom: 'var(--space-3xl)' }}>
                 <div className="container">
                     <motion.div
-                        className="section-header"
-                        initial={{ opacity: 0, y: 30 }}
+                        initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
+                        style={{ maxWidth: '700px' }}
                     >
-                        <span className="section-label">Technology Stack</span>
-                        <h1>Built for <span className="text-gradient">Performance</span></h1>
-                        <p style={{
-                            color: 'var(--text-secondary)',
-                            maxWidth: '600px',
-                            margin: '0 auto',
-                            marginTop: 'var(--space-lg)'
+                        <div style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            color: 'var(--accent-primary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.1em',
+                            marginBottom: 'var(--space-sm)'
                         }}>
-                            Enterprise-grade SAR processing powered by cutting-edge technologies
+                            Technology Stack
+                        </div>
+                        <h1 style={{ fontSize: '2.5rem', fontWeight: 600, marginBottom: 'var(--space-md)' }}>
+                            Enterprise-Grade Infrastructure
+                        </h1>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', lineHeight: 1.6 }}>
+                            Built on proven open-source technologies for reliability, security, and performance at scale.
                         </p>
                     </motion.div>
                 </div>
             </section>
 
             {/* Metrics */}
-            <section className="section" style={{ paddingTop: 0 }}>
+            <section style={{ paddingBottom: 'var(--space-3xl)' }}>
                 <div className="container">
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                        gap: 'var(--space-xl)'
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: 'var(--space-md)'
                     }}>
                         {metrics.map((metric, i) => (
                             <motion.div
                                 key={metric.label}
-                                className="card"
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.3 + i * 0.1 }}
-                                style={{ textAlign: 'center' }}
+                                transition={{ delay: i * 0.05 }}
+                                style={{
+                                    padding: 'var(--space-xl)',
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border-subtle)',
+                                    borderRadius: 'var(--radius-lg)'
+                                }}
                             >
                                 <div style={{
-                                    fontSize: '3rem',
+                                    fontSize: '2rem',
                                     fontWeight: 700,
-                                    background: 'var(--accent-gradient)',
-                                    WebkitBackgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent'
+                                    color: 'var(--accent-primary)',
+                                    fontFamily: 'var(--font-mono)',
+                                    marginBottom: 'var(--space-xs)'
                                 }}>
                                     {metric.value}
                                 </div>
-                                <div style={{
-                                    fontSize: '1rem',
-                                    fontWeight: 600,
-                                    marginTop: 'var(--space-sm)'
-                                }}>
+                                <div style={{ fontWeight: 600, marginBottom: '2px' }}>
                                     {metric.label}
                                 </div>
-                                <div style={{
-                                    fontSize: '0.85rem',
-                                    color: 'var(--text-tertiary)',
-                                    marginTop: 'var(--space-xs)'
-                                }}>
-                                    {metric.description}
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
+                                    {metric.sublabel}
                                 </div>
                             </motion.div>
                         ))}
@@ -119,113 +133,176 @@ function TechnologyPage() {
                 </div>
             </section>
 
-            {/* Technology Grid */}
-            {technologies.map((category, catIndex) => (
-                <section key={category.category} className="section" style={{ paddingTop: 0 }}>
-                    <div className="container">
-                        <motion.h2
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.4 + catIndex * 0.2 }}
-                            style={{
-                                marginBottom: 'var(--space-xl)',
-                                fontSize: '1.5rem',
-                                borderLeft: '3px solid var(--accent-primary)',
-                                paddingLeft: 'var(--space-md)'
-                            }}
-                        >
-                            {category.category}
-                        </motion.h2>
+            {/* Technology Stack */}
+            <section>
+                <div className="container">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2xl)' }}>
+                        {technologies.map((category, catIndex) => (
+                            <motion.div
+                                key={category.category}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 + catIndex * 0.05 }}
+                            >
+                                {/* Category Header */}
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'baseline',
+                                    gap: 'var(--space-md)',
+                                    marginBottom: 'var(--space-lg)',
+                                    paddingBottom: 'var(--space-sm)',
+                                    borderBottom: '1px solid var(--border-subtle)'
+                                }}>
+                                    <h2 style={{ fontSize: '1.1rem', fontWeight: 600 }}>
+                                        {category.category}
+                                    </h2>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
+                                        {category.description}
+                                    </span>
+                                </div>
+
+                                {/* Items */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(3, 1fr)',
+                                    gap: 'var(--space-md)'
+                                }}>
+                                    {category.items.map((tech) => (
+                                        <div
+                                            key={tech.name}
+                                            style={{
+                                                padding: 'var(--space-lg)',
+                                                background: 'var(--bg-secondary)',
+                                                border: '1px solid var(--border-subtle)',
+                                                borderRadius: 'var(--radius-md)'
+                                            }}
+                                        >
+                                            <div style={{
+                                                fontWeight: 600,
+                                                marginBottom: 'var(--space-xs)'
+                                            }}>
+                                                {tech.name}
+                                            </div>
+                                            <div style={{
+                                                fontSize: '0.85rem',
+                                                color: 'var(--text-tertiary)',
+                                                lineHeight: 1.5
+                                            }}>
+                                                {tech.description}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* Architecture Diagram */}
+            <section style={{ marginTop: 'var(--space-3xl)' }}>
+                <div className="container">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                    >
+                        <div style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            color: 'var(--accent-primary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.1em',
+                            marginBottom: 'var(--space-sm)'
+                        }}>
+                            Architecture
+                        </div>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: 'var(--space-xl)' }}>
+                            System Overview
+                        </h2>
 
                         <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                            gap: 'var(--space-lg)'
-                        }}>
-                            {category.items.map((tech, i) => (
-                                <motion.div
-                                    key={tech.name}
-                                    className="card"
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.5 + catIndex * 0.2 + i * 0.1 }}
-                                    whileHover={{ scale: 1.02 }}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: 'var(--space-lg)'
-                                    }}
-                                >
-                                    <div style={{
-                                        fontSize: '2.5rem',
-                                        lineHeight: 1
-                                    }}>
-                                        {tech.logo}
-                                    </div>
-                                    <div>
-                                        <h4 style={{ marginBottom: 'var(--space-xs)' }}>{tech.name}</h4>
-                                        <p style={{
-                                            color: 'var(--text-secondary)',
-                                            fontSize: '0.9rem'
-                                        }}>
-                                            {tech.description}
-                                        </p>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-            ))}
-
-            {/* Architecture Preview */}
-            <section className="section">
-                <div className="container">
-                    <div className="section-header">
-                        <span className="section-label">Architecture</span>
-                        <h2>Cloud-Native Design</h2>
-                    </div>
-
-                    <motion.div
-                        className="card card-glass"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.6 }}
-                        style={{
-                            padding: 'var(--space-3xl)',
-                            textAlign: 'center'
-                        }}
-                    >
-                        <pre style={{
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '0.85rem',
-                            color: 'var(--text-secondary)',
-                            textAlign: 'left',
+                            background: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-lg)',
+                            padding: 'var(--space-2xl)',
                             overflow: 'auto'
                         }}>
-                            {`┌─────────────────────────────────────────────────────────────┐
-│                     SAR PROCESSOR ARCHITECTURE              │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│   ┌─────────┐     ┌──────────┐     ┌─────────────┐         │
-│   │ Gateway │────▶│ Operator │────▶│  Processor  │         │
-│   │  (Go)   │     │  (Rust)  │     │   (Rust)    │         │
-│   └─────────┘     └──────────┘     └─────────────┘         │
-│        │                                   │                │
-│        ▼                                   ▼                │
-│   ┌─────────┐                       ┌─────────────┐         │
-│   │Dashboard│                       │ ISCE3 (C++) │         │
-│   │ (React) │                       │  Optional   │         │
-│   └─────────┘                       └─────────────┘         │
-│                                                             │
-│   ════════════════════════════════════════════════          │
-│                    Kubernetes / EKS                          │
-│   ════════════════════════════════════════════════          │
-│                                                             │
-│   [ S3 Raw Data ]  [ S3 Processed ]  [ ECR Images ]         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘`}
-                        </pre>
+                            <pre style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.8rem',
+                                color: 'var(--text-secondary)',
+                                lineHeight: 1.6,
+                                margin: 0
+                            }}>
+                                {`┌────────────────────────────────────────────────────────────────────────┐
+│                        SAR PROCESSING PLATFORM                         │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  ┌──────────────┐      ┌───────────────┐      ┌──────────────────┐    │
+│  │   GitLab     │─────▶│   Dashboard   │◀────▶│    Gateway       │    │
+│  │  CI/CD       │      │   (React)     │      │    (Go/Rust)     │    │
+│  └──────────────┘      └───────────────┘      └────────┬─────────┘    │
+│         │                                              │              │
+│         ▼                                              ▼              │
+│  ┌──────────────┐      ┌───────────────┐      ┌──────────────────┐    │
+│  │   Podman     │      │   Operator    │─────▶│   Processor      │    │
+│  │   Registry   │      │   (Rust)      │      │   (Rust/ISCE3)   │    │
+│  └──────────────┘      └───────────────┘      └──────────────────┘    │
+│                                                                        │
+│  ══════════════════════════════════════════════════════════════════   │
+│                    Kubernetes on Red Hat Enterprise Linux 10           │
+│  ══════════════════════════════════════════════════════════════════   │
+│                                                                        │
+│  ┌──────────────┐      ┌───────────────┐      ┌──────────────────┐    │
+│  │  Raw Data    │      │   Processed   │      │    OpenTofu      │    │
+│  │  (S3)        │      │   (S3)        │      │    State         │    │
+│  └──────────────┘      └───────────────┘      └──────────────────┘    │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘`}
+                            </pre>
+                        </div>
+                    </motion.div>
+                </div>
+            </section>
+
+            {/* Footer CTA */}
+            <section style={{ marginTop: 'var(--space-3xl)', textAlign: 'center' }}>
+                <div className="container">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        style={{
+                            padding: 'var(--space-2xl)',
+                            background: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-lg)'
+                        }}
+                    >
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 'var(--space-sm)' }}>
+                            Open Source & Vendor Neutral
+                        </h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)', maxWidth: '500px', margin: '0 auto var(--space-lg)' }}>
+                            Built entirely on open-source technologies. No vendor lock-in, full auditability.
+                        </p>
+                        <a
+                            href="https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                display: 'inline-block',
+                                padding: 'var(--space-md) var(--space-xl)',
+                                background: 'var(--accent-primary)',
+                                color: 'white',
+                                textDecoration: 'none',
+                                borderRadius: 'var(--radius-md)',
+                                fontWeight: 500,
+                                fontSize: '0.9rem'
+                            }}
+                        >
+                            View on GitLab →
+                        </a>
                     </motion.div>
                 </div>
             </section>
