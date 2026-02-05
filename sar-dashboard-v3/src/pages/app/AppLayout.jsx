@@ -2,158 +2,156 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useWorkflowStore } from '../../store/workflowStore'
 
-const steps = [
-    { id: 1, path: '/app', label: 'Dashboard', icon: '🏠' },
-    { id: 2, path: '/app/select', label: 'Location', icon: '📍' },
-    { id: 3, path: '/app/data', label: 'Data Source', icon: '🛰️' },
-    { id: 4, path: '/app/configure', label: 'Configure', icon: '⚙️' },
-    { id: 5, path: '/app/jobs', label: 'Processing', icon: '⚡' },
-    { id: 6, path: '/app/results', label: 'Results', icon: '📊' },
+const workflowSteps = [
+    { id: 1, path: '/app/select', label: 'Select Area', description: 'Define area of interest' },
+    { id: 2, path: '/app/data', label: 'Data Source', description: 'Choose SAR mission' },
+    { id: 3, path: '/app/configure', label: 'Configure', description: 'Processing options' },
+    { id: 4, path: '/app/jobs', label: 'Processing', description: 'Monitor progress' },
+    { id: 5, path: '/app/results', label: 'Results', description: 'View & export' },
 ]
 
 function AppLayout() {
     const location = useLocation()
-    const { currentStep, isStepComplete } = useWorkflowStore()
+    const { isStepComplete } = useWorkflowStore()
+
+    // Check if on dashboard
+    const isOnDashboard = location.pathname === '/app'
+
+    // Get current step index
+    const currentStepIndex = workflowSteps.findIndex(s => s.path === location.pathname)
 
     return (
         <div style={{
-            display: 'flex',
             minHeight: '100vh',
-            paddingTop: '70px'
+            paddingTop: '70px',
+            background: 'var(--bg-primary)'
         }}>
-            {/* Sidebar */}
-            <motion.aside
-                initial={{ x: -280 }}
-                animate={{ x: 0 }}
-                style={{
-                    width: '260px',
+            {/* Top Workflow Bar - Only show when in workflow, not on dashboard */}
+            {!isOnDashboard && (
+                <div style={{
                     background: 'var(--bg-secondary)',
-                    borderRight: '1px solid var(--border-subtle)',
-                    padding: 'var(--space-lg)',
-                    position: 'fixed',
-                    top: '70px',
-                    left: 0,
-                    bottom: 0,
-                    overflowY: 'auto',
-                    zIndex: 100
-                }}
-            >
-                {/* App Title */}
-                <div style={{ marginBottom: 'var(--space-xl)' }}>
-                    <h3 style={{
-                        fontSize: '1rem',
-                        color: 'var(--text-primary)',
-                        marginBottom: 'var(--space-xs)'
-                    }}>
-                        SAR Analyzer
-                    </h3>
-                    <span style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--text-tertiary)',
-                        fontFamily: 'var(--font-mono)'
-                    }}>
-                        Processing Workflow
-                    </span>
-                </div>
-
-                {/* Navigation */}
-                <nav style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
-                    {steps.map((step, index) => {
-                        const isActive = location.pathname === step.path
-                        const isComplete = index > 0 && isStepComplete(index)
-
-                        return (
+                    borderBottom: '1px solid var(--border-subtle)',
+                    padding: 'var(--space-md) 0'
+                }}>
+                    <div className="container">
+                        {/* Breadcrumb */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 'var(--space-sm)',
+                            marginBottom: 'var(--space-md)',
+                            fontSize: '0.8rem'
+                        }}>
                             <NavLink
-                                key={step.path}
-                                to={step.path}
+                                to="/app"
                                 style={{
+                                    color: 'var(--text-tertiary)',
+                                    textDecoration: 'none',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: 'var(--space-md)',
-                                    padding: 'var(--space-md)',
-                                    borderRadius: 'var(--radius-md)',
-                                    textDecoration: 'none',
-                                    background: isActive ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                                    border: isActive ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid transparent',
-                                    transition: 'all var(--transition-fast)'
+                                    gap: '4px'
                                 }}
                             >
-                                <span style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: 'var(--radius-sm)',
-                                    background: isActive ? 'var(--accent-gradient)' : 'var(--bg-tertiary)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '1rem'
-                                }}>
-                                    {isComplete ? '✓' : step.icon}
-                                </span>
-                                <div>
-                                    <div style={{
-                                        fontSize: '0.85rem',
-                                        fontWeight: isActive ? 600 : 400,
-                                        color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)'
-                                    }}>
-                                        {step.label}
-                                    </div>
-                                    {index > 0 && (
-                                        <div style={{
-                                            fontSize: '0.7rem',
-                                            color: 'var(--text-tertiary)',
-                                            fontFamily: 'var(--font-mono)'
-                                        }}>
-                                            Step {index}
-                                        </div>
-                                    )}
-                                </div>
+                                ← Dashboard
                             </NavLink>
-                        )
-                    })}
-                </nav>
+                            <span style={{ color: 'var(--text-tertiary)' }}>/</span>
+                            <span style={{ color: 'var(--text-primary)' }}>New Analysis</span>
+                        </div>
 
-                {/* Quick Actions */}
-                <div style={{
-                    marginTop: 'var(--space-2xl)',
-                    padding: 'var(--space-md)',
-                    background: 'var(--bg-tertiary)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-subtle)'
-                }}>
-                    <div style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--text-tertiary)',
-                        marginBottom: 'var(--space-sm)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em'
-                    }}>
-                        Quick Actions
+                        {/* Step Progress */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 'var(--space-xs)'
+                        }}>
+                            {workflowSteps.map((step, index) => {
+                                const isActive = location.pathname === step.path
+                                const isCompleted = currentStepIndex > index || isStepComplete(index + 1)
+                                const isPast = currentStepIndex > index
+
+                                return (
+                                    <div
+                                        key={step.id}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            flex: index < workflowSteps.length - 1 ? 1 : 'none'
+                                        }}
+                                    >
+                                        <NavLink
+                                            to={step.path}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 'var(--space-sm)',
+                                                padding: 'var(--space-xs) var(--space-sm)',
+                                                borderRadius: 'var(--radius-sm)',
+                                                textDecoration: 'none',
+                                                background: isActive ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                                                border: isActive ? '1px solid rgba(99, 102, 241, 0.2)' : '1px solid transparent',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            <div style={{
+                                                width: '24px',
+                                                height: '24px',
+                                                borderRadius: '50%',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 600,
+                                                background: isCompleted
+                                                    ? 'var(--accent-primary)'
+                                                    : isActive
+                                                        ? 'var(--bg-tertiary)'
+                                                        : 'var(--bg-tertiary)',
+                                                color: isCompleted
+                                                    ? 'white'
+                                                    : isActive
+                                                        ? 'var(--text-primary)'
+                                                        : 'var(--text-tertiary)',
+                                                border: isActive && !isCompleted ? '2px solid var(--accent-primary)' : 'none'
+                                            }}>
+                                                {isCompleted ? '✓' : step.id}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: isActive ? 600 : 400,
+                                                    color: isActive ? 'var(--text-primary)' : isPast ? 'var(--text-secondary)' : 'var(--text-tertiary)'
+                                                }}>
+                                                    {step.label}
+                                                </span>
+                                            </div>
+                                        </NavLink>
+
+                                        {/* Connector line */}
+                                        {index < workflowSteps.length - 1 && (
+                                            <div style={{
+                                                flex: 1,
+                                                height: '2px',
+                                                background: isPast ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                                                margin: '0 var(--space-sm)',
+                                                borderRadius: '1px'
+                                            }} />
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
                     </div>
-                    <NavLink
-                        to="/app/select"
-                        style={{
-                            display: 'block',
-                            padding: 'var(--space-sm)',
-                            borderRadius: 'var(--radius-sm)',
-                            fontSize: '0.85rem',
-                            color: 'var(--accent-primary)',
-                            textDecoration: 'none'
-                        }}
-                    >
-                        + New Analysis
-                    </NavLink>
                 </div>
-            </motion.aside>
+            )}
 
             {/* Main Content */}
             <main style={{
-                flex: 1,
-                marginLeft: '260px',
-                padding: 'var(--space-xl)',
-                minHeight: 'calc(100vh - 70px)'
+                padding: 'var(--space-xl) 0',
+                minHeight: 'calc(100vh - 140px)'
             }}>
-                <Outlet />
+                <div className="container">
+                    <Outlet />
+                </div>
             </main>
         </div>
     )

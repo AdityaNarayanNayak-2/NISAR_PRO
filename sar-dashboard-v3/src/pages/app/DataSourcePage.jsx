@@ -5,19 +5,18 @@ import { useWorkflowStore } from '../../store/workflowStore'
 import { format, subDays } from 'date-fns'
 
 const missions = [
-    { id: 'nisar', name: 'NISAR', org: 'NASA-ISRO', band: 'L + S', flag: '🇺🇸🇮🇳', color: '#6366f1' },
-    { id: 'sentinel1', name: 'Sentinel-1', org: 'ESA', band: 'C-Band', flag: '🇪🇺', color: '#06b6d4' },
-    { id: 'iceye', name: 'ICEYE', org: 'Commercial', band: 'X-Band', flag: '🇫🇮', color: '#8b5cf6' },
-    { id: 'capella', name: 'Capella', org: 'Commercial', band: 'X-Band', flag: '🇺🇸', color: '#f59e0b' },
+    { id: 'nisar', name: 'NISAR', org: 'NASA-ISRO', band: 'L + S Band', status: 'Active' },
+    { id: 'sentinel1', name: 'Sentinel-1', org: 'ESA', band: 'C-Band', status: 'Active' },
+    { id: 'iceye', name: 'ICEYE', org: 'Commercial', band: 'X-Band', status: 'Active' },
+    { id: 'capella', name: 'Capella', org: 'Commercial', band: 'X-Band', status: 'Active' },
 ]
 
-// Mock available scenes
 const mockScenes = [
-    { id: 'S1A_IW_SLC_20260201', mission: 'sentinel1', date: '2026-02-01', size: '1.2 GB', cloud: 0, mode: 'IW' },
-    { id: 'S1A_IW_SLC_20260125', mission: 'sentinel1', date: '2026-01-25', size: '1.1 GB', cloud: 0, mode: 'IW' },
-    { id: 'NISAR_L1_SLC_20260130', mission: 'nisar', date: '2026-01-30', size: '2.4 GB', cloud: 0, mode: 'ScanSAR' },
-    { id: 'NISAR_L1_SLC_20260118', mission: 'nisar', date: '2026-01-18', size: '2.3 GB', cloud: 0, mode: 'ScanSAR' },
-    { id: 'ICEYE_X2_SLC_20260128', mission: 'iceye', date: '2026-01-28', size: '0.8 GB', cloud: 0, mode: 'Spotlight' },
+    { id: 'S1A_IW_SLC_20260201', mission: 'sentinel1', date: '2026-02-01', size: '1.2 GB', mode: 'IW' },
+    { id: 'S1A_IW_SLC_20260125', mission: 'sentinel1', date: '2026-01-25', size: '1.1 GB', mode: 'IW' },
+    { id: 'NISAR_L1_SLC_20260130', mission: 'nisar', date: '2026-01-30', size: '2.4 GB', mode: 'ScanSAR' },
+    { id: 'NISAR_L1_SLC_20260118', mission: 'nisar', date: '2026-01-18', size: '2.3 GB', mode: 'ScanSAR' },
+    { id: 'ICEYE_X2_SLC_20260128', mission: 'iceye', date: '2026-01-28', size: '0.8 GB', mode: 'Spotlight' },
 ]
 
 function DataSourcePage() {
@@ -31,9 +30,7 @@ function DataSourcePage() {
     })
     const [selectedScenes, setSelectedScenes] = useState(dataSource.selectedScenes)
 
-    const filteredScenes = mockScenes.filter(s =>
-        !selectedMission || s.mission === selectedMission
-    )
+    const filteredScenes = mockScenes.filter(s => !selectedMission || s.mission === selectedMission)
 
     const toggleScene = (scene) => {
         if (selectedScenes.find(s => s.id === scene.id)) {
@@ -44,56 +41,36 @@ function DataSourcePage() {
     }
 
     const handleContinue = () => {
-        setDataSource({
-            mission: selectedMission,
-            dateRange,
-            selectedScenes
-        })
+        setDataSource({ mission: selectedMission, dateRange, selectedScenes })
         nextStep()
         navigate('/app/configure')
     }
 
     return (
-        <div>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 style={{ marginBottom: 'var(--space-xl)' }}
             >
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-sm)',
-                    marginBottom: 'var(--space-sm)'
-                }}>
-                    <span style={{
-                        padding: 'var(--space-xs) var(--space-sm)',
-                        background: 'var(--accent-gradient)',
-                        borderRadius: 'var(--radius-full)',
-                        fontSize: '0.7rem',
-                        fontFamily: 'var(--font-mono)'
-                    }}>
-                        STEP 2
-                    </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Select Data Source</h1>
                     {location.name && (
                         <span style={{
-                            padding: 'var(--space-xs) var(--space-sm)',
-                            background: 'rgba(34, 197, 94, 0.1)',
-                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                            padding: '4px 10px',
+                            background: 'rgba(99, 102, 241, 0.1)',
+                            border: '1px solid rgba(99, 102, 241, 0.2)',
                             borderRadius: 'var(--radius-full)',
-                            fontSize: '0.7rem',
-                            fontFamily: 'var(--font-mono)',
-                            color: '#22c55e'
+                            fontSize: '0.75rem',
+                            color: 'var(--accent-primary)'
                         }}>
-                            📍 {location.name}
+                            {location.name}
                         </span>
                     )}
                 </div>
-                <h1 style={{ marginBottom: 'var(--space-sm)' }}>
-                    Select <span className="text-gradient">Data Source</span>
-                </h1>
-                <p style={{ color: 'var(--text-secondary)' }}>
-                    Choose a mission and select available SAR scenes for your area
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    Choose a SAR mission and select available scenes
                 </p>
             </motion.div>
 
@@ -104,47 +81,34 @@ function DataSourcePage() {
                 transition={{ delay: 0.1 }}
                 style={{ marginBottom: 'var(--space-xl)' }}
             >
-                <h3 style={{ fontSize: '1rem', marginBottom: 'var(--space-md)' }}>Mission</h3>
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                    gap: 'var(--space-md)'
-                }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)', fontWeight: 500 }}>
+                    Mission
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-md)' }}>
                     {missions.map((mission) => (
-                        <motion.button
+                        <button
                             key={mission.id}
-                            whileHover={{ y: -3 }}
-                            whileTap={{ scale: 0.98 }}
                             onClick={() => setSelectedMission(mission.id)}
                             style={{
                                 padding: 'var(--space-lg)',
-                                background: selectedMission === mission.id
-                                    ? `${mission.color}20`
-                                    : 'var(--bg-secondary)',
-                                border: `2px solid ${selectedMission === mission.id ? mission.color : 'var(--border-subtle)'}`,
+                                background: selectedMission === mission.id ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-secondary)',
+                                border: `1px solid ${selectedMission === mission.id ? 'rgba(99, 102, 241, 0.3)' : 'var(--border-subtle)'}`,
                                 borderRadius: 'var(--radius-lg)',
                                 cursor: 'pointer',
-                                textAlign: 'left'
+                                textAlign: 'left',
+                                transition: 'all 0.15s ease'
                             }}
                         >
-                            <div style={{ fontSize: '1.5rem', marginBottom: 'var(--space-sm)' }}>
-                                {mission.flag}
-                            </div>
-                            <div style={{
-                                fontWeight: 600,
-                                color: 'var(--text-primary)',
-                                marginBottom: 'var(--space-xs)'
-                            }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
                                 {mission.name}
                             </div>
-                            <div style={{
-                                fontSize: '0.75rem',
-                                color: 'var(--text-tertiary)',
-                                fontFamily: 'var(--font-mono)'
-                            }}>
-                                {mission.band} • {mission.org}
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                                {mission.band}
                             </div>
-                        </motion.button>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                                {mission.org}
+                            </div>
+                        </button>
                     ))}
                 </div>
             </motion.div>
@@ -153,19 +117,21 @@ function DataSourcePage() {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="card"
-                style={{ marginBottom: 'var(--space-xl)' }}
+                transition={{ delay: 0.15 }}
+                style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: 'var(--space-lg)',
+                    marginBottom: 'var(--space-xl)'
+                }}
             >
-                <h3 style={{ fontSize: '1rem', marginBottom: 'var(--space-md)' }}>Date Range</h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)', fontWeight: 500 }}>
+                    Date Range
+                </div>
                 <div style={{ display: 'flex', gap: 'var(--space-lg)', alignItems: 'center' }}>
                     <div>
-                        <label style={{
-                            display: 'block',
-                            fontSize: '0.8rem',
-                            color: 'var(--text-tertiary)',
-                            marginBottom: 'var(--space-xs)'
-                        }}>From</label>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>From</label>
                         <input
                             type="date"
                             value={dateRange.start}
@@ -176,18 +142,13 @@ function DataSourcePage() {
                                 border: '1px solid var(--border-default)',
                                 borderRadius: 'var(--radius-md)',
                                 color: 'var(--text-primary)',
-                                fontSize: '0.9rem'
+                                fontSize: '0.85rem'
                             }}
                         />
                     </div>
-                    <span style={{ color: 'var(--text-tertiary)', marginTop: '20px' }}>→</span>
+                    <span style={{ color: 'var(--text-tertiary)', marginTop: '18px' }}>→</span>
                     <div>
-                        <label style={{
-                            display: 'block',
-                            fontSize: '0.8rem',
-                            color: 'var(--text-tertiary)',
-                            marginBottom: 'var(--space-xs)'
-                        }}>To</label>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>To</label>
                         <input
                             type="date"
                             value={dateRange.end}
@@ -198,125 +159,118 @@ function DataSourcePage() {
                                 border: '1px solid var(--border-default)',
                                 borderRadius: 'var(--radius-md)',
                                 color: 'var(--text-primary)',
-                                fontSize: '0.9rem'
+                                fontSize: '0.85rem'
                             }}
                         />
                     </div>
                 </div>
             </motion.div>
 
-            {/* Available Scenes */}
+            {/* Scenes Table */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                transition={{ delay: 0.2 }}
             >
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 'var(--space-md)'
-                }}>
-                    <h3 style={{ fontSize: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>
                         Available Scenes ({filteredScenes.length})
-                    </h3>
-                    <span style={{
-                        fontSize: '0.8rem',
-                        color: 'var(--accent-primary)',
-                        fontFamily: 'var(--font-mono)'
-                    }}>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--accent-primary)' }}>
                         {selectedScenes.length} selected
-                    </span>
+                    </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                    {filteredScenes.map((scene) => {
+                <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-lg)',
+                    overflow: 'hidden'
+                }}>
+                    {/* Header */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '40px 1fr 100px 80px 100px',
+                        gap: 'var(--space-md)',
+                        padding: 'var(--space-md) var(--space-lg)',
+                        background: 'var(--bg-tertiary)',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-tertiary)',
+                        fontWeight: 500
+                    }}>
+                        <div></div>
+                        <div>Scene ID</div>
+                        <div>Mode</div>
+                        <div>Size</div>
+                        <div>Date</div>
+                    </div>
+
+                    {/* Rows */}
+                    {filteredScenes.map((scene, i) => {
                         const isSelected = selectedScenes.find(s => s.id === scene.id)
                         return (
-                            <motion.div
+                            <div
                                 key={scene.id}
-                                whileHover={{ backgroundColor: 'var(--bg-tertiary)' }}
                                 onClick={() => toggleScene(scene)}
-                                className="card"
                                 style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
+                                    display: 'grid',
+                                    gridTemplateColumns: '40px 1fr 100px 80px 100px',
+                                    gap: 'var(--space-md)',
                                     padding: 'var(--space-md) var(--space-lg)',
+                                    borderTop: '1px solid var(--border-subtle)',
                                     cursor: 'pointer',
-                                    border: isSelected
-                                        ? '2px solid var(--accent-primary)'
-                                        : '1px solid var(--border-subtle)',
-                                    background: isSelected
-                                        ? 'rgba(99, 102, 241, 0.1)'
-                                        : 'var(--bg-secondary)'
+                                    background: isSelected ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
+                                    transition: 'background 0.15s ease'
                                 }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+                                <div>
                                     <div style={{
-                                        width: '24px',
-                                        height: '24px',
-                                        borderRadius: 'var(--radius-sm)',
+                                        width: '18px',
+                                        height: '18px',
+                                        borderRadius: '4px',
                                         border: `2px solid ${isSelected ? 'var(--accent-primary)' : 'var(--border-default)'}`,
                                         background: isSelected ? 'var(--accent-primary)' : 'transparent',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         color: 'white',
-                                        fontSize: '0.8rem'
+                                        fontSize: '0.7rem'
                                     }}>
                                         {isSelected && '✓'}
                                     </div>
-                                    <div>
-                                        <div style={{
-                                            fontFamily: 'var(--font-mono)',
-                                            fontSize: '0.85rem',
-                                            marginBottom: '2px'
-                                        }}>
-                                            {scene.id}
-                                        </div>
-                                        <div style={{
-                                            fontSize: '0.75rem',
-                                            color: 'var(--text-tertiary)'
-                                        }}>
-                                            {scene.mode} • {scene.size}
-                                        </div>
-                                    </div>
                                 </div>
-                                <div style={{
-                                    fontSize: '0.85rem',
-                                    color: 'var(--text-secondary)',
-                                    fontFamily: 'var(--font-mono)'
-                                }}>
-                                    {scene.date}
-                                </div>
-                            </motion.div>
+                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>{scene.id}</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{scene.mode}</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{scene.size}</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>{scene.date}</div>
+                            </div>
                         )
                     })}
                 </div>
             </motion.div>
 
-            {/* Continue Button */}
+            {/* Continue */}
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                style={{
-                    marginTop: 'var(--space-2xl)',
-                    display: 'flex',
-                    justifyContent: 'flex-end'
-                }}
+                transition={{ delay: 0.3 }}
+                style={{ marginTop: 'var(--space-xl)', display: 'flex', justifyContent: 'flex-end' }}
             >
                 <button
                     onClick={handleContinue}
                     disabled={selectedScenes.length === 0}
-                    className="btn btn-primary"
                     style={{
-                        opacity: selectedScenes.length > 0 ? 1 : 0.5,
-                        cursor: selectedScenes.length > 0 ? 'pointer' : 'not-allowed'
+                        padding: 'var(--space-md) var(--space-xl)',
+                        background: selectedScenes.length > 0 ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-md)',
+                        color: selectedScenes.length > 0 ? 'white' : 'var(--text-tertiary)',
+                        cursor: selectedScenes.length > 0 ? 'pointer' : 'not-allowed',
+                        fontSize: '0.9rem',
+                        fontWeight: 500
                     }}
                 >
-                    Continue to Configure →
+                    Continue →
                 </button>
             </motion.div>
         </div>

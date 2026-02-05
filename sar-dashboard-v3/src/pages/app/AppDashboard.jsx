@@ -1,191 +1,227 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { mockJobs } from '../../store/workflowStore'
+import { formatDistanceToNow } from 'date-fns'
 
 function AppDashboard() {
-    const recentJobs = mockJobs.slice(0, 3)
+    const activeJobs = mockJobs.filter(j => j.status === 'processing')
+    const completedJobs = mockJobs.filter(j => j.status === 'completed')
 
     return (
-        <div>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 style={{ marginBottom: 'var(--space-2xl)' }}
             >
-                <h1 style={{ marginBottom: 'var(--space-sm)' }}>
-                    Welcome to <span className="text-gradient">SAR Analyzer</span>
+                <h1 style={{
+                    fontSize: '1.75rem',
+                    fontWeight: 600,
+                    marginBottom: 'var(--space-sm)'
+                }}>
+                    Processing Dashboard
                 </h1>
-                <p style={{ color: 'var(--text-secondary)' }}>
-                    Start a new analysis or view your recent processing jobs
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                    Manage your SAR processing jobs and start new analyses
                 </p>
             </motion.div>
 
-            {/* Quick Stats */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: 'var(--space-lg)',
-                marginBottom: 'var(--space-2xl)'
-            }}>
-                {[
-                    { label: 'Active Jobs', value: '2', icon: '⚡', color: '#6366f1' },
-                    { label: 'Completed', value: '24', icon: '✅', color: '#22c55e' },
-                    { label: 'Data Processed', value: '1.2 TB', icon: '💾', color: '#8b5cf6' },
-                    { label: 'Saved Areas', value: '5', icon: '📍', color: '#f59e0b' },
-                ].map((stat, i) => (
-                    <motion.div
-                        key={stat.label}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.1 }}
-                        className="card"
-                        style={{ textAlign: 'center' }}
-                    >
-                        <div style={{ fontSize: '2rem', marginBottom: 'var(--space-sm)' }}>
-                            {stat.icon}
-                        </div>
-                        <div style={{
-                            fontSize: '2rem',
-                            fontWeight: 700,
-                            color: stat.color
-                        }}>
-                            {stat.value}
-                        </div>
-                        <div style={{
-                            fontSize: '0.85rem',
-                            color: 'var(--text-tertiary)',
-                            fontFamily: 'var(--font-mono)'
-                        }}>
-                            {stat.label}
-                        </div>
-                    </motion.div>
-                ))}
-            </div>
+            {/* Quick Actions */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                style={{ marginBottom: 'var(--space-2xl)' }}
+            >
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    gap: 'var(--space-lg)'
+                }}>
+                    {/* New Analysis */}
+                    <Link to="/app/select" style={{ textDecoration: 'none' }}>
+                        <motion.div
+                            whileHover={{ borderColor: 'var(--accent-primary)' }}
+                            style={{
+                                padding: 'var(--space-xl)',
+                                background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: 'var(--radius-lg)',
+                                cursor: 'pointer',
+                                transition: 'border-color 0.15s ease'
+                            }}
+                        >
+                            <div style={{
+                                width: '40px',
+                                height: '40px',
+                                background: 'rgba(99, 102, 241, 0.1)',
+                                borderRadius: 'var(--radius-md)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: 'var(--space-md)',
+                                fontSize: '1.2rem'
+                            }}>
+                                +
+                            </div>
+                            <h3 style={{
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                marginBottom: 'var(--space-xs)',
+                                color: 'var(--text-primary)'
+                            }}>
+                                New Analysis
+                            </h3>
+                            <p style={{
+                                fontSize: '0.85rem',
+                                color: 'var(--text-tertiary)',
+                                margin: 0
+                            }}>
+                                Start a new SAR processing workflow
+                            </p>
+                        </motion.div>
+                    </Link>
 
-            {/* Main Actions */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                gap: 'var(--space-xl)',
-                marginBottom: 'var(--space-2xl)'
-            }}>
-                {/* New Analysis Card */}
+                    {/* Browse Data */}
+                    <Link to="/app/data" style={{ textDecoration: 'none' }}>
+                        <motion.div
+                            whileHover={{ borderColor: 'var(--accent-primary)' }}
+                            style={{
+                                padding: 'var(--space-xl)',
+                                background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: 'var(--radius-lg)',
+                                cursor: 'pointer',
+                                transition: 'border-color 0.15s ease'
+                            }}
+                        >
+                            <div style={{
+                                width: '40px',
+                                height: '40px',
+                                background: 'rgba(6, 182, 212, 0.1)',
+                                borderRadius: 'var(--radius-md)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: 'var(--space-md)',
+                                fontSize: '1rem'
+                            }}>
+                                🛰️
+                            </div>
+                            <h3 style={{
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                marginBottom: 'var(--space-xs)',
+                                color: 'var(--text-primary)'
+                            }}>
+                                Browse Data
+                            </h3>
+                            <p style={{
+                                fontSize: '0.85rem',
+                                color: 'var(--text-tertiary)',
+                                margin: 0
+                            }}>
+                                Explore available SAR scenes
+                            </p>
+                        </motion.div>
+                    </Link>
+
+                    {/* View Jobs */}
+                    <Link to="/app/jobs" style={{ textDecoration: 'none' }}>
+                        <motion.div
+                            whileHover={{ borderColor: 'var(--accent-primary)' }}
+                            style={{
+                                padding: 'var(--space-xl)',
+                                background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: 'var(--radius-lg)',
+                                cursor: 'pointer',
+                                transition: 'border-color 0.15s ease'
+                            }}
+                        >
+                            <div style={{
+                                width: '40px',
+                                height: '40px',
+                                background: 'rgba(34, 197, 94, 0.1)',
+                                borderRadius: 'var(--radius-md)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: 'var(--space-md)',
+                                fontSize: '1rem'
+                            }}>
+                                📊
+                            </div>
+                            <h3 style={{
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                marginBottom: 'var(--space-xs)',
+                                color: 'var(--text-primary)'
+                            }}>
+                                All Jobs
+                            </h3>
+                            <p style={{
+                                fontSize: '0.85rem',
+                                color: 'var(--text-tertiary)',
+                                margin: 0
+                            }}>
+                                {mockJobs.length} total jobs
+                            </p>
+                        </motion.div>
+                    </Link>
+                </div>
+            </motion.div>
+
+            {/* Active Jobs */}
+            {activeJobs.length > 0 && (
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    whileHover={{ y: -5 }}
-                    className="card"
-                    style={{
-                        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1))',
-                        border: '1px solid rgba(99, 102, 241, 0.3)',
-                        cursor: 'pointer'
-                    }}
+                    style={{ marginBottom: 'var(--space-2xl)' }}
                 >
-                    <Link to="/app/select" style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>🚀</div>
-                        <h3 style={{ marginBottom: 'var(--space-sm)' }}>Start New Analysis</h3>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                            Select a location, choose data source, and configure processing
-                        </p>
-                        <div style={{
-                            marginTop: 'var(--space-lg)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-xs)',
-                            color: 'var(--accent-primary)',
-                            fontSize: '0.9rem',
-                            fontWeight: 500
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 'var(--space-md)'
+                    }}>
+                        <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>
+                            Active Processing
+                        </h2>
+                        <span style={{
+                            fontSize: '0.8rem',
+                            color: 'var(--text-tertiary)'
                         }}>
-                            Begin workflow →
-                        </div>
-                    </Link>
-                </motion.div>
+                            {activeJobs.length} running
+                        </span>
+                    </div>
 
-                {/* Browse Data Card */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    whileHover={{ y: -5 }}
-                    className="card"
-                    style={{ cursor: 'pointer' }}
-                >
-                    <Link to="/app/data" style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>🛰️</div>
-                        <h3 style={{ marginBottom: 'var(--space-sm)' }}>Browse Data Catalog</h3>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                            Explore available SAR scenes from NISAR, Sentinel-1, and more
-                        </p>
-                        <div style={{
-                            marginTop: 'var(--space-lg)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-xs)',
-                            color: 'var(--text-secondary)',
-                            fontSize: '0.9rem'
-                        }}>
-                            Explore catalog →
-                        </div>
-                    </Link>
-                </motion.div>
-            </div>
-
-            {/* Recent Jobs */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-            >
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 'var(--space-lg)'
-                }}>
-                    <h3>Recent Jobs</h3>
-                    <Link
-                        to="/app/jobs"
-                        style={{
-                            color: 'var(--accent-primary)',
-                            textDecoration: 'none',
-                            fontSize: '0.85rem'
-                        }}
-                    >
-                        View all →
-                    </Link>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                    {recentJobs.map((job) => (
-                        <div
-                            key={job.id}
-                            className="card"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: 'var(--space-lg)'
-                            }}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-                                <div style={{
-                                    width: '40px',
-                                    height: '40px',
-                                    borderRadius: 'var(--radius-md)',
-                                    background: job.status === 'completed' ? 'rgba(34, 197, 94, 0.2)' :
-                                        job.status === 'processing' ? 'rgba(99, 102, 241, 0.2)' :
-                                            'rgba(113, 113, 122, 0.2)',
+                    <div style={{
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-lg)',
+                        overflow: 'hidden'
+                    }}>
+                        {activeJobs.map((job, i) => (
+                            <div
+                                key={job.id}
+                                style={{
+                                    padding: 'var(--space-lg)',
+                                    borderBottom: i < activeJobs.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}>
-                                    {job.status === 'completed' ? '✅' :
-                                        job.status === 'processing' ? '⚡' : '⏳'}
-                                </div>
-                                <div>
-                                    <div style={{ fontWeight: 500 }}>{job.name}</div>
+                                    justifyContent: 'space-between'
+                                }}
+                            >
+                                <div style={{ flex: 1 }}>
+                                    <div style={{
+                                        fontWeight: 500,
+                                        marginBottom: 'var(--space-xs)'
+                                    }}>
+                                        {job.name}
+                                    </div>
                                     <div style={{
                                         fontSize: '0.8rem',
                                         color: 'var(--text-tertiary)',
@@ -194,39 +230,145 @@ function AppDashboard() {
                                         {job.mission.toUpperCase()} • {job.processType.toUpperCase()}
                                     </div>
                                 </div>
-                            </div>
 
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500,
-                                    color: job.status === 'completed' ? '#22c55e' :
-                                        job.status === 'processing' ? 'var(--accent-primary)' :
-                                            'var(--text-tertiary)',
-                                    textTransform: 'capitalize'
-                                }}>
-                                    {job.status}
-                                </div>
-                                {job.status === 'processing' && (
+                                <div style={{ width: '200px', marginRight: 'var(--space-lg)' }}>
                                     <div style={{
-                                        width: '100px',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        marginBottom: '4px',
+                                        fontSize: '0.75rem',
+                                        color: 'var(--text-secondary)'
+                                    }}>
+                                        <span>Processing</span>
+                                        <span style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(job.progress)}%</span>
+                                    </div>
+                                    <div style={{
                                         height: '4px',
                                         background: 'var(--bg-tertiary)',
-                                        borderRadius: 'var(--radius-full)',
-                                        marginTop: 'var(--space-xs)',
+                                        borderRadius: '2px',
                                         overflow: 'hidden'
                                     }}>
                                         <div style={{
                                             width: `${job.progress}%`,
                                             height: '100%',
-                                            background: 'var(--accent-gradient)',
-                                            borderRadius: 'var(--radius-full)'
+                                            background: 'var(--accent-primary)',
+                                            borderRadius: '2px',
+                                            transition: 'width 0.3s ease'
                                         }} />
                                     </div>
-                                )}
+                                </div>
+
+                                <Link
+                                    to="/app/jobs"
+                                    style={{
+                                        fontSize: '0.85rem',
+                                        color: 'var(--accent-primary)',
+                                        textDecoration: 'none'
+                                    }}
+                                >
+                                    View →
+                                </Link>
+                            </div>
+                        ))}
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Recent Completed */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+            >
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 'var(--space-md)'
+                }}>
+                    <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>
+                        Recent Results
+                    </h2>
+                    <Link
+                        to="/app/results"
+                        style={{
+                            fontSize: '0.85rem',
+                            color: 'var(--accent-primary)',
+                            textDecoration: 'none'
+                        }}
+                    >
+                        View all →
+                    </Link>
+                </div>
+
+                <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-lg)',
+                    overflow: 'hidden'
+                }}>
+                    {completedJobs.length > 0 ? completedJobs.map((job, i) => (
+                        <div
+                            key={job.id}
+                            style={{
+                                padding: 'var(--space-lg)',
+                                borderBottom: i < completedJobs.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}
+                        >
+                            <div>
+                                <div style={{
+                                    fontWeight: 500,
+                                    marginBottom: 'var(--space-xs)'
+                                }}>
+                                    {job.name}
+                                </div>
+                                <div style={{
+                                    fontSize: '0.8rem',
+                                    color: 'var(--text-tertiary)'
+                                }}>
+                                    Completed {job.completedAt ? formatDistanceToNow(job.completedAt, { addSuffix: true }) : 'recently'}
+                                </div>
+                            </div>
+
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 'var(--space-md)'
+                            }}>
+                                <span style={{
+                                    padding: '4px 8px',
+                                    background: 'rgba(34, 197, 94, 0.1)',
+                                    border: '1px solid rgba(34, 197, 94, 0.2)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    fontSize: '0.75rem',
+                                    color: '#22c55e'
+                                }}>
+                                    Completed
+                                </span>
+                                <Link
+                                    to="/app/results"
+                                    style={{
+                                        fontSize: '0.85rem',
+                                        color: 'var(--accent-primary)',
+                                        textDecoration: 'none'
+                                    }}
+                                >
+                                    View →
+                                </Link>
                             </div>
                         </div>
-                    ))}
+                    )) : (
+                        <div style={{
+                            padding: 'var(--space-2xl)',
+                            textAlign: 'center',
+                            color: 'var(--text-tertiary)'
+                        }}>
+                            No completed jobs yet
+                        </div>
+                    )}
                 </div>
             </motion.div>
         </div>
