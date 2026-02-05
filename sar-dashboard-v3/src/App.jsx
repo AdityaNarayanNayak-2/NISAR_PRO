@@ -1,26 +1,29 @@
-import { useState } from 'react'
-import './App.css'
+import { Routes, Route } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import Navbar from './components/Navbar'
-import Hero from './components/Hero'
-import LiveFeed from './components/LiveFeed'
 import Footer from './components/Footer'
+import HomePage from './pages/HomePage'
+import TechnologyPage from './pages/TechnologyPage'
+import DemoPage from './pages/DemoPage'
+import './App.css'
 
 function App() {
-  const [jobs, setJobs] = useState([
-    { id: 1, name: 'NISAR_L1_SLC_2024_001', status: 'Completed', progress: 100 },
-    { id: 2, name: 'S1A_IW_SLC_20241115', status: 'Processing', progress: 67 },
-    { id: 3, name: 'NISAR_L2_INSAR_2024_002', status: 'Queued', progress: 0 },
-  ]);
-
-  const handleSearchResults = (newJobs) => {
-    setJobs(newJobs);
-  };
-
   return (
     <>
+      {/* Background Effects */}
+      <div className="bg-gradient-mesh" />
+      <div className="bg-grid" />
+
       <Navbar />
-      <Hero onSearchResults={handleSearchResults} />
-      <LiveFeed jobs={jobs} />
+
+      <AnimatePresence mode="wait">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/technology" element={<TechnologyPage />} />
+          <Route path="/demo" element={<DemoPage />} />
+        </Routes>
+      </AnimatePresence>
+
       <Footer />
     </>
   )
