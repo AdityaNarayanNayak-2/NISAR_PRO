@@ -7,6 +7,7 @@ const navLinks = [
     { path: '/use-cases', label: 'Use Cases' },
     { path: '/technology', label: 'Technology' },
     { path: '/demo', label: 'Demo' },
+    { path: '/app', label: 'Launch App', isApp: true },
 ]
 
 function Navbar() {
