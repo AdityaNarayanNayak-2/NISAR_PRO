@@ -1,0 +1,19 @@
+# Terraform/OpenTofu
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Sensitive variable files (keep templates, ignore actual values)
+# environments/*/secrets.tfvars
+
+# Lock file - generally should be committed, but optional
+# .terraform.lock.hcl
