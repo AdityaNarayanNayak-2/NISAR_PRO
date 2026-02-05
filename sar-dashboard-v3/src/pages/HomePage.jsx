@@ -3,6 +3,7 @@ import Hero from '../components/Hero'
 import Features from '../components/Features'
 import DataVisualization from '../components/DataVisualization'
 import ProcessingPipeline from '../components/ProcessingPipeline'
+import Comparison from '../components/Comparison'
 
 const pageVariants = {
     initial: { opacity: 0, y: 20 },
@@ -23,6 +24,7 @@ function HomePage() {
             <Features />
             <ProcessingPipeline />
             <DataVisualization />
+            <Comparison />
         </motion.main>
     )
 }

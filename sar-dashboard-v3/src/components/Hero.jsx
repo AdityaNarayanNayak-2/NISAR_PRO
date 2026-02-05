@@ -56,7 +56,15 @@ function Hero() {
                 />
             </div>
 
-            <div className="container" style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
+            <div className="container" style={{
+                textAlign: 'center',
+                position: 'relative',
+                zIndex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                width: '100%'
+            }}>
                 {/* Badge */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}

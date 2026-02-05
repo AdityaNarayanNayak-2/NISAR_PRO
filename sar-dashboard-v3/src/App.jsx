@@ -5,6 +5,7 @@ import Footer from './components/Footer'
 import HomePage from './pages/HomePage'
 import TechnologyPage from './pages/TechnologyPage'
 import DemoPage from './pages/DemoPage'
+import UseCasesPage from './pages/UseCasesPage'
 import './App.css'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/technology" element={<TechnologyPage />} />
           <Route path="/demo" element={<DemoPage />} />
+          <Route path="/use-cases" element={<UseCasesPage />} />
         </Routes>
       </AnimatePresence>
 
