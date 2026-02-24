@@ -1,0 +1,350 @@
+/* ============================================================
+   App Shell Light Theme
+   Applied ONLY within .app-shell — marketing pages unaffected
+   ============================================================ */
+
+.app-shell {
+  /* Background */
+  --app-bg: #eaf5fb;
+  --app-bg-gradient:
+    radial-gradient(ellipse at top left, #c8e8f5, transparent 55%),
+    radial-gradient(ellipse at bottom right, #daf0f7, transparent 55%),
+    #eaf5fb;
+
+  /* Surfaces */
+  --app-card: #ffffff;
+  --app-card-elevated: #ffffff;
+  --app-surface: #f4f8fb;
+
+  /* Text */
+  --app-text-primary: #1a1a1a;
+  --app-text-secondary: #444444;
+  --app-text-muted: #888888;
+
+  /* Accent */
+  --app-accent: #0078d4;
+  --app-accent-hover: #0067b8;
+  --app-accent-bg: rgba(0, 120, 212, 0.08);
+  --app-accent-border: rgba(0, 120, 212, 0.25);
+
+  /* Borders */
+  --app-border: #e0e0e0;
+  --app-border-hover: #c8c8c8;
+
+  /* Shadows — the "premium" feel */
+  --app-shadow-card: 0 4px 20px rgba(0, 0, 0, 0.07);
+  --app-shadow-hover: 0 8px 28px rgba(0, 0, 0, 0.12);
+  --app-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --app-shadow-pill: 0 4px 16px rgba(0, 0, 0, 0.12);
+
+  /* Radius — curvy as user wants */
+  --app-radius-sm: 10px;
+  --app-radius-md: 16px;
+  --app-radius-lg: 20px;
+  --app-radius-xl: 28px;
+  --app-radius-pill: 9999px;
+
+  /* Status */
+  --app-success: #1a7f3c;
+  --app-success-bg: rgba(26, 127, 60, 0.08);
+  --app-success-border: rgba(26, 127, 60, 0.2);
+  --app-warning: #b45309;
+  --app-warning-bg: rgba(180, 83, 9, 0.08);
+  --app-processing: #0078d4;
+  --app-processing-bg: rgba(0, 120, 212, 0.08);
+
+  /* Override global dark vars inside app shell */
+  --bg-primary: var(--app-bg);
+  --bg-secondary: var(--app-card);
+  --bg-tertiary: var(--app-surface);
+  --bg-elevated: #ffffff;
+  --text-primary: var(--app-text-primary);
+  --text-secondary: var(--app-text-secondary);
+  --text-tertiary: var(--app-text-muted);
+  --border-subtle: var(--app-border);
+  --border-default: var(--app-border);
+  --accent-primary: var(--app-accent);
+
+  /* Apply background */
+  background: var(--app-bg-gradient);
+  color: var(--app-text-primary);
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+/* ── Cards ─────────────────────────────────────── */
+.app-shell .app-card {
+  background: var(--app-card);
+  border-radius: var(--app-radius-lg);
+  box-shadow: var(--app-shadow-card);
+  padding: 28px 32px;
+  border: none;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.app-shell .app-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--app-shadow-hover);
+}
+
+.app-shell .app-card-sm {
+  background: var(--app-card);
+  border-radius: var(--app-radius-md);
+  box-shadow: var(--app-shadow-card);
+  padding: 20px 24px;
+  border: none;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.app-shell .app-card-sm:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--app-shadow-hover);
+}
+
+/* Table-style card — no hover lift */
+.app-shell .app-table {
+  background: var(--app-card);
+  border-radius: var(--app-radius-lg);
+  box-shadow: var(--app-shadow-card);
+  overflow: hidden;
+}
+
+.app-shell .app-table-header {
+  background: #f7f9fb;
+  padding: 12px 24px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--app-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.app-shell .app-table-row {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--app-border);
+  transition: background 0.15s ease;
+}
+
+.app-shell .app-table-row:last-child {
+  border-bottom: none;
+}
+
+.app-shell .app-table-row:hover {
+  background: #f7fbff;
+}
+
+/* ── Buttons ────────────────────────────────────── */
+.app-shell .app-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: var(--app-accent);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--app-radius-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+  text-decoration: none;
+}
+
+.app-shell .app-btn-primary:hover {
+  background: var(--app-accent-hover);
+  transform: translateY(-1px);
+}
+
+.app-shell .app-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background: transparent;
+  color: var(--app-text-primary);
+  border: 1px solid #d0d0d0;
+  border-radius: var(--app-radius-sm);
+  font-size: 0.875rem;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  text-decoration: none;
+}
+
+.app-shell .app-btn-outline:hover {
+  background: #f5f5f5;
+}
+
+.app-shell .app-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--app-accent);
+  border: none;
+  border-radius: var(--app-radius-sm);
+  font-size: 0.875rem;
+  font-weight: 400;
+  cursor: pointer;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+  text-decoration: none;
+}
+
+.app-shell .app-btn-ghost:hover {
+  color: var(--app-accent-hover);
+  text-decoration: underline;
+}
+
+/* ── Pill Stepper ───────────────────────────────── */
+.app-shell .app-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: #ffffff;
+  border-radius: var(--app-radius-pill);
+  box-shadow: var(--app-shadow-pill);
+  padding: 6px;
+  width: fit-content;
+}
+
+.app-shell .app-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: var(--app-radius-pill);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  text-decoration: none;
+  color: #444;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.app-shell .app-step-item.active {
+  background: #e8e8e8;
+  color: #000;
+  font-weight: 600;
+}
+
+.app-shell .app-step-item.completed .app-step-num {
+  background: var(--app-accent);
+  color: white;
+  border-color: var(--app-accent);
+}
+
+.app-shell .app-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid #c0c0c0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #888;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.app-shell .app-step-item.active .app-step-num {
+  border-color: var(--app-accent);
+  color: var(--app-accent);
+}
+
+/* ── Status Badges ──────────────────────────────── */
+.app-shell .app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--app-radius-pill);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.app-shell .app-badge-success {
+  background: var(--app-success-bg);
+  color: var(--app-success);
+  border: 1px solid var(--app-success-border);
+}
+
+.app-shell .app-badge-processing {
+  background: var(--app-processing-bg);
+  color: var(--app-processing);
+  border: 1px solid var(--app-accent-border);
+}
+
+.app-shell .app-badge-queued {
+  background: rgba(100, 100, 100, 0.08);
+  color: #666;
+  border: 1px solid rgba(100, 100, 100, 0.18);
+}
+
+/* ── Section Labels ─────────────────────────────── */
+.app-shell .app-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--app-text-muted);
+  margin-bottom: 12px;
+}
+
+/* ── Progress Bar ───────────────────────────────── */
+.app-shell .app-progress-track {
+  height: 5px;
+  background: #e8e8e8;
+  border-radius: var(--app-radius-pill);
+  overflow: hidden;
+}
+
+.app-shell .app-progress-fill {
+  height: 100%;
+  background: var(--app-accent);
+  border-radius: var(--app-radius-pill);
+  transition: width 0.4s ease;
+}
+
+/* ── Input ──────────────────────────────────────── */
+.app-shell .app-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  color: var(--app-text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+}
+
+.app-shell .app-input:focus {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.12);
+}
+
+.app-shell .app-input::placeholder {
+  color: #aaa;
+}
+
+/* ── Connector for stepper (linear line between steps) */
+.app-step-connector {
+  height: 2px;
+  flex: 1;
+  max-width: 40px;
+  background: #e0e0e0;
+  border-radius: 1px;
+  margin: 0 4px;
+  transition: background 0.3s ease;
+}
+
+.app-step-connector.done {
+  background: var(--app-accent);
+}

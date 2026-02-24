@@ -4,15 +4,14 @@ import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
 const mockResult = {
-    id: 'result-001',
     jobName: 'Mumbai Coastal InSAR',
-    processType: 'insar',
-    stats: {
-        coherence: 0.87,
-        coverage: 98.5,
-        resolution: '10m',
-        maxDeformation: '-12.4 mm/yr'
-    },
+    processType: 'InSAR',
+    stats: [
+        { label: 'Coherence', value: '0.87' },
+        { label: 'Coverage', value: '98.5%' },
+        { label: 'Resolution', value: '10 m' },
+        { label: 'Max Deformation', value: '−12.4 mm/yr' }
+    ],
     outputs: [
         { name: 'Deformation Map', format: 'GeoTIFF', size: '245 MB' },
         { name: 'Coherence Map', format: 'GeoTIFF', size: '120 MB' },
@@ -23,226 +22,109 @@ const mockResult = {
 
 const resultPolygon = {
     type: 'Feature',
-    geometry: {
-        type: 'Polygon',
-        coordinates: [[[72.77, 19.00], [72.97, 19.00], [72.97, 19.15], [72.77, 19.15], [72.77, 19.00]]]
-    }
+    geometry: { type: 'Polygon', coordinates: [[[72.77, 19.00], [72.97, 19.00], [72.97, 19.15], [72.77, 19.15], [72.77, 19.00]]] }
 }
 
 function ResultsPage() {
-    const [activeTab, setActiveTab] = useState('overview')
+    const [tab, setTab] = useState('overview')
 
     return (
-        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-            {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                style={{ marginBottom: 'var(--space-xl)' }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Analysis Results</h1>
-                    <span style={{
-                        padding: '4px 10px',
-                        background: 'rgba(34, 197, 94, 0.1)',
-                        border: '1px solid rgba(34, 197, 94, 0.2)',
-                        borderRadius: 'var(--radius-full)',
-                        fontSize: '0.75rem',
-                        color: '#22c55e'
-                    }}>
+        <div style={{ maxWidth: '1060px' }}>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: '28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                    <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#000', letterSpacing: '-0.02em' }}>Analysis Results</h1>
+                    <span style={{ padding: '3px 10px', background: 'rgba(26,127,60,0.08)', border: '1px solid rgba(26,127,60,0.2)', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 500, color: '#1a7f3c' }}>
                         Complete
                     </span>
                 </div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                    {mockResult.jobName} • {mockResult.processType.toUpperCase()}
+                <p style={{ color: '#666', fontSize: '0.9rem' }}>
+                    {mockResult.jobName} · {mockResult.processType}
                 </p>
             </motion.div>
 
             {/* Stats */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(4, 1fr)',
-                    gap: 'var(--space-md)',
-                    marginBottom: 'var(--space-xl)'
-                }}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}
             >
-                {[
-                    { label: 'Coherence', value: mockResult.stats.coherence },
-                    { label: 'Coverage', value: `${mockResult.stats.coverage}%` },
-                    { label: 'Resolution', value: mockResult.stats.resolution },
-                    { label: 'Max Deformation', value: mockResult.stats.maxDeformation }
-                ].map(stat => (
-                    <div
-                        key={stat.label}
-                        style={{
-                            padding: 'var(--space-lg)',
-                            background: 'var(--bg-secondary)',
-                            border: '1px solid var(--border-subtle)',
-                            borderRadius: 'var(--radius-lg)'
-                        }}
-                    >
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 500 }}>
-                            {stat.label}
-                        </div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                            {stat.value}
-                        </div>
+                {mockResult.stats.map(s => (
+                    <div key={s.label} style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', padding: '22px 20px' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#bbb', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', fontWeight: 600 }}>{s.label}</div>
+                        <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1a1a1a', fontFamily: 'JetBrains Mono, monospace' }}>{s.value}</div>
                     </div>
                 ))}
             </motion.div>
 
-            {/* Tabs */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                style={{
-                    display: 'flex',
-                    gap: '0',
-                    marginBottom: 'var(--space-lg)',
-                    borderBottom: '1px solid var(--border-subtle)'
-                }}
+            {/* Tab Bar */}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+                style={{ display: 'flex', gap: '0', borderBottom: '1px solid #e8e8e8', marginBottom: '20px' }}
             >
-                {['overview', 'outputs', 'export'].map((tab) => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
+                {['overview', 'outputs', 'export'].map(t => (
+                    <button key={t} onClick={() => setTab(t)}
                         style={{
-                            padding: 'var(--space-sm) var(--space-lg)',
-                            background: 'transparent',
-                            border: 'none',
-                            borderBottom: `2px solid ${activeTab === tab ? 'var(--accent-primary)' : 'transparent'}`,
-                            color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                            cursor: 'pointer',
-                            fontSize: '0.9rem',
-                            fontWeight: activeTab === tab ? 600 : 400,
-                            textTransform: 'capitalize',
-                            marginBottom: '-1px'
+                            padding: '10px 22px', background: 'transparent', border: 'none',
+                            borderBottom: `2px solid ${tab === t ? '#0078d4' : 'transparent'}`,
+                            color: tab === t ? '#0078d4' : '#888', cursor: 'pointer',
+                            fontSize: '0.9rem', fontWeight: tab === t ? 600 : 400,
+                            textTransform: 'capitalize', marginBottom: '-1px',
+                            transition: 'all 0.2s ease'
                         }}
                     >
-                        {tab}
+                        {t}
                     </button>
                 ))}
             </motion.div>
 
             {/* Tab Content */}
-            <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.15 }}
-            >
-                {activeTab === 'overview' && (
-                    <div style={{
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-lg)',
-                        overflow: 'hidden',
-                        height: '450px'
-                    }}>
+            <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+                {tab === 'overview' && (
+                    <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', overflow: 'hidden', height: '440px' }}>
                         <MapContainer center={[19.076, 72.877]} zoom={11} style={{ height: '100%', width: '100%' }}>
-                            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-                            <GeoJSON data={resultPolygon} style={{ fillColor: '#6366f1', fillOpacity: 0.3, color: '#6366f1', weight: 2 }} />
+                            <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+                            <GeoJSON data={resultPolygon} style={{ fillColor: '#0078d4', fillOpacity: 0.25, color: '#0078d4', weight: 2 }} />
                         </MapContainer>
                     </div>
                 )}
 
-                {activeTab === 'outputs' && (
-                    <div style={{
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-lg)',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Table Header */}
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 100px 100px 100px',
-                            gap: 'var(--space-md)',
-                            padding: 'var(--space-md) var(--space-lg)',
-                            background: 'var(--bg-tertiary)',
-                            fontSize: '0.75rem',
-                            color: 'var(--text-tertiary)',
-                            fontWeight: 500
-                        }}>
-                            <div>File</div>
-                            <div>Format</div>
-                            <div>Size</div>
-                            <div></div>
+                {tab === 'outputs' && (
+                    <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', overflow: 'hidden' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px', gap: '12px', padding: '12px 24px', background: '#f7f9fb', fontSize: '0.7rem', fontWeight: 600, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f0f0f0' }}>
+                            <div>File</div><div>Format</div><div>Size</div><div></div>
                         </div>
-
-                        {/* Table Rows */}
-                        {mockResult.outputs.map((output, i) => (
-                            <div
-                                key={output.name}
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '1fr 100px 100px 100px',
-                                    gap: 'var(--space-md)',
-                                    padding: 'var(--space-lg)',
-                                    borderTop: '1px solid var(--border-subtle)',
-                                    alignItems: 'center'
-                                }}
-                            >
-                                <div style={{ fontWeight: 500 }}>{output.name}</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{output.format}</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>{output.size}</div>
-                                <div>
-                                    <button style={{
-                                        padding: 'var(--space-xs) var(--space-md)',
-                                        background: 'var(--bg-tertiary)',
-                                        border: '1px solid var(--border-default)',
-                                        borderRadius: 'var(--radius-md)',
-                                        color: 'var(--text-primary)',
-                                        cursor: 'pointer',
-                                        fontSize: '0.8rem'
-                                    }}>
-                                        Download
-                                    </button>
-                                </div>
+                        {mockResult.outputs.map((o, i) => (
+                            <div key={o.name} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px', gap: '12px', padding: '16px 24px', borderBottom: i < mockResult.outputs.length - 1 ? '1px solid #f5f5f5' : 'none', alignItems: 'center' }}>
+                                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{o.name}</div>
+                                <div style={{ fontSize: '0.82rem', color: '#aaa', fontFamily: 'JetBrains Mono, monospace' }}>{o.format}</div>
+                                <div style={{ fontSize: '0.82rem', color: '#bbb' }}>{o.size}</div>
+                                <button style={{ padding: '7px 14px', background: 'transparent', border: '1px solid #d0d0d0', borderRadius: '8px', color: '#444', cursor: 'pointer', fontSize: '0.8rem', transition: 'background 0.15s ease' }}
+                                    onMouseEnter={e => e.target.style.background = '#f5f5f5'}
+                                    onMouseLeave={e => e.target.style.background = 'transparent'}
+                                >
+                                    Download
+                                </button>
                             </div>
                         ))}
                     </div>
                 )}
 
-                {activeTab === 'export' && (
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: 'var(--space-lg)'
-                    }}>
+                {tab === 'export' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                         {[
-                            { title: 'Download All', desc: 'Get all outputs as ZIP archive', action: 'Download ZIP' },
+                            { title: 'Download All', desc: 'All outputs as a ZIP archive', action: 'Download ZIP' },
                             { title: 'Schedule Recurring', desc: 'Automate this analysis weekly or monthly', action: 'Set Schedule' },
-                            { title: 'Share Results', desc: 'Generate a shareable link', action: 'Copy Link' }
-                        ].map(option => (
-                            <div
-                                key={option.title}
-                                style={{
-                                    padding: 'var(--space-xl)',
-                                    background: 'var(--bg-secondary)',
-                                    border: '1px solid var(--border-subtle)',
-                                    borderRadius: 'var(--radius-lg)',
-                                    textAlign: 'center'
-                                }}
-                            >
-                                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 'var(--space-xs)' }}>{option.title}</h3>
-                                <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-lg)' }}>{option.desc}</p>
+                            { title: 'Share Results', desc: 'Generate a read-only shareable link', action: 'Copy Link' }
+                        ].map(o => (
+                            <div key={o.title} style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', padding: '28px 24px', textAlign: 'center' }}>
+                                <h3 style={{ fontWeight: 700, color: '#1a1a1a', fontSize: '1rem', marginBottom: '6px' }}>{o.title}</h3>
+                                <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: '20px' }}>{o.desc}</p>
                                 <button style={{
-                                    padding: 'var(--space-sm) var(--space-lg)',
-                                    background: 'var(--accent-primary)',
-                                    border: 'none',
-                                    borderRadius: 'var(--radius-md)',
-                                    color: 'white',
-                                    cursor: 'pointer',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 500
-                                }}>
-                                    {option.action}
+                                    padding: '9px 22px', background: '#0078d4', border: 'none', borderRadius: '10px',
+                                    color: '#fff', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500,
+                                    transition: 'background 0.2s ease'
+                                }}
+                                    onMouseEnter={e => e.target.style.background = '#0067b8'}
+                                    onMouseLeave={e => e.target.style.background = '#0078d4'}
+                                >
+                                    {o.action}
                                 </button>
                             </div>
                         ))}

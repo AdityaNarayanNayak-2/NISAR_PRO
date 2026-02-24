@@ -5,10 +5,10 @@ import { useWorkflowStore } from '../../store/workflowStore'
 import { format, subDays } from 'date-fns'
 
 const missions = [
-    { id: 'nisar', name: 'NISAR', org: 'NASA-ISRO', band: 'L + S Band', status: 'Active' },
-    { id: 'sentinel1', name: 'Sentinel-1', org: 'ESA', band: 'C-Band', status: 'Active' },
-    { id: 'iceye', name: 'ICEYE', org: 'Commercial', band: 'X-Band', status: 'Active' },
-    { id: 'capella', name: 'Capella', org: 'Commercial', band: 'X-Band', status: 'Active' },
+    { id: 'nisar', name: 'NISAR', band: 'L + S Band', org: 'NASA-ISRO' },
+    { id: 'sentinel1', name: 'Sentinel-1', band: 'C-Band', org: 'ESA' },
+    { id: 'iceye', name: 'ICEYE', band: 'X-Band', org: 'Commercial' },
+    { id: 'capella', name: 'Capella', band: 'X-Band', org: 'Commercial' },
 ]
 
 const mockScenes = [
@@ -22,257 +22,118 @@ const mockScenes = [
 function DataSourcePage() {
     const navigate = useNavigate()
     const { dataSource, setDataSource, nextStep, location } = useWorkflowStore()
-
     const [selectedMission, setSelectedMission] = useState(dataSource.mission)
-    const [dateRange, setDateRange] = useState({
-        start: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
-        end: format(new Date(), 'yyyy-MM-dd')
-    })
+    const [dateRange, setDateRange] = useState({ start: format(subDays(new Date(), 30), 'yyyy-MM-dd'), end: format(new Date(), 'yyyy-MM-dd') })
     const [selectedScenes, setSelectedScenes] = useState(dataSource.selectedScenes)
 
-    const filteredScenes = mockScenes.filter(s => !selectedMission || s.mission === selectedMission)
+    const filtered = mockScenes.filter(s => !selectedMission || s.mission === selectedMission)
 
     const toggleScene = (scene) => {
-        if (selectedScenes.find(s => s.id === scene.id)) {
-            setSelectedScenes(selectedScenes.filter(s => s.id !== scene.id))
-        } else {
-            setSelectedScenes([...selectedScenes, scene])
-        }
+        setSelectedScenes(prev => prev.find(s => s.id === scene.id) ? prev.filter(s => s.id !== scene.id) : [...prev, scene])
     }
 
     const handleContinue = () => {
         setDataSource({ mission: selectedMission, dateRange, selectedScenes })
-        nextStep()
-        navigate('/app/configure')
+        nextStep(); navigate('/app/configure')
     }
 
     return (
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-            {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                style={{ marginBottom: 'var(--space-xl)' }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Select Data Source</h1>
+        <div style={{ maxWidth: '960px' }}>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: '28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                    <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#000', letterSpacing: '-0.02em' }}>Data Source</h1>
                     {location.name && (
-                        <span style={{
-                            padding: '4px 10px',
-                            background: 'rgba(99, 102, 241, 0.1)',
-                            border: '1px solid rgba(99, 102, 241, 0.2)',
-                            borderRadius: 'var(--radius-full)',
-                            fontSize: '0.75rem',
-                            color: 'var(--accent-primary)'
-                        }}>
+                        <span style={{ padding: '3px 12px', background: '#e8f3fc', border: '1px solid #b3d6f4', borderRadius: '99px', fontSize: '0.78rem', color: '#0078d4', fontWeight: 500 }}>
                             {location.name}
                         </span>
                     )}
                 </div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                    Choose a SAR mission and select available scenes
-                </p>
+                <p style={{ color: '#666', fontSize: '0.9rem' }}>Select a mission and choose scenes for your area</p>
             </motion.div>
 
-            {/* Mission Selection */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                style={{ marginBottom: 'var(--space-xl)' }}
-            >
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)', fontWeight: 500 }}>
-                    Mission
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-md)' }}>
-                    {missions.map((mission) => (
+            {/* Mission Cards */}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#999', marginBottom: '12px' }}>Mission</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                    {missions.map(m => (
                         <button
-                            key={mission.id}
-                            onClick={() => setSelectedMission(mission.id)}
+                            key={m.id}
+                            onClick={() => setSelectedMission(m.id)}
                             style={{
-                                padding: 'var(--space-lg)',
-                                background: selectedMission === mission.id ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-secondary)',
-                                border: `1px solid ${selectedMission === mission.id ? 'rgba(99, 102, 241, 0.3)' : 'var(--border-subtle)'}`,
-                                borderRadius: 'var(--radius-lg)',
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                                transition: 'all 0.15s ease'
+                                padding: '18px 16px', textAlign: 'left',
+                                background: selectedMission === m.id ? '#e8f3fc' : '#fff',
+                                border: `1px solid ${selectedMission === m.id ? '#b3d6f4' : '#e8e8e8'}`,
+                                borderRadius: '16px', cursor: 'pointer',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                                transition: 'all 0.2s ease'
                             }}
                         >
-                            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                                {mission.name}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                                {mission.band}
-                            </div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-                                {mission.org}
-                            </div>
+                            <div style={{ fontWeight: 700, color: '#1a1a1a', marginBottom: '3px', fontSize: '0.95rem' }}>{m.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#888' }}>{m.band}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#bbb', marginTop: '2px' }}>{m.org}</div>
                         </button>
                     ))}
                 </div>
             </motion.div>
 
             {/* Date Range */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: 'var(--space-lg)',
-                    marginBottom: 'var(--space-xl)'
-                }}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+                style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', padding: '22px 24px', marginBottom: '20px' }}
             >
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)', fontWeight: 500 }}>
-                    Date Range
-                </div>
-                <div style={{ display: 'flex', gap: 'var(--space-lg)', alignItems: 'center' }}>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>From</label>
-                        <input
-                            type="date"
-                            value={dateRange.start}
-                            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                            style={{
-                                padding: 'var(--space-sm) var(--space-md)',
-                                background: 'var(--bg-tertiary)',
-                                border: '1px solid var(--border-default)',
-                                borderRadius: 'var(--radius-md)',
-                                color: 'var(--text-primary)',
-                                fontSize: '0.85rem'
-                            }}
-                        />
-                    </div>
-                    <span style={{ color: 'var(--text-tertiary)', marginTop: '18px' }}>→</span>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>To</label>
-                        <input
-                            type="date"
-                            value={dateRange.end}
-                            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                            style={{
-                                padding: 'var(--space-sm) var(--space-md)',
-                                background: 'var(--bg-tertiary)',
-                                border: '1px solid var(--border-default)',
-                                borderRadius: 'var(--radius-md)',
-                                color: 'var(--text-primary)',
-                                fontSize: '0.85rem'
-                            }}
-                        />
-                    </div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#999', marginBottom: '14px' }}>Date Range</div>
+                <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                    {['start', 'end'].map((key, i) => (
+                        <div key={key}>
+                            <div style={{ fontSize: '0.75rem', color: '#aaa', marginBottom: '5px' }}>{key === 'start' ? 'From' : 'To'}</div>
+                            <input type="date" value={dateRange[key]} onChange={e => setDateRange(p => ({ ...p, [key]: e.target.value }))}
+                                style={{ padding: '9px 14px', background: '#f7f9fb', border: '1px solid #e8e8e8', borderRadius: '10px', color: '#1a1a1a', fontSize: '0.875rem', fontFamily: 'inherit', outline: 'none' }}
+                            />
+                        </div>
+                    ))}
                 </div>
             </motion.div>
 
             {/* Scenes Table */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-            >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>
-                        Available Scenes ({filteredScenes.length})
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#999' }}>
+                        Available Scenes ({filtered.length})
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--accent-primary)' }}>
-                        {selectedScenes.length} selected
-                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#0078d4', fontWeight: 500 }}>{selectedScenes.length} selected</div>
                 </div>
 
-                <div style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-lg)',
-                    overflow: 'hidden'
-                }}>
-                    {/* Header */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: '40px 1fr 100px 80px 100px',
-                        gap: 'var(--space-md)',
-                        padding: 'var(--space-md) var(--space-lg)',
-                        background: 'var(--bg-tertiary)',
-                        fontSize: '0.75rem',
-                        color: 'var(--text-tertiary)',
-                        fontWeight: 500
-                    }}>
-                        <div></div>
-                        <div>Scene ID</div>
-                        <div>Mode</div>
-                        <div>Size</div>
-                        <div>Date</div>
+                <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 80px 110px', gap: '12px', padding: '12px 24px', background: '#f7f9fb', fontSize: '0.72rem', fontWeight: 600, color: '#999', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f0f0f0' }}>
+                        <div></div><div>Scene ID</div><div>Mode</div><div>Size</div><div>Date</div>
                     </div>
-
-                    {/* Rows */}
-                    {filteredScenes.map((scene, i) => {
-                        const isSelected = selectedScenes.find(s => s.id === scene.id)
+                    {filtered.map((scene) => {
+                        const sel = !!selectedScenes.find(s => s.id === scene.id)
                         return (
-                            <div
-                                key={scene.id}
-                                onClick={() => toggleScene(scene)}
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '40px 1fr 100px 80px 100px',
-                                    gap: 'var(--space-md)',
-                                    padding: 'var(--space-md) var(--space-lg)',
-                                    borderTop: '1px solid var(--border-subtle)',
-                                    cursor: 'pointer',
-                                    background: isSelected ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
-                                    transition: 'background 0.15s ease'
-                                }}
+                            <div key={scene.id} onClick={() => toggleScene(scene)}
+                                style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 80px 110px', gap: '12px', padding: '14px 24px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', background: sel ? '#f0f7ff' : 'transparent', transition: 'background 0.15s ease', alignItems: 'center' }}
                             >
                                 <div>
-                                    <div style={{
-                                        width: '18px',
-                                        height: '18px',
-                                        borderRadius: '4px',
-                                        border: `2px solid ${isSelected ? 'var(--accent-primary)' : 'var(--border-default)'}`,
-                                        background: isSelected ? 'var(--accent-primary)' : 'transparent',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: 'white',
-                                        fontSize: '0.7rem'
-                                    }}>
-                                        {isSelected && '✓'}
+                                    <div style={{ width: '18px', height: '18px', borderRadius: '5px', border: `2px solid ${sel ? '#0078d4' : '#d0d0d0'}`, background: sel ? '#0078d4' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.65rem', fontWeight: 700 }}>
+                                        {sel && '✓'}
                                     </div>
                                 </div>
-                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>{scene.id}</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{scene.mode}</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{scene.size}</div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>{scene.date}</div>
+                                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem', color: '#333' }}>{scene.id}</div>
+                                <div style={{ fontSize: '0.85rem', color: '#666' }}>{scene.mode}</div>
+                                <div style={{ fontSize: '0.85rem', color: '#888' }}>{scene.size}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#aaa' }}>{scene.date}</div>
                             </div>
                         )
                     })}
                 </div>
             </motion.div>
 
-            {/* Continue */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                style={{ marginTop: 'var(--space-xl)', display: 'flex', justifyContent: 'flex-end' }}
-            >
-                <button
-                    onClick={handleContinue}
-                    disabled={selectedScenes.length === 0}
-                    style={{
-                        padding: 'var(--space-md) var(--space-xl)',
-                        background: selectedScenes.length > 0 ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-md)',
-                        color: selectedScenes.length > 0 ? 'white' : 'var(--text-tertiary)',
-                        cursor: selectedScenes.length > 0 ? 'pointer' : 'not-allowed',
-                        fontSize: '0.9rem',
-                        fontWeight: 500
-                    }}
+            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={handleContinue} disabled={selectedScenes.length === 0}
+                    style={{ padding: '11px 28px', background: selectedScenes.length > 0 ? '#0078d4' : '#e8e8e8', border: 'none', borderRadius: '12px', color: selectedScenes.length > 0 ? '#fff' : '#aaa', cursor: selectedScenes.length > 0 ? 'pointer' : 'not-allowed', fontSize: '0.9rem', fontWeight: 500, transition: 'background 0.2s ease' }}
                 >
                     Continue →
                 </button>
-            </motion.div>
+            </div>
         </div>
     )
 }

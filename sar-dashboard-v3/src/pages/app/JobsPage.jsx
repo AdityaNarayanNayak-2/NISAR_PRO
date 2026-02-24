@@ -2,112 +2,69 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { mockJobs } from '../../store/workflowStore'
-import { formatDistanceToNow } from 'date-fns'
 
 function JobsPage() {
     const [jobs, setJobs] = useState(mockJobs)
     const [filter, setFilter] = useState('all')
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            setJobs(prevJobs =>
-                prevJobs.map(job => {
-                    if (job.status === 'processing' && job.progress < 100) {
-                        const newProgress = Math.min(job.progress + Math.random() * 3, 100)
-                        return {
-                            ...job,
-                            progress: newProgress,
-                            status: newProgress >= 100 ? 'completed' : 'processing'
-                        }
-                    }
-                    return job
-                })
-            )
+        const id = setInterval(() => {
+            setJobs(prev => prev.map(j => {
+                if (j.status === 'processing' && j.progress < 100) {
+                    const p = Math.min(j.progress + Math.random() * 3, 100)
+                    return { ...j, progress: p, status: p >= 100 ? 'completed' : 'processing' }
+                }
+                return j
+            }))
         }, 2000)
-        return () => clearInterval(interval)
+        return () => clearInterval(id)
     }, [])
 
-    const filteredJobs = filter === 'all' ? jobs : jobs.filter(j => j.status === filter)
+    const filtered = filter === 'all' ? jobs : jobs.filter(j => j.status === filter)
 
-    const getStatusStyle = (status) => {
-        switch (status) {
-            case 'completed': return { bg: 'rgba(34, 197, 94, 0.1)', border: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }
-            case 'processing': return { bg: 'rgba(99, 102, 241, 0.1)', border: 'rgba(99, 102, 241, 0.2)', color: '#6366f1' }
-            case 'queued': return { bg: 'rgba(156, 163, 175, 0.1)', border: 'rgba(156, 163, 175, 0.2)', color: '#9ca3af' }
-            default: return { bg: 'transparent', border: 'transparent', color: 'var(--text-tertiary)' }
-        }
-    }
+    const statusStyle = (s) => ({
+        completed: { bg: 'rgba(26,127,60,0.08)', color: '#1a7f3c', border: 'rgba(26,127,60,0.2)' },
+        processing: { bg: 'rgba(0,120,212,0.08)', color: '#0078d4', border: 'rgba(0,120,212,0.2)' },
+        queued: { bg: 'rgba(120,120,120,0.07)', color: '#888', border: 'rgba(120,120,120,0.18)' }
+    }[s] || {})
 
     return (
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-            {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                style={{ marginBottom: 'var(--space-xl)' }}
-            >
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: 'var(--space-xs)' }}>
-                    Processing Jobs
-                </h1>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                    Monitor your SAR processing jobs
-                </p>
+        <div style={{ maxWidth: '960px' }}>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: '28px' }}>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#000', letterSpacing: '-0.02em', marginBottom: '6px' }}>Processing Jobs</h1>
+                <p style={{ color: '#666', fontSize: '0.9rem' }}>Monitor and manage your SAR processing queue</p>
             </motion.div>
 
             {/* Stats */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(4, 1fr)',
-                    gap: 'var(--space-md)',
-                    marginBottom: 'var(--space-xl)'
-                }}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}
             >
                 {[
-                    { label: 'Total', value: jobs.length },
-                    { label: 'Processing', value: jobs.filter(j => j.status === 'processing').length },
-                    { label: 'Completed', value: jobs.filter(j => j.status === 'completed').length },
-                    { label: 'Queued', value: jobs.filter(j => j.status === 'queued').length }
-                ].map(stat => (
-                    <div
-                        key={stat.label}
-                        style={{
-                            padding: 'var(--space-md)',
-                            background: 'var(--bg-secondary)',
-                            border: '1px solid var(--border-subtle)',
-                            borderRadius: 'var(--radius-md)',
-                            textAlign: 'center'
-                        }}
-                    >
-                        <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{stat.value}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{stat.label}</div>
+                    { label: 'Total', val: jobs.length },
+                    { label: 'Processing', val: jobs.filter(j => j.status === 'processing').length },
+                    { label: 'Completed', val: jobs.filter(j => j.status === 'completed').length },
+                    { label: 'Queued', val: jobs.filter(j => j.status === 'queued').length }
+                ].map(s => (
+                    <div key={s.label} style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', padding: '18px 20px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#1a1a1a' }}>{s.val}</div>
+                        <div style={{ fontSize: '0.78rem', color: '#aaa' }}>{s.label}</div>
                     </div>
                 ))}
             </motion.div>
 
-            {/* Filters */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                style={{ display: 'flex', gap: 'var(--space-xs)', marginBottom: 'var(--space-lg)' }}
+            {/* Filter Tabs */}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+                style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}
             >
-                {['all', 'processing', 'completed', 'queued'].map((f) => (
-                    <button
-                        key={f}
-                        onClick={() => setFilter(f)}
+                {['all', 'processing', 'completed', 'queued'].map(f => (
+                    <button key={f} onClick={() => setFilter(f)}
                         style={{
-                            padding: 'var(--space-xs) var(--space-md)',
-                            background: filter === f ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                            border: 'none',
-                            borderRadius: 'var(--radius-md)',
-                            color: filter === f ? 'white' : 'var(--text-secondary)',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem',
-                            textTransform: 'capitalize'
+                            padding: '7px 18px',
+                            background: filter === f ? '#1a1a1a' : '#fff',
+                            border: `1px solid ${filter === f ? '#1a1a1a' : '#e0e0e0'}`,
+                            borderRadius: '99px', color: filter === f ? '#fff' : '#666',
+                            cursor: 'pointer', fontSize: '0.82rem', fontWeight: filter === f ? 600 : 400,
+                            textTransform: 'capitalize', transition: 'all 0.15s ease'
                         }}
                     >
                         {f}
@@ -116,95 +73,43 @@ function JobsPage() {
             </motion.div>
 
             {/* Jobs Table */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-lg)',
-                    overflow: 'hidden'
-                }}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}
+                style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', overflow: 'hidden' }}
             >
-                {/* Header */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 120px 180px 100px 80px',
-                    gap: 'var(--space-md)',
-                    padding: 'var(--space-md) var(--space-lg)',
-                    background: 'var(--bg-tertiary)',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-tertiary)',
-                    fontWeight: 500
-                }}>
-                    <div>Job Name</div>
-                    <div>Type</div>
-                    <div>Progress</div>
-                    <div>Status</div>
-                    <div></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 180px 100px 80px', gap: '12px', padding: '12px 24px', background: '#f7f9fb', fontSize: '0.7rem', fontWeight: 600, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f0f0f0' }}>
+                    <div>Job</div><div>Mission</div><div>Progress</div><div>Status</div><div></div>
                 </div>
 
-                {/* Rows */}
-                {filteredJobs.map((job) => {
-                    const statusStyle = getStatusStyle(job.status)
+                {filtered.map((job) => {
+                    const ss = statusStyle(job.status)
                     return (
-                        <div
-                            key={job.id}
-                            style={{
-                                display: 'grid',
-                                gridTemplateColumns: '1fr 120px 180px 100px 80px',
-                                gap: 'var(--space-md)',
-                                padding: 'var(--space-lg)',
-                                borderTop: '1px solid var(--border-subtle)',
-                                alignItems: 'center'
-                            }}
-                        >
+                        <div key={job.id} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 180px 100px 80px', gap: '12px', padding: '16px 24px', borderBottom: '1px solid #f5f5f5', alignItems: 'center' }}>
                             <div>
-                                <div style={{ fontWeight: 500, marginBottom: '2px' }}>{job.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                                    {job.id}
-                                </div>
+                                <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '2px' }}>{job.name}</div>
+                                <div style={{ fontSize: '0.72rem', color: '#bbb', fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</div>
                             </div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                {job.mission.toUpperCase()}
-                            </div>
+                            <div style={{ fontSize: '0.82rem', color: '#888' }}>{job.mission.toUpperCase()}</div>
                             <div>
                                 {job.status === 'processing' ? (
                                     <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.75rem' }}>
-                                            <span style={{ color: 'var(--text-tertiary)' }}>Processing</span>
-                                            <span style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(job.progress)}%</span>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '0.75rem', color: '#aaa' }}>
+                                            <span>Running</span><span>{Math.round(job.progress)}%</span>
                                         </div>
-                                        <div style={{ height: '4px', background: 'var(--bg-tertiary)', borderRadius: '2px', overflow: 'hidden' }}>
-                                            <div style={{ width: `${job.progress}%`, height: '100%', background: 'var(--accent-primary)', borderRadius: '2px' }} />
+                                        <div style={{ height: '5px', background: '#ebebeb', borderRadius: '99px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${job.progress}%`, height: '100%', background: '#0078d4', borderRadius: '99px', transition: 'width 0.4s ease' }} />
                                         </div>
                                     </div>
-                                ) : (
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>—</span>
-                                )}
+                                ) : <span style={{ fontSize: '0.82rem', color: '#ccc' }}>—</span>}
                             </div>
                             <div>
-                                <span style={{
-                                    padding: '4px 8px',
-                                    background: statusStyle.bg,
-                                    border: `1px solid ${statusStyle.border}`,
-                                    borderRadius: 'var(--radius-sm)',
-                                    fontSize: '0.75rem',
-                                    color: statusStyle.color,
-                                    textTransform: 'capitalize'
-                                }}>
+                                <span style={{ padding: '3px 10px', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 500, background: ss.bg, color: ss.color, border: `1px solid ${ss.border}`, textTransform: 'capitalize' }}>
                                     {job.status}
                                 </span>
                             </div>
                             <div>
-                                {job.status === 'completed' ? (
-                                    <Link to="/app/results" style={{ fontSize: '0.8rem', color: 'var(--accent-primary)', textDecoration: 'none' }}>
-                                        View →
-                                    </Link>
-                                ) : (
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>—</span>
-                                )}
+                                {job.status === 'completed'
+                                    ? <Link to="/app/results" style={{ fontSize: '0.82rem', color: '#0078d4', textDecoration: 'none' }}>View →</Link>
+                                    : <span style={{ fontSize: '0.82rem', color: '#ccc' }}>—</span>}
                             </div>
                         </div>
                     )

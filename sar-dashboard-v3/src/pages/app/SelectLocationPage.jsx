@@ -15,179 +15,96 @@ const savedLocations = [
 function DrawRectangle({ onDraw, isDrawing }) {
     const [startPos, setStartPos] = useState(null)
     const [bounds, setBounds] = useState(null)
-
     useMapEvents({
-        mousedown(e) {
-            if (isDrawing) setStartPos(e.latlng)
-        },
-        mousemove(e) {
-            if (startPos && isDrawing) {
-                setBounds([[startPos.lat, startPos.lng], [e.latlng.lat, e.latlng.lng]])
-            }
-        },
+        mousedown(e) { if (isDrawing) setStartPos(e.latlng) },
+        mousemove(e) { if (startPos && isDrawing) setBounds([[startPos.lat, startPos.lng], [e.latlng.lat, e.latlng.lng]]) },
         mouseup(e) {
             if (startPos && isDrawing) {
-                const finalBounds = [[startPos.lat, startPos.lng], [e.latlng.lat, e.latlng.lng]]
-                setBounds(finalBounds)
-                onDraw(finalBounds)
-                setStartPos(null)
+                const b = [[startPos.lat, startPos.lng], [e.latlng.lat, e.latlng.lng]]
+                setBounds(b); onDraw(b); setStartPos(null)
             }
         }
     })
-
-    return bounds ? (
-        <Rectangle
-            bounds={bounds}
-            pathOptions={{ color: '#6366f1', weight: 2, fillColor: '#6366f1', fillOpacity: 0.15 }}
-        />
-    ) : null
+    return bounds ? <Rectangle bounds={bounds} pathOptions={{ color: '#0078d4', weight: 2, fillColor: '#0078d4', fillOpacity: 0.12 }} /> : null
 }
 
 function SelectLocationPage() {
     const navigate = useNavigate()
     const { setLocation, nextStep } = useWorkflowStore()
     const [drawnArea, setDrawnArea] = useState(null)
-    const [mapCenter, setMapCenter] = useState([20.5937, 78.9629])
-    const [mapZoom, setMapZoom] = useState(5)
+    const [mapCenter] = useState([20.5937, 78.9629])
+    const [mapZoom] = useState(5)
     const [locationName, setLocationName] = useState('')
     const [isDrawing, setIsDrawing] = useState(false)
+    const [activeSaved, setActiveSaved] = useState(null)
 
     const handleDraw = (bounds) => {
-        const geoJSON = {
-            type: 'Feature',
-            geometry: {
-                type: 'Polygon',
-                coordinates: [[
-                    [bounds[0][1], bounds[0][0]],
-                    [bounds[1][1], bounds[0][0]],
-                    [bounds[1][1], bounds[1][0]],
-                    [bounds[0][1], bounds[1][0]],
-                    [bounds[0][1], bounds[0][0]]
-                ]]
-            }
-        }
-        setDrawnArea(geoJSON)
+        setDrawnArea({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[bounds[0][1], bounds[0][0]], [bounds[1][1], bounds[0][0]], [bounds[1][1], bounds[1][0]], [bounds[0][1], bounds[1][0]], [bounds[0][1], bounds[0][0]]]] } })
         setIsDrawing(false)
     }
 
     const handleSelectSaved = (loc) => {
-        setMapCenter(loc.center)
-        setMapZoom(loc.zoom)
+        setActiveSaved(loc.id)
         setLocationName(loc.name)
-        const offset = 0.15
-        setDrawnArea({
-            type: 'Feature',
-            geometry: {
-                type: 'Polygon',
-                coordinates: [[
-                    [loc.center[1] - offset, loc.center[0] - offset],
-                    [loc.center[1] + offset, loc.center[0] - offset],
-                    [loc.center[1] + offset, loc.center[0] + offset],
-                    [loc.center[1] - offset, loc.center[0] + offset],
-                    [loc.center[1] - offset, loc.center[0] - offset]
-                ]]
-            }
-        })
+        const off = 0.15
+        setDrawnArea({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[loc.center[1] - off, loc.center[0] - off], [loc.center[1] + off, loc.center[0] - off], [loc.center[1] + off, loc.center[0] + off], [loc.center[1] - off, loc.center[0] + off], [loc.center[1] - off, loc.center[0] - off]]] } })
     }
 
     const handleContinue = () => {
-        if (drawnArea) {
-            setLocation({ type: 'draw', coordinates: drawnArea, name: locationName || 'Custom Area' })
-            nextStep()
-            navigate('/app/data')
-        }
+        setLocation({ type: 'draw', coordinates: drawnArea, name: locationName || 'Custom Area' })
+        nextStep(); navigate('/app/data')
     }
 
     return (
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                style={{ marginBottom: 'var(--space-xl)' }}
-            >
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: 'var(--space-xs)' }}>
+        <div style={{ maxWidth: '1160px' }}>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: '24px' }}>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#000', letterSpacing: '-0.02em', marginBottom: '6px' }}>
                     Select Area of Interest
                 </h1>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                    Draw a region on the map or select a saved location
-                </p>
+                <p style={{ color: '#666', fontSize: '0.9rem' }}>Draw a region on the map or pick a saved location below</p>
             </motion.div>
 
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 300px',
-                gap: 'var(--space-xl)',
-                minHeight: '500px'
-            }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px', minHeight: '520px' }}>
                 {/* Map */}
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.1 }}
-                    style={{
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-lg)',
-                        overflow: 'hidden',
-                        position: 'relative'
-                    }}
+                    style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', overflow: 'hidden', position: 'relative' }}
                 >
-                    <MapContainer
-                        center={mapCenter}
-                        zoom={mapZoom}
-                        style={{ height: '100%', width: '100%', minHeight: '500px', cursor: isDrawing ? 'crosshair' : 'grab' }}
-                    >
+                    <MapContainer center={mapCenter} zoom={mapZoom} style={{ height: '100%', width: '100%', minHeight: '520px', cursor: isDrawing ? 'crosshair' : 'grab' }}>
                         <TileLayer
-                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                            attribution="&copy; CARTO"
                         />
                         <DrawRectangle onDraw={handleDraw} isDrawing={isDrawing} />
                         {drawnArea && !isDrawing && (
                             <Rectangle
-                                bounds={[
-                                    [drawnArea.geometry.coordinates[0][0][1], drawnArea.geometry.coordinates[0][0][0]],
-                                    [drawnArea.geometry.coordinates[0][2][1], drawnArea.geometry.coordinates[0][2][0]]
-                                ]}
-                                pathOptions={{ color: '#6366f1', weight: 2, fillColor: '#6366f1', fillOpacity: 0.2 }}
+                                bounds={[[drawnArea.geometry.coordinates[0][0][1], drawnArea.geometry.coordinates[0][0][0]], [drawnArea.geometry.coordinates[0][2][1], drawnArea.geometry.coordinates[0][2][0]]]}
+                                pathOptions={{ color: '#0078d4', weight: 2, fillColor: '#0078d4', fillOpacity: 0.15 }}
                             />
                         )}
                     </MapContainer>
-
                     {/* Map toolbar */}
-                    <div style={{
-                        position: 'absolute',
-                        top: 'var(--space-md)',
-                        right: 'var(--space-md)',
-                        zIndex: 1000,
-                        display: 'flex',
-                        gap: 'var(--space-sm)'
-                    }}>
+                    <div style={{ position: 'absolute', top: '14px', right: '14px', zIndex: 1000, display: 'flex', gap: '8px' }}>
                         <button
-                            onClick={() => { setIsDrawing(!isDrawing); setDrawnArea(null) }}
+                            onClick={() => { setIsDrawing(!isDrawing); if (isDrawing) setDrawnArea(null) }}
                             style={{
-                                padding: 'var(--space-sm) var(--space-md)',
-                                background: isDrawing ? 'var(--accent-primary)' : 'var(--bg-secondary)',
-                                border: '1px solid var(--border-default)',
-                                borderRadius: 'var(--radius-md)',
-                                color: isDrawing ? 'white' : 'var(--text-primary)',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
+                                padding: '8px 16px',
+                                background: isDrawing ? '#0078d4' : '#fff',
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '10px',
+                                color: isDrawing ? '#fff' : '#1a1a1a',
+                                cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                             }}
                         >
-                            {isDrawing ? 'Click & Drag to Draw' : 'Draw Rectangle'}
+                            {isDrawing ? '↖ Drag to Draw' : '✏ Draw Rectangle'}
                         </button>
                         {drawnArea && (
                             <button
-                                onClick={() => setDrawnArea(null)}
-                                style={{
-                                    padding: 'var(--space-sm) var(--space-md)',
-                                    background: 'var(--bg-secondary)',
-                                    border: '1px solid var(--border-default)',
-                                    borderRadius: 'var(--radius-md)',
-                                    color: 'var(--text-secondary)',
-                                    cursor: 'pointer',
-                                    fontSize: '0.85rem'
-                                }}
+                                onClick={() => { setDrawnArea(null); setActiveSaved(null) }}
+                                style={{ padding: '8px 14px', background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', color: '#666', cursor: 'pointer', fontSize: '0.85rem', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
                             >
                                 Clear
                             </button>
@@ -197,119 +114,80 @@ function SelectLocationPage() {
 
                 {/* Sidebar */}
                 <motion.div
-                    initial={{ opacity: 0, x: 20 }}
+                    initial={{ opacity: 0, x: 16 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 }}
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}
+                    transition={{ delay: 0.15 }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
                 >
-                    {/* Location Name */}
-                    <div style={{
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-lg)',
-                        padding: 'var(--space-lg)'
-                    }}>
-                        <label style={{
-                            display: 'block',
-                            fontSize: '0.8rem',
-                            color: 'var(--text-tertiary)',
-                            marginBottom: 'var(--space-sm)',
-                            fontWeight: 500
-                        }}>
+                    {/* Name Input */}
+                    <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', padding: '22px 24px' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#999', marginBottom: '10px' }}>
                             Location Name
-                        </label>
+                        </div>
                         <input
                             type="text"
                             value={locationName}
-                            onChange={(e) => setLocationName(e.target.value)}
-                            placeholder="e.g., Mumbai Coastal Study"
+                            onChange={e => setLocationName(e.target.value)}
+                            placeholder="e.g. Mumbai Coastal Study"
                             style={{
-                                width: '100%',
-                                padding: 'var(--space-sm) var(--space-md)',
-                                background: 'var(--bg-tertiary)',
-                                border: '1px solid var(--border-default)',
-                                borderRadius: 'var(--radius-md)',
-                                color: 'var(--text-primary)',
-                                fontSize: '0.9rem'
+                                width: '100%', padding: '10px 14px',
+                                background: '#f7f9fb', border: '1px solid #e8e8e8',
+                                borderRadius: '10px', color: '#1a1a1a', fontSize: '0.9rem',
+                                outline: 'none', fontFamily: 'inherit'
                             }}
                         />
                     </div>
 
                     {/* Saved Locations */}
-                    <div style={{
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-lg)',
-                        padding: 'var(--space-lg)',
-                        flex: 1
-                    }}>
-                        <div style={{
-                            fontSize: '0.8rem',
-                            color: 'var(--text-tertiary)',
-                            marginBottom: 'var(--space-md)',
-                            fontWeight: 500
-                        }}>
+                    <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', padding: '22px 24px', flex: 1 }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#999', marginBottom: '12px' }}>
                             Saved Locations
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
-                            {savedLocations.map((loc) => (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {savedLocations.map(loc => (
                                 <button
                                     key={loc.id}
                                     onClick={() => handleSelectSaved(loc)}
                                     style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 'var(--space-sm)',
-                                        padding: 'var(--space-sm) var(--space-md)',
-                                        background: locationName === loc.name ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-tertiary)',
-                                        border: locationName === loc.name ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid transparent',
-                                        borderRadius: 'var(--radius-md)',
-                                        cursor: 'pointer',
-                                        textAlign: 'left',
-                                        color: 'var(--text-primary)',
-                                        fontSize: '0.85rem',
+                                        display: 'flex', alignItems: 'center', gap: '10px',
+                                        padding: '10px 12px',
+                                        background: activeSaved === loc.id ? '#e8f3fc' : '#f7f9fb',
+                                        border: `1px solid ${activeSaved === loc.id ? '#b3d6f4' : 'transparent'}`,
+                                        borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
+                                        color: '#1a1a1a', fontSize: '0.875rem',
                                         transition: 'all 0.15s ease'
                                     }}
                                 >
-                                    <span style={{ opacity: 0.6 }}>📍</span>
+                                    <span style={{ color: '#0078d4', fontSize: '0.9rem' }}>📍</span>
                                     {loc.name}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    {/* Status & Continue */}
+                    {/* Status + Continue */}
                     <div style={{
-                        background: drawnArea ? 'rgba(34, 197, 94, 0.05)' : 'var(--bg-secondary)',
-                        border: `1px solid ${drawnArea ? 'rgba(34, 197, 94, 0.2)' : 'var(--border-subtle)'}`,
-                        borderRadius: 'var(--radius-lg)',
-                        padding: 'var(--space-lg)'
+                        background: drawnArea ? '#f0faf4' : '#fff',
+                        border: `1px solid ${drawnArea ? '#b6e2c8' : '#e8e8e8'}`,
+                        borderRadius: '20px', padding: '20px 24px'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
-                            <div style={{
-                                width: '8px',
-                                height: '8px',
-                                borderRadius: '50%',
-                                background: drawnArea ? '#22c55e' : 'var(--text-tertiary)'
-                            }} />
-                            <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: drawnArea ? '#1a7f3c' : '#ccc' }} />
+                            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: drawnArea ? '#1a7f3c' : '#888' }}>
                                 {drawnArea ? 'Area selected' : 'No area selected'}
                             </span>
                         </div>
-
                         <button
                             onClick={handleContinue}
                             disabled={!drawnArea}
                             style={{
-                                width: '100%',
-                                padding: 'var(--space-md)',
-                                background: drawnArea ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                                border: 'none',
-                                borderRadius: 'var(--radius-md)',
-                                color: drawnArea ? 'white' : 'var(--text-tertiary)',
+                                width: '100%', padding: '11px',
+                                background: drawnArea ? '#0078d4' : '#e8e8e8',
+                                border: 'none', borderRadius: '12px',
+                                color: drawnArea ? '#fff' : '#aaa',
                                 cursor: drawnArea ? 'pointer' : 'not-allowed',
-                                fontSize: '0.9rem',
-                                fontWeight: 500
+                                fontSize: '0.9rem', fontWeight: 500,
+                                transition: 'background 0.2s ease'
                             }}
                         >
                             Continue →
