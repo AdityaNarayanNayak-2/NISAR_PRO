@@ -1,6 +1,6 @@
+import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { MapContainer, TileLayer, Rectangle, useMapEvents } from 'react-leaflet'
 import { useWorkflowStore } from '../../store/workflowStore'
 import 'leaflet/dist/leaflet.css'

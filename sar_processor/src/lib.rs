@@ -5,12 +5,14 @@
 //! - Range Cell Migration Correction (RCMC)
 //! - ISCE3 integration (optional)
 //! - Sentinel-1 SAFE format parsing
+//! - NISAR HDF5 format parsing
 //! - Anomaly detection (AMTAD)
 
 pub mod algorithm;
 pub mod errors;
 pub mod io;
 pub mod isce3_ffi;
+pub mod nisar_parser;
 pub mod radar_utils;
 pub mod rcmc;
 pub mod rda;

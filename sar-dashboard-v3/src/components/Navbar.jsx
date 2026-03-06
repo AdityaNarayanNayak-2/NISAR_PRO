@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { Link, useLocation } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Satellite, Rocket, ChevronRight, Github } from 'lucide-react'
 
 const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/use-cases', label: 'Use Cases' },
     { path: '/technology', label: 'Technology' },
     { path: '/demo', label: 'Demo' },
-    { path: '/app', label: 'Launch App', isApp: true },
 ]
 
 function Navbar() {
     const [scrolled, setScrolled] = useState(false)
-    const [mobileOpen, setMobileOpen] = useState(false)
     const location = useLocation()
 
     useEffect(() => {
@@ -32,17 +31,21 @@ function Navbar() {
                 left: 0,
                 right: 0,
                 zIndex: 1000,
-                padding: scrolled ? '0.75rem 0' : '1.5rem 0',
-                background: scrolled ? 'var(--glass-bg)' : 'transparent',
-                backdropFilter: scrolled ? 'blur(20px)' : 'none',
-                borderBottom: scrolled ? '1px solid var(--glass-border)' : 'none',
-                transition: 'all var(--transition-base)'
+                padding: scrolled ? '1rem 0' : '1.5rem 0',
+                background: scrolled ? 'rgba(10, 10, 15, 0.6)' : 'transparent',
+                backdropFilter: scrolled ? 'blur(24px)' : 'none',
+                WebkitBackdropFilter: scrolled ? 'blur(24px)' : 'none',
+                borderBottom: scrolled ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid transparent',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
         >
             <div className="container" style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center'
+                alignItems: 'center',
+                maxWidth: '1400px',
+                margin: '0 auto',
+                padding: '0 2rem'
             }}>
                 {/* Logo */}
                 <Link to="/" style={{ textDecoration: 'none' }}>
@@ -51,29 +54,32 @@ function Navbar() {
                         style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 'var(--space-sm)'
+                            gap: '12px'
                         }}
                     >
                         <div style={{
-                            width: '36px',
-                            height: '36px',
-                            background: 'var(--accent-gradient)',
-                            borderRadius: 'var(--radius-md)',
+                            width: '32px',
+                            height: '32px',
+                            background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+                            borderRadius: '8px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: '1.2rem'
+                            boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)'
                         }}>
-                            🛰️
+                            <Satellite size={18} color="white" />
                         </div>
                         <span style={{
-                            fontFamily: 'var(--font-mono)',
-                            fontWeight: 700,
-                            fontSize: '1.1rem',
-                            color: 'var(--text-primary)',
-                            letterSpacing: '-0.01em'
+                            fontFamily: '"JetBrains Mono", monospace',
+                            fontWeight: 600,
+                            fontSize: '1rem',
+                            color: '#ffffff',
+                            letterSpacing: '-0.02em',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px'
                         }}>
-                            SAR<span style={{ color: 'var(--accent-primary)' }}>Analyzer</span>
+                            SAR<span style={{ color: '#60a5fa' }}>Analyzer</span>
                         </span>
                     </motion.div>
                 </Link>
@@ -82,12 +88,19 @@ function Navbar() {
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 'var(--space-xl)'
+                    gap: '2rem',
+                    background: scrolled ? 'transparent' : 'rgba(255,255,255,0.03)',
+                    padding: scrolled ? '0' : '8px 24px',
+                    borderRadius: '100px',
+                    border: scrolled ? 'none' : '1px solid rgba(255,255,255,0.05)',
+                    transition: 'all 0.3s ease'
                 }}>
                     <ul style={{
                         display: 'flex',
                         listStyle: 'none',
-                        gap: 'var(--space-lg)'
+                        gap: '2rem',
+                        margin: 0,
+                        padding: 0
                     }}>
                         {navLinks.map((link) => (
                             <li key={link.path}>
@@ -95,49 +108,75 @@ function Navbar() {
                                     to={link.path}
                                     style={{
                                         textDecoration: 'none',
-                                        fontFamily: 'var(--font-sans)',
-                                        fontSize: '0.9rem',
+                                        fontFamily: '"Inter", sans-serif',
+                                        fontSize: '0.85rem',
                                         fontWeight: 500,
                                         color: location.pathname === link.path
-                                            ? 'var(--text-primary)'
-                                            : 'var(--text-secondary)',
-                                        transition: 'color var(--transition-fast)',
+                                            ? '#ffffff'
+                                            : '#a1a1aa',
+                                        transition: 'color 0.2s ease',
                                         position: 'relative'
                                     }}
+                                    onMouseEnter={(e) => e.target.style.color = '#ffffff'}
+                                    onMouseLeave={(e) => e.target.style.color = location.pathname === link.path ? '#ffffff' : '#a1a1aa'}
                                 >
                                     {link.label}
-                                    {location.pathname === link.path && (
-                                        <motion.div
-                                            layoutId="nav-indicator"
-                                            style={{
-                                                position: 'absolute',
-                                                bottom: '-6px',
-                                                left: 0,
-                                                right: 0,
-                                                height: '2px',
-                                                background: 'var(--accent-gradient)',
-                                                borderRadius: 'var(--radius-full)'
-                                            }}
-                                        />
-                                    )}
                                 </Link>
                             </li>
                         ))}
                     </ul>
+                </div>
 
-                    {/* CTA Button */}
+                {/* Right Actions */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <a
                         href="https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="btn btn-primary"
-                        style={{ padding: 'var(--space-sm) var(--space-lg)' }}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            color: '#a1a1aa',
+                            textDecoration: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: 500,
+                            transition: 'color 0.2s ease'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}
                     >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M22.65 14.39L12 22.13 1.35 14.39a.84.84 0 0 1-.3-.94l1.22-3.78 2.44-7.51A.42.42 0 0 1 4.82 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.49h8.1l2.44-7.51A.42.42 0 0 1 18.6 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.51L23 13.45a.84.84 0 0 1-.35.94z" />
-                        </svg>
-                        GitLab
+                        <Github size={16} />
+                        <span>Source</span>
                     </a>
+                    <Link
+                        to="/app"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: '#ffffff',
+                            color: '#000000',
+                            padding: '8px 16px',
+                            borderRadius: '99px',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            textDecoration: 'none',
+                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                            boxShadow: '0 4px 14px 0 rgba(255,255,255,0.1)'
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(255,255,255,0.2)';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 4px 14px 0 rgba(255,255,255,0.1)';
+                        }}
+                    >
+                        Launch App
+                        <ChevronRight size={14} strokeWidth={2.5} />
+                    </Link>
                 </div>
             </div>
         </motion.nav>

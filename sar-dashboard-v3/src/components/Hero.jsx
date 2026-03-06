@@ -1,4 +1,6 @@
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
+import { Sparkles, ArrowRight, Terminal } from 'lucide-react'
 
 function Hero() {
     return (
@@ -9,164 +11,206 @@ function Hero() {
             justifyContent: 'center',
             position: 'relative',
             overflow: 'hidden',
-            paddingTop: '80px'
+            paddingTop: '80px',
+            background: '#040404'
         }}>
-            {/* Animated Background Orbs */}
+            {/* Background Grid Pattern */}
             <div style={{
                 position: 'absolute',
                 inset: 0,
-                overflow: 'hidden',
-                pointerEvents: 'none'
-            }}>
-                <motion.div
-                    animate={{
-                        scale: [1, 1.2, 1],
-                        x: [0, 50, 0],
-                        y: [0, -30, 0]
-                    }}
-                    transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-                    style={{
-                        position: 'absolute',
-                        top: '10%',
-                        right: '10%',
-                        width: '500px',
-                        height: '500px',
-                        background: 'radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%)',
-                        borderRadius: '50%',
-                        filter: 'blur(40px)'
-                    }}
-                />
-                <motion.div
-                    animate={{
-                        scale: [1, 1.3, 1],
-                        x: [0, -40, 0],
-                        y: [0, 40, 0]
-                    }}
-                    transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-                    style={{
-                        position: 'absolute',
-                        bottom: '20%',
-                        left: '5%',
-                        width: '400px',
-                        height: '400px',
-                        background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
-                        borderRadius: '50%',
-                        filter: 'blur(40px)'
-                    }}
-                />
-            </div>
+                backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)',
+                backgroundSize: '40px 40px',
+                maskImage: 'radial-gradient(ellipse 60% 50% at 50% 50%, #000 0%, transparent 100%)',
+                WebkitMaskImage: 'radial-gradient(ellipse 60% 50% at 50% 50%, #000 0%, transparent 100%)',
+                zIndex: 0
+            }} />
+
+            {/* Glowing Orbs for subtle contrast */}
+            <div style={{
+                position: 'absolute',
+                top: '20%',
+                left: '20%',
+                width: '400px',
+                height: '400px',
+                background: 'rgba(56, 189, 248, 0.08)',
+                filter: 'blur(100px)',
+                borderRadius: '50%',
+                zIndex: 0
+            }} />
+            <div style={{
+                position: 'absolute',
+                bottom: '10%',
+                right: '20%',
+                width: '500px',
+                height: '500px',
+                background: 'rgba(129, 140, 248, 0.05)',
+                filter: 'blur(120px)',
+                borderRadius: '50%',
+                zIndex: 0
+            }} />
 
             <div className="container" style={{
                 textAlign: 'center',
                 position: 'relative',
-                zIndex: 1,
+                zIndex: 10,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                width: '100%'
+                maxWidth: '900px'
             }}>
-                {/* Badge */}
+                {/* Entrance Badge */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    style={{ marginBottom: '32px' }}
                 >
-                    <span className="section-label">
-                        🛰️ Next-Generation SAR Processing
-                    </span>
+                    <Link to="/technology" style={{ textDecoration: 'none' }}>
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 16px',
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '100px',
+                            fontSize: '0.8rem',
+                            fontWeight: 500,
+                            color: '#e2e8f0',
+                            backdropFilter: 'blur(12px)',
+                            WebkitBackdropFilter: 'blur(12px)',
+                            transition: 'all 0.2s ease',
+                            cursor: 'pointer'
+                        }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                            }}
+                        >
+                            <Sparkles size={14} color="#60a5fa" />
+                            Next-Generation Process Engine
+                            <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.2)', margin: '0 4px' }} />
+                            <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                View tech <ArrowRight size={12} />
+                            </span>
+                        </div>
+                    </Link>
                 </motion.div>
 
                 {/* Main Heading */}
                 <motion.h1
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3, duration: 0.6 }}
+                    transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
                     style={{
-                        marginTop: 'var(--space-xl)',
-                        marginBottom: 'var(--space-lg)'
+                        fontSize: 'clamp(3rem, 6vw, 5rem)',
+                        fontWeight: 700,
+                        letterSpacing: '-0.04em',
+                        lineHeight: 1.1,
+                        color: '#ffffff',
+                        marginBottom: '24px'
                     }}
                 >
                     Synthetic Aperture Radar
                     <br />
-                    <span className="text-gradient">Made Simple</span>
+                    <span style={{
+                        background: 'linear-gradient(135deg, #ffffff 0%, #94a3b8 100%)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text'
+                    }}>
+                        Infrastructure.
+                    </span>
                 </motion.h1>
 
                 {/* Subtitle */}
                 <motion.p
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
+                    transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
                     style={{
-                        fontSize: '1.25rem',
-                        color: 'var(--text-secondary)',
-                        maxWidth: '600px',
-                        margin: '0 auto',
-                        lineHeight: 1.7
+                        fontSize: '1.15rem',
+                        color: '#94a3b8',
+                        maxWidth: '640px',
+                        margin: '0 auto 40px',
+                        lineHeight: 1.6,
+                        fontWeight: 400
                     }}
                 >
-                    Production-grade image focusing with Rust, RCMC, and cloud-native architecture.
-                    Process NISAR and Sentinel-1 data at scale.
+                    Production-grade image focusing with Rust and Kubernetes. Process NISAR and Sentinel-1 data at hyperscale without managing infrastructure.
                 </motion.p>
 
                 {/* CTA Buttons */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7 }}
+                    transition={{ duration: 0.6, delay: 0.3, ease: 'easeOut' }}
                     style={{
                         display: 'flex',
-                        gap: 'var(--space-md)',
+                        gap: '16px',
                         justifyContent: 'center',
-                        marginTop: 'var(--space-2xl)'
+                        alignItems: 'center'
                     }}
                 >
-                    <a href="/demo" className="btn btn-primary">
-                        Try Live Demo
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M5 12h14M12 5l7 7-7 7" />
-                        </svg>
-                    </a>
-                    <a href="/technology" className="btn btn-secondary">
-                        View Technology
-                    </a>
-                </motion.div>
-
-                {/* Scroll Indicator */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 1.2 }}
-                    style={{
-                        position: 'absolute',
-                        bottom: '-100px',
-                        left: '50%',
-                        transform: 'translateX(-50%)'
+                    {/* Primary Button */}
+                    <Link to="/app" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '12px 28px',
+                        background: '#ffffff',
+                        color: '#000000',
+                        textDecoration: 'none',
+                        borderRadius: '8px',
+                        fontSize: '0.95rem',
+                        fontWeight: 600,
+                        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                        boxShadow: '0 0 24px rgba(255,255,255,0.1)'
                     }}
-                >
-                    <motion.div
-                        animate={{ y: [0, 10, 0] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        style={{
-                            width: '24px',
-                            height: '40px',
-                            border: '2px solid var(--border-default)',
-                            borderRadius: 'var(--radius-full)',
-                            display: 'flex',
-                            justifyContent: 'center',
-                            paddingTop: '8px'
+                        onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 8px 32px rgba(255,255,255,0.2)';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 0 24px rgba(255,255,255,0.1)';
                         }}
                     >
-                        <motion.div
-                            animate={{ opacity: [0.3, 1, 0.3], y: [0, 8, 0] }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                            style={{
-                                width: '4px',
-                                height: '8px',
-                                background: 'var(--accent-primary)',
-                                borderRadius: 'var(--radius-full)'
-                            }}
-                        />
-                    </motion.div>
+                        Launch Interface
+                        <ArrowRight size={16} strokeWidth={2.5} />
+                    </Link>
+
+                    {/* Secondary Button */}
+                    <a href="https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro" target="_blank" rel="noopener noreferrer" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '12px 28px',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: '#ffffff',
+                        textDecoration: 'none',
+                        borderRadius: '8px',
+                        fontSize: '0.95rem',
+                        fontWeight: 500,
+                        transition: 'all 0.2s ease'
+                    }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                        }}
+                    >
+                        <Terminal size={16} />
+                        View Source
+                    </a>
                 </motion.div>
             </div>
         </section>

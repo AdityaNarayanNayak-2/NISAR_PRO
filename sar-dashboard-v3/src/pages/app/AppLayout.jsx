@@ -1,5 +1,5 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { useWorkflowStore } from '../../store/workflowStore'
 import '../../styles/app-theme.css'
 

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
 
 const pageVariants = {
     initial: { opacity: 0, y: 20 },
@@ -17,7 +17,6 @@ const initialJobs = [
 function DemoPage() {
     const [jobs, setJobs] = useState(initialJobs)
     const [selectedJob, setSelectedJob] = useState(null)
-    const [isProcessing, setIsProcessing] = useState(false)
 
     // Simulate processing progress
     useEffect(() => {
@@ -38,7 +37,6 @@ function DemoPage() {
     }, [])
 
     const startNewJob = () => {
-        setIsProcessing(true)
         const newJob = {
             id: `SAR-2026-${String(jobs.length + 1).padStart(3, '0')}`,
             name: `DEMO_SLC_${Date.now()}`,

@@ -30,7 +30,7 @@ function AppDashboard() {
                     { to: '/app/select', icon: '＋', label: 'New Analysis', desc: 'Start a new SAR processing workflow', accent: true },
                     { to: '/app/data', icon: '🛰', label: 'Browse Data', desc: 'Explore NISAR, Sentinel-1 and more', accent: false },
                     { to: '/app/jobs', icon: '📊', label: 'All Jobs', desc: `${mockJobs.length} total jobs in system`, accent: false },
-                ].map((item, i) => (
+                ].map((item) => (
                     <Link key={item.to} to={item.to} style={{ textDecoration: 'none' }}>
                         <motion.div
                             whileHover={{ translateY: -2, boxShadow: '0 8px 28px rgba(0,0,0,0.12)' }}

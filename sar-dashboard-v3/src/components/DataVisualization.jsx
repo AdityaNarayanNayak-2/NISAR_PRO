@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { Leaf, Building2, Trees, ShieldAlert, Pickaxe, Shield, ChevronRight } from 'lucide-react'
 
 const industries = [
     {
-        icon: '🌾',
+        icon: <Leaf size={28} className="text-green-500" />,
         title: 'Agriculture',
         description: 'Precision farming with crop health monitoring, soil moisture analysis, and yield prediction using multi-temporal SAR.',
         applications: ['Crop Health', 'Soil Moisture', 'Yield Prediction'],
@@ -11,15 +12,15 @@ const industries = [
         link: '/use-cases#agriculture'
     },
     {
-        icon: '🏙️',
+        icon: <Building2 size={28} className="text-purple-500" />,
         title: 'Urban Planning',
         description: 'Monitor infrastructure stability, track urban expansion, and detect mm-level ground subsidence with InSAR.',
         applications: ['Subsidence', 'Infrastructure', 'Construction'],
-        color: '#8b5cf6',
+        color: '#a855f7',
         link: '/use-cases#urban'
     },
     {
-        icon: '🌍',
+        icon: <Trees size={28} className="text-cyan-500" />,
         title: 'Environmental',
         description: 'Track deforestation, monitor glaciers, detect oil spills, and quantify carbon for climate action.',
         applications: ['Deforestation', 'Glaciers', 'Oil Spills'],
@@ -27,7 +28,7 @@ const industries = [
         link: '/use-cases#environment'
     },
     {
-        icon: '🚨',
+        icon: <ShieldAlert size={28} className="text-red-500" />,
         title: 'Disaster Response',
         description: 'Rapid flood mapping, earthquake damage assessment, and landslide prediction when every minute counts.',
         applications: ['Floods', 'Earthquakes', 'Landslides'],
@@ -35,7 +36,7 @@ const industries = [
         link: '/use-cases#disaster'
     },
     {
-        icon: '⛏️',
+        icon: <Pickaxe size={28} className="text-amber-500" />,
         title: 'Mining & Resources',
         description: 'Detect mineral deposits, monitor land stability, track excavation, and ensure environmental compliance.',
         applications: ['Deposits', 'Stability', 'Compliance'],
@@ -43,7 +44,7 @@ const industries = [
         link: '/use-cases#mining'
     },
     {
-        icon: '🛡️',
+        icon: <Shield size={28} className="text-pink-500" />,
         title: 'Defense & Security',
         description: 'ISR missions, change detection, maritime surveillance, and border security — all-weather, day-night.',
         applications: ['ISR', 'Surveillance', 'Maritime'],
@@ -54,31 +55,47 @@ const industries = [
 
 function DataVisualization() {
     return (
-        <section className="section">
-            <div className="container">
+        <section style={{
+            padding: '120px 0',
+            background: '#040404',
+            position: 'relative',
+            overflow: 'hidden'
+        }}>
+            <div className="container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem' }}>
                 <motion.div
-                    className="section-header"
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
+                    style={{ textAlign: 'center', marginBottom: '80px' }}
                 >
-                    <span className="section-label">Industries</span>
-                    <h2>SAR for <span className="text-gradient">Every Sector</span></h2>
-                    <p style={{
-                        color: 'var(--text-secondary)',
-                        maxWidth: '600px',
-                        margin: '0 auto',
-                        marginTop: 'var(--space-md)'
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '6px 16px',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '100px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em',
+                        color: '#94a3b8',
+                        marginBottom: '24px'
                     }}>
-                        Process any SAR data for actionable insights across industries
+                        Use Cases
+                    </div>
+                    <h2 style={{ fontSize: 'clamp(2.5rem, 4vw, 3.5rem)', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.02em', marginBottom: '16px' }}>
+                        SAR for <span style={{ color: '#94a3b8' }}>Every Sector</span>
+                    </h2>
+                    <p style={{ color: '#94a3b8', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto' }}>
+                        Process any SAR data for actionable insights across industries, regardless of weather or daylight.
                     </p>
                 </motion.div>
 
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-                    gap: 'var(--space-lg)',
-                    marginTop: 'var(--space-2xl)'
+                    gap: '24px',
                 }}>
                     {industries.map((industry, index) => (
                         <motion.div
@@ -87,139 +104,102 @@ function DataVisualization() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: index * 0.1 }}
-                            whileHover={{ y: -6, borderColor: industry.color }}
-                            className="card"
+                            whileHover={{ y: -4, borderColor: `rgba(${industry.color}, 0.5)` }}
                             style={{
+                                background: 'rgba(255, 255, 255, 0.02)',
+                                border: '1px solid rgba(255, 255, 255, 0.05)',
+                                borderRadius: '20px',
+                                padding: '32px',
                                 position: 'relative',
                                 overflow: 'hidden',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                transition: 'all 0.3s ease',
                                 cursor: 'pointer'
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                                e.currentTarget.style.boxShadow = `0 8px 32px ${industry.color}15`;
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
+                                e.currentTarget.style.boxShadow = 'none';
                             }}
                         >
                             {/* Top accent line */}
                             <div style={{
                                 position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                height: '3px',
-                                background: industry.color
+                                top: 0, left: 0, right: 0, height: '2px',
+                                background: `linear-gradient(90deg, transparent, ${industry.color}, transparent)`
                             }} />
 
-                            {/* Animated background pulse */}
-                            <motion.div
-                                animate={{
-                                    scale: [1, 1.5, 1],
-                                    opacity: [0.05, 0.1, 0.05]
-                                }}
-                                transition={{
-                                    duration: 4,
-                                    repeat: Infinity,
-                                    delay: index * 0.5
-                                }}
-                                style={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%)',
-                                    width: '200px',
-                                    height: '200px',
-                                    background: `radial-gradient(circle, ${industry.color} 0%, transparent 70%)`,
-                                    borderRadius: '50%',
-                                    pointerEvents: 'none'
-                                }}
-                            />
-
-                            <div style={{ position: 'relative', zIndex: 1 }}>
+                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
                                 {/* Icon */}
                                 <div style={{
-                                    fontSize: '2.5rem',
-                                    marginBottom: 'var(--space-md)'
+                                    width: '48px', height: '48px',
+                                    borderRadius: '12px',
+                                    background: `${industry.color}15`,
+                                    border: `1px solid ${industry.color}30`,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    marginBottom: '24px'
                                 }}>
                                     {industry.icon}
                                 </div>
 
-                                {/* Title */}
-                                <h3 style={{ marginBottom: 'var(--space-sm)' }}>
+                                {/* Title & Desc */}
+                                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#ffffff', marginBottom: '12px' }}>
                                     {industry.title}
                                 </h3>
-
-                                {/* Description */}
-                                <p style={{
-                                    color: 'var(--text-secondary)',
-                                    fontSize: '0.9rem',
-                                    lineHeight: 1.6,
-                                    marginBottom: 'var(--space-lg)'
-                                }}>
+                                <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '24px', flexGrow: 1 }}>
                                     {industry.description}
                                 </p>
 
-                                {/* Application tags */}
-                                <div style={{
-                                    display: 'flex',
-                                    gap: 'var(--space-sm)',
-                                    flexWrap: 'wrap',
-                                    marginBottom: 'var(--space-lg)'
-                                }}>
+                                {/* Tags */}
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '32px' }}>
                                     {industry.applications.map(app => (
-                                        <span
-                                            key={app}
-                                            style={{
-                                                padding: 'var(--space-xs) var(--space-sm)',
-                                                background: `${industry.color}15`,
-                                                border: `1px solid ${industry.color}30`,
-                                                borderRadius: 'var(--radius-sm)',
-                                                fontSize: '0.75rem',
-                                                fontFamily: 'var(--font-mono)',
-                                                color: industry.color
-                                            }}
-                                        >
+                                        <span key={app} style={{
+                                            padding: '4px 10px',
+                                            background: `${industry.color}10`,
+                                            border: `1px solid ${industry.color}20`,
+                                            borderRadius: '6px',
+                                            fontSize: '0.75rem',
+                                            fontFamily: '"JetBrains Mono", monospace',
+                                            color: industry.color
+                                        }}>
                                             {app}
                                         </span>
                                     ))}
                                 </div>
 
-                                {/* Learn More Link */}
-                                <Link
-                                    to="/use-cases"
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 'var(--space-xs)',
-                                        color: industry.color,
-                                        textDecoration: 'none',
-                                        fontSize: '0.85rem',
-                                        fontWeight: 500
-                                    }}
-                                >
-                                    Explore use cases
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M5 12h14M12 5l7 7-7 7" />
-                                    </svg>
+                                {/* Link */}
+                                < Link to={industry.link} style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                    color: industry.color, textDecoration: 'none',
+                                    fontSize: '0.9rem', fontWeight: 500
+                                }}>
+                                    Explore use cases <ChevronRight size={16} />
                                 </Link>
                             </div>
                         </motion.div>
-                    ))}
-                </div>
+                    ))
+                    }
+                </div >
 
-                {/* View All CTA */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    style={{
-                        textAlign: 'center',
-                        marginTop: 'var(--space-3xl)'
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '64px' }}>
+                    <Link to="/use-cases" style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '8px',
+                        padding: '12px 28px', background: '#ffffff', color: '#000000',
+                        borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, textDecoration: 'none',
+                        transition: 'transform 0.2s ease', boxShadow: '0 0 24px rgba(255,255,255,0.1)'
                     }}
-                >
-                    <Link to="/use-cases" className="btn btn-primary">
-                        View All Use Cases
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M5 12h14M12 5l7 7-7 7" />
-                        </svg>
+                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                        onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                    >
+                        View All Use Cases <ChevronRight size={18} />
                     </Link>
-                </motion.div>
-            </div>
-        </section>
+                </div>
+            </div >
+        </section >
     )
 }
 

@@ -1,6 +1,6 @@
+import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { useWorkflowStore } from '../../store/workflowStore'
 import { format, subDays } from 'date-fns'
 
@@ -82,7 +82,7 @@ function DataSourcePage() {
             >
                 <div style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#999', marginBottom: '14px' }}>Date Range</div>
                 <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                    {['start', 'end'].map((key, i) => (
+                    {['start', 'end'].map((key) => (
                         <div key={key}>
                             <div style={{ fontSize: '0.75rem', color: '#aaa', marginBottom: '5px' }}>{key === 'start' ? 'From' : 'To'}</div>
                             <input type="date" value={dateRange[key]} onChange={e => setDateRange(p => ({ ...p, [key]: e.target.value }))}
