@@ -1,8 +1,8 @@
-name: Deploy frontend (sar-dashboard-v3) to GitHub Pages
+name: Deploy SAR Dashboard Frontend to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
       - 'sar-dashboard-v3/**'
       - '.github/workflows/deploy-frontend-gh-pages.yml'
