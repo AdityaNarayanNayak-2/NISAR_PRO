@@ -1,16 +1,54 @@
-# React + Vite
+# SAR Dashboard v3 Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This folder contains the standalone React + Vite frontend for the SAR Dashboard.
 
-Currently, two official plugins are available:
+The app currently runs with mock/demo workflow data in the `/app/*` flow, so it can be deployed as a static site without the backend.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Run locally
 
-## React Compiler
+```bash
+npm install
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Open: `http://localhost:5173`
 
-## Expanding the ESLint configuration
+## Production build
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm run build
+npm run preview
+```
+
+## GitHub Pages deploy
+
+A workflow is provided at:
+
+- `.github/workflows/deploy-frontend-gh-pages.yml`
+
+It does the following:
+
+1. Builds only `sar-dashboard-v3`
+2. Copies `index.html` to `404.html` (SPA fallback)
+3. Publishes `dist/` to the `gh-pages` branch
+
+### One-time GitHub repo setup
+
+In your repository settings:
+
+1. Go to **Settings → Pages**
+2. Under **Build and deployment**, choose:
+   - **Source**: *Deploy from a branch*
+   - **Branch**: `gh-pages` / `/ (root)`
+3. Save
+
+If your Actions are restricted, also check:
+
+- **Settings → Actions → General → Workflow permissions**
+- Set to: **Read and write permissions**
+
+After that, each push to `main` that changes `sar-dashboard-v3/**` will redeploy the frontend.
+
+## Routing note
+
+The app uses `HashRouter` so client-side routes work reliably on GitHub Pages project sites.
