@@ -1,10 +1,145 @@
-/* App-specific styles - legacy cleanup */
-
-/* Remove old styles, using design-system.css now */
-/* Keeping minimal overrides only */
+/* App-specific styles */
 
 .app {
     min-height: 100vh;
+}
+
+.enterprise-card-grid {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+.enterprise-card {
+    background: linear-gradient(180deg, #0e1116 0%, #11161d 100%);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 14px;
+    padding: 18px 20px;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24);
+}
+
+.enterprise-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(99, 102, 241, 0.45);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+.enterprise-card.span-2 {
+    grid-column: span 2;
+}
+
+.enterprise-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+
+.enterprise-category {
+    font-size: 11px;
+    letter-spacing: 0.11em;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: rgba(226, 232, 240, 0.65);
+}
+
+.enterprise-status {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 9999px;
+    padding: 4px 8px;
+    font-weight: 600;
+}
+
+.enterprise-status.validated {
+    color: #86efac;
+    border: 1px solid rgba(134, 239, 172, 0.35);
+    background: rgba(22, 101, 52, 0.22);
+}
+
+.enterprise-status.in-progress {
+    color: #93c5fd;
+    border: 1px solid rgba(147, 197, 253, 0.35);
+    background: rgba(30, 64, 175, 0.22);
+}
+
+.enterprise-status.planned {
+    color: #c4b5fd;
+    border: 1px solid rgba(196, 181, 253, 0.35);
+    background: rgba(76, 29, 149, 0.22);
+}
+
+.enterprise-card h3 {
+    font-size: 24px;
+    line-height: 1.28;
+    font-weight: 650;
+    margin-bottom: 10px;
+}
+
+.enterprise-body {
+    color: var(--text-secondary);
+    font-size: 15px;
+    margin-bottom: 10px;
+    line-height: 1.55;
+}
+
+.enterprise-bullets {
+    margin: 0 0 12px;
+    padding-left: 18px;
+    display: grid;
+    gap: 6px;
+}
+
+.enterprise-bullets li {
+    color: #cbd5e1;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.enterprise-metrics {
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: #cbd5e1;
+    display: grid;
+    gap: 4px;
+}
+
+.enterprise-action {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: #93c5fd;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.enterprise-action:hover {
+    color: #bfdbfe;
+    text-decoration: underline;
+}
+
+@media (max-width: 1024px) {
+    .enterprise-card-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .enterprise-card.span-2 {
+        grid-column: auto;
+    }
+
+    .enterprise-card h3 {
+        font-size: 22px;
+    }
 }
 
 /* Responsive adjustments for footer grid */
