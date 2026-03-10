@@ -1,54 +1,33 @@
-# SAR Dashboard v3 Frontend
+# SAR Dashboard v3 (Frontend)
 
-This folder contains the standalone React + Vite frontend for the SAR Dashboard.
+React + Vite frontend for SAR Analyzer with mock workflow data suitable for standalone static deployment.
 
-The app currently runs with mock/demo workflow data in the `/app/*` flow, so it can be deployed as a static site without the backend.
-
-## Run locally
+## Local development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open: `http://localhost:5173`
+Open `http://localhost:5173`.
 
-## Production build
+## Build
 
 ```bash
 npm run build
 npm run preview
 ```
 
-## GitHub Pages deploy
+## GitHub Pages deployment
 
-A workflow is provided at:
+A GitHub Actions workflow is included at:
 
 - `.github/workflows/deploy-frontend-gh-pages.yml`
 
-It does the following:
+It will:
 
-1. Builds only `sar-dashboard-v3`
-2. Copies `index.html` to `404.html` (SPA fallback)
-3. Publishes `dist/` to the `gh-pages` branch
+1. Build `sar-dashboard-v3`.
+2. Publish static assets to GitHub Pages.
+3. Add `404.html` fallback for SPA routes.
 
-### One-time GitHub repo setup
-
-In your repository settings:
-
-1. Go to **Settings → Pages**
-2. Under **Build and deployment**, choose:
-   - **Source**: *Deploy from a branch*
-   - **Branch**: `gh-pages` / `/ (root)`
-3. Save
-
-If your Actions are restricted, also check:
-
-- **Settings → Actions → General → Workflow permissions**
-- Set to: **Read and write permissions**
-
-After that, each push to `main` that changes `sar-dashboard-v3/**` will redeploy the frontend.
-
-## Routing note
-
-The app uses `HashRouter` so client-side routes work reliably on GitHub Pages project sites.
+> Note: the app uses `HashRouter` so routes work on GitHub Pages with mock data and no backend.
