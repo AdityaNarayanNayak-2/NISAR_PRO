@@ -25,5 +25,5 @@ k8s_manifests/esa_secret.yaml
 .env
 *.secret.yaml
 
-# Research / Private AI chats (never commit)
+# Research /
 Research/
