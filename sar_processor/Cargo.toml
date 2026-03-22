@@ -25,6 +25,7 @@ csv = "1.1"
 tempfile = "3.3"
 tiff = "0.9"
 rustyhdf5 = "1.93"       # Pure-Rust HDF5 reader, no C deps
+rustyhdf5-format = "1.93" # Low-level HDF5 format for compound type reading
 clap = { version = "4", features = ["derive"] }  # CLI argument parsing
 cxx = { version = "1.0", optional = true }
 

@@ -21,7 +21,7 @@ function AppLayout() {
     return (
         <div
             className="app-shell"
-            style={{ minHeight: '100vh', paddingTop: '70px' }}
+            style={{ minHeight: '100vh', paddingTop: isOnDashboard ? '0px' : '70px' }}
         >
             {/* Workflow Top Bar — hidden on dashboard */}
             {!isOnDashboard && (
@@ -97,10 +97,15 @@ function AppLayout() {
             )}
 
             {/* Main Content */}
-            <main style={{
+            <main style={isOnDashboard ? {
+                width: '100%',
+                height: '100vh',
+                display: 'flex',
+                overflow: 'hidden'
+            } : {
                 maxWidth: '1200px',
                 margin: '0 auto',
-                padding: isOnDashboard ? '40px 32px' : '36px 32px',
+                padding: '36px 32px',
                 minHeight: 'calc(100vh - 130px)'
             }}>
                 <Outlet />

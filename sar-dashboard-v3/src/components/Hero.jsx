@@ -1,218 +1,214 @@
-import { motion } from 'framer-motion'
+import React, { useRef, Suspense } from 'react'
 import { Link } from 'react-router-dom'
-import { Sparkles, ArrowRight, Terminal } from 'lucide-react'
+import { Canvas, useFrame, useLoader } from '@react-three/fiber'
+import { Sphere } from '@react-three/drei'
+import * as THREE from 'three'
+
+// The rotating 3D Earth matching the huge scale and lighting of the SpaceX planet
+// Restyled to represent a Synthetic Aperture Radar (SAR) digital visualization
+function Earth() {
+  const meshRef = useRef()
+  
+  // Use local textures
+  const [colorMap, nightMap] = useLoader(THREE.TextureLoader, ['/earth.jpg', '/earth_night.png'])
+
+  // Define our custom day/night shader uniforms
+  const uniforms = React.useMemo(() => ({
+    dayMap: { value: colorMap },
+    nightMap: { value: nightMap },
+    sunDirection: { value: new THREE.Vector3(-8, 2, 4).normalize() }
+  }), [colorMap, nightMap])
+
+  // Slow smooth rotation
+  useFrame((state, delta) => {
+    meshRef.current.rotation.y += delta * 0.03
+  })
+
+  return (
+    <group position={[2.3, 0, 0]}>
+      {/* Main globe: sized down and positioned further right */}
+      <Sphere ref={meshRef} args={[2.0, 64, 64]}>
+        <shaderMaterial 
+          uniforms={uniforms}
+          vertexShader={`
+            varying vec2 vUv;
+            varying vec3 vNormal;
+            void main() {
+              vUv = uv;
+              // ModelMatrix converts normal to world space so lighting doesn't rotate with the texture
+              vNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `}
+          fragmentShader={`
+            uniform sampler2D dayMap;
+            uniform sampler2D nightMap;
+            uniform vec3 sunDirection;
+            
+            varying vec2 vUv;
+            varying vec3 vNormal;
+            
+            void main() {
+              vec3 normal = normalize(vNormal);
+              // Calculate light intensity
+              float intensity = dot(normal, sunDirection);
+              
+              // Smoothly mix between day and night textures to create a dusk/dawn terminator line
+              float dayMix = smoothstep(-0.2, 0.2, intensity);
+              
+              // Natural daylight colors
+              vec4 dayColor = texture2D(dayMap, vUv);
+
+              // Night lights map
+              vec4 nightColor = texture2D(nightMap, vUv);
+              // Boost city lights and give them a highly visible cinematic warm glow
+              nightColor = nightColor * vec4(1.5, 1.2, 0.8, 1.0);
+              
+              // Apply standard Lambert lighting to the day side
+              vec4 shadedDay = dayColor * max(0.0, intensity);
+              // Add a tiny bit of ambient light to the day side
+              shadedDay += dayColor * 0.05;
+              
+              // Blend day and night
+              vec4 finalColor = mix(nightColor, shadedDay, dayMix);
+              
+              // Add a subtle atmospheric rim glow on the edge of the planet facing the camera
+              float rim = 1.0 - max(dot(normal, vec3(0.0, 0.0, 1.0)), 0.0);
+              rim = smoothstep(0.6, 1.0, rim);
+              finalColor += vec4(0.1, 0.3, 0.6, 1.0) * rim * 0.5 * dayMix;
+              
+              gl_FragColor = finalColor;
+            }
+          `}
+        />
+      </Sphere>
+    </group>
+  )
+}
 
 function Hero() {
     return (
         <section style={{
             minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            width: '100%',
             position: 'relative',
+            background: '#000000',
             overflow: 'hidden',
-            paddingTop: '80px',
-            background: '#040404'
         }}>
-            {/* Background Grid Pattern */}
             <div style={{
                 position: 'absolute',
-                inset: 0,
-                backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)',
-                backgroundSize: '40px 40px',
-                maskImage: 'radial-gradient(ellipse 60% 50% at 50% 50%, #000 0%, transparent 100%)',
-                WebkitMaskImage: 'radial-gradient(ellipse 60% 50% at 50% 50%, #000 0%, transparent 100%)',
-                zIndex: 0
-            }} />
-
-            {/* Glowing Orbs for subtle contrast */}
-            <div style={{
-                position: 'absolute',
-                top: '20%',
-                left: '20%',
-                width: '400px',
-                height: '400px',
-                background: 'rgba(56, 189, 248, 0.08)',
-                filter: 'blur(100px)',
-                borderRadius: '50%',
-                zIndex: 0
-            }} />
-            <div style={{
-                position: 'absolute',
-                bottom: '10%',
-                right: '20%',
-                width: '500px',
-                height: '500px',
-                background: 'rgba(129, 140, 248, 0.05)',
-                filter: 'blur(120px)',
-                borderRadius: '50%',
-                zIndex: 0
-            }} />
-
-            <div className="container" style={{
-                textAlign: 'center',
-                position: 'relative',
-                zIndex: 10,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                maxWidth: '900px'
+                top: 0, 
+                left: 0, 
+                width: '100%',
+                height: '100%',
+                zIndex: 0,
             }}>
-                {/* Entrance Badge */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, ease: 'easeOut' }}
-                    style={{ marginBottom: '32px' }}
-                >
-                    <Link to="/technology" style={{ textDecoration: 'none' }}>
-                        <div style={{
+                <Canvas camera={{ position: [0, 0, 7], fov: 45 }}>
+                    <ambientLight intensity={0.005} />
+                    
+                    <directionalLight 
+                        position={[-8, 2, 4]} 
+                        intensity={4.0} 
+                        color="#ffffff" 
+                    />
+                    
+                    <Suspense fallback={null}>
+                        <Earth />
+                    </Suspense>
+                </Canvas>
+            </div>
+
+            <div style={{
+                position: 'absolute',
+                zIndex: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                left: '10%',
+                maxWidth: '600px',
+                pointerEvents: 'none',
+                fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}>
+                <h1 style={{
+                    fontSize: 'clamp(2.5rem, 5vw, 4rem)',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    lineHeight: 1.1,
+                    letterSpacing: '-0.02em',
+                    color: '#ffffff',
+                    margin: '0 0 24px 0',
+                    pointerEvents: 'auto',
+                }}>
+                    Earth Observation<br/> at Hyperscale
+                </h1>
+
+                <p style={{
+                    fontSize: '1rem',
+                    color: '#d1d5db',
+                    lineHeight: 1.6,
+                    fontWeight: 400,
+                    margin: '0 0 40px 0',
+                    maxWidth: '450px',
+                    pointerEvents: 'auto',
+                }}>
+                    Production-grade synthetic aperture radar focusing. Process NISAR and Sentinel-1 data with our blazing fast Rust engine without managing infrastructure.
+                </p>
+
+                <div style={{ pointerEvents: 'auto' }}>
+                    <Link to="/app" 
+                        style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            padding: '6px 16px',
-                            background: 'rgba(255, 255, 255, 0.03)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: '100px',
-                            fontSize: '0.8rem',
-                            fontWeight: 500,
-                            color: '#e2e8f0',
-                            backdropFilter: 'blur(12px)',
-                            WebkitBackdropFilter: 'blur(12px)',
-                            transition: 'all 0.2s ease',
+                            gap: '12px',
+                            padding: '16px 40px',
+                            background: 'transparent',
+                            border: '2px solid #ffffff',
+                            color: '#ffffff',
+                            textDecoration: 'none',
+                            fontSize: '0.875rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.1em',
+                            transition: 'all 0.3s ease',
                             cursor: 'pointer'
                         }}
-                            onMouseEnter={e => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                            }}
-                            onMouseLeave={e => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                            }}
-                        >
-                            <Sparkles size={14} color="#60a5fa" />
-                            Next-Generation Process Engine
-                            <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.2)', margin: '0 4px' }} />
-                            <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                View tech <ArrowRight size={12} />
-                            </span>
-                        </div>
-                    </Link>
-                </motion.div>
-
-                {/* Main Heading */}
-                <motion.h1
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
-                    style={{
-                        fontSize: 'clamp(3rem, 6vw, 5rem)',
-                        fontWeight: 700,
-                        letterSpacing: '-0.04em',
-                        lineHeight: 1.1,
-                        color: '#ffffff',
-                        marginBottom: '24px'
-                    }}
-                >
-                    Synthetic Aperture Radar
-                    <br />
-                    <span style={{
-                        background: 'linear-gradient(135deg, #ffffff 0%, #94a3b8 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        backgroundClip: 'text'
-                    }}>
-                        Infrastructure.
-                    </span>
-                </motion.h1>
-
-                {/* Subtitle */}
-                <motion.p
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
-                    style={{
-                        fontSize: '1.15rem',
-                        color: '#94a3b8',
-                        maxWidth: '640px',
-                        margin: '0 auto 40px',
-                        lineHeight: 1.6,
-                        fontWeight: 400
-                    }}
-                >
-                    Production-grade image focusing with Rust and Kubernetes. Process NISAR and Sentinel-1 data at hyperscale without managing infrastructure.
-                </motion.p>
-
-                {/* CTA Buttons */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.3, ease: 'easeOut' }}
-                    style={{
-                        display: 'flex',
-                        gap: '16px',
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                    }}
-                >
-                    {/* Primary Button */}
-                    <Link to="/app" style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '12px 28px',
-                        background: '#ffffff',
-                        color: '#000000',
-                        textDecoration: 'none',
-                        borderRadius: '8px',
-                        fontSize: '0.95rem',
-                        fontWeight: 600,
-                        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                        boxShadow: '0 0 24px rgba(255,255,255,0.1)'
-                    }}
                         onMouseEnter={e => {
-                            e.currentTarget.style.transform = 'translateY(-2px)';
-                            e.currentTarget.style.boxShadow = '0 8px 32px rgba(255,255,255,0.2)';
+                            e.currentTarget.style.background = '#ffffff';
+                            e.currentTarget.style.color = '#000000';
                         }}
                         onMouseLeave={e => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 0 24px rgba(255,255,255,0.1)';
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = '#ffffff';
                         }}
                     >
-                        Launch Interface
-                        <ArrowRight size={16} strokeWidth={2.5} />
+                        Explore 
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
                     </Link>
-
-                    {/* Secondary Button */}
-                    <a href="https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro" target="_blank" rel="noopener noreferrer" style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '12px 28px',
-                        background: 'rgba(255,255,255,0.03)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        color: '#ffffff',
-                        textDecoration: 'none',
-                        borderRadius: '8px',
-                        fontSize: '0.95rem',
-                        fontWeight: 500,
-                        transition: 'all 0.2s ease'
-                    }}
-                        onMouseEnter={e => {
-                            e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
-                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
-                        }}
-                        onMouseLeave={e => {
-                            e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
-                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                        }}
-                    >
-                        <Terminal size={16} />
-                        View Source
-                    </a>
-                </motion.div>
+                </div>
             </div>
+            
+            <header style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                padding: '30px 50px',
+                display: 'flex',
+                alignItems: 'center',
+                zIndex: 20,
+            }}>
+                <div style={{
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    fontSize: '1.25rem',
+                    letterSpacing: '0.2rem',
+                    fontFamily: 'system-ui, -apple-system, sans-serif'
+                }}>
+                    SARX
+                </div>
+            </header>
         </section>
     )
 }

@@ -133,9 +133,10 @@ pub fn range_migration(
 
 /// Apply Range Cell Migration Correction to range-Doppler domain data
 ///
-/// This function performs RCMC by:
-/// 1. For each range bin, calculate expected migration at each Doppler frequency
-/// 2. Apply sinc interpolation to shift each range cell back to its zero-Doppler position
+/// Uses full sinc interpolation (8-point Hamming-windowed kernel) per Doppler
+/// column — the SAR-standard approach. Shift is calculated at the center range
+/// for each Doppler frequency (excellent approximation for NISAR/Sentinel-1
+/// swaths where variation across range is small).
 ///
 /// # Arguments
 /// * `range_doppler_data` - Data in range-Doppler domain [Range x Doppler]
@@ -155,61 +156,46 @@ pub fn apply_rcmc(
     velocity: f32,
     near_range: f32,
 ) -> Array2<Complex32> {
-    let (num_range, num_azimuth) = range_doppler_data.dim();
+    let (num_range, num_doppler) = range_doppler_data.dim();
     info!(
-        "Applying RCMC: {}x{}, λ={:.3}m, v={:.0}m/s",
-        num_range, num_azimuth, wavelength, velocity
+        "Applying RCMC with SINC interpolation: {}×{}, λ={:.3}m, v={:.0}m/s",
+        num_range, num_doppler, wavelength, velocity
     );
 
-    let mut corrected = Array2::zeros((num_range, num_azimuth));
+    let mut corrected = Array2::zeros((num_range, num_doppler));
 
     // Range sample spacing in meters
-    let c = 299792458.0_f32; // Speed of light
+    let c = 299792458.0_f32;
     let range_spacing = c / (2.0 * sample_rate);
 
-    // Process each range line (now in Doppler domain)
-    for range_idx in 0..num_range {
-        // Calculate slant range for this bin
-        let slant_range = near_range + (range_idx as f32) * range_spacing;
+    // Process column-by-column (fixed Doppler frequency per column)
+    // This is the SAR-standard way and is much more cache-friendly
+    for doppler_idx in 0..num_doppler {
+        // Doppler frequency (centered)
+        let doppler_freq =
+            ((doppler_idx as f32) - (num_doppler as f32 / 2.0)) * prf / (num_doppler as f32);
 
-        // Extract the range line (all Doppler bins for this range)
-        let range_line: Vec<Complex32> = (0..num_azimuth)
-            .map(|az| range_doppler_data[[range_idx, az]])
+        // Extract the full range column for this Doppler bin
+        let range_column: Vec<Complex32> = (0..num_range)
+            .map(|r| range_doppler_data[[r, doppler_idx]])
             .collect();
 
-        // For each Doppler frequency, calculate migration and create shifted line
-        for doppler_idx in 0..num_azimuth {
-            // Doppler frequency (centered)
-            let doppler_freq =
-                ((doppler_idx as f32) - (num_azimuth as f32 / 2.0)) * prf / (num_azimuth as f32);
+        // Calculate migration shift at center range (excellent approximation)
+        let center_range_idx = num_range / 2;
+        let slant_range = near_range + (center_range_idx as f32) * range_spacing;
+        let migration_meters = range_migration(doppler_freq, wavelength, velocity, slant_range);
+        let migration_samples = migration_meters / range_spacing;
 
-            // Calculate range migration in samples
-            let migration_meters = range_migration(doppler_freq, wavelength, velocity, slant_range);
-            let migration_samples = migration_meters / range_spacing;
+        // Shift the entire range column with sinc kernel (opposite direction to correct)
+        let shifted_column = sinc_interpolate_shift(&range_column, -migration_samples);
 
-            // Apply shift via sinc interpolation (shift the opposite direction to correct)
-            // For efficiency, we just compute the shifted value at this position
-            let shifted_range_idx = range_idx as f32 + migration_samples;
-
-            if shifted_range_idx >= 0.0 && shifted_range_idx < (num_range - 1) as f32 {
-                // Integer and fractional indices
-                let idx0 = shifted_range_idx.floor() as usize;
-                let frac = shifted_range_idx - idx0 as f32;
-
-                // Linear interpolation (faster than full sinc for now)
-                let idx1 = (idx0 + 1).min(num_range - 1);
-                let val = range_doppler_data[[idx0, doppler_idx]] * (1.0 - frac)
-                    + range_doppler_data[[idx1, doppler_idx]] * frac;
-
-                corrected[[range_idx, doppler_idx]] = val;
-            } else {
-                // Outside valid range, use original
-                corrected[[range_idx, doppler_idx]] = range_doppler_data[[range_idx, doppler_idx]];
-            }
+        // Write back to corrected matrix
+        for r in 0..num_range {
+            corrected[[r, doppler_idx]] = shifted_column[r];
         }
     }
 
-    info!("RCMC Complete.");
+    info!("RCMC with sinc interpolation complete.");
     corrected
 }
 

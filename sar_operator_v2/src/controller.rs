@@ -72,6 +72,21 @@ fn create_sar_job_manifest(sar_job: &SarJob) -> Job {
                                 value: Some(output_path),
                                 ..Default::default()
                             },
+                            k8s_openapi::api::core::v1::EnvVar {
+                                name: "SAR_PIPELINE".to_string(),
+                                value: sar_job.spec.processing_pipeline.clone(),
+                                ..Default::default()
+                            },
+                            k8s_openapi::api::core::v1::EnvVar {
+                                name: "SAR_PURPOSE".to_string(),
+                                value: sar_job.spec.analysis_purpose.clone(),
+                                ..Default::default()
+                            },
+                            k8s_openapi::api::core::v1::EnvVar {
+                                name: "SAR_ML_MODELS".to_string(),
+                                value: sar_job.spec.ml_models.as_ref().map(|v| v.join(",")),
+                                ..Default::default()
+                            },
                         ]),
                         resources: Some(k8s_openapi::api::core::v1::ResourceRequirements {
                             limits: Some(BTreeMap::from([

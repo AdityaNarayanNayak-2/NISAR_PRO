@@ -8,6 +8,12 @@ pub struct SearchQuery {
     pub end_date: Option<String>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct ProcessRequest {
+    pub input_file: Option<String>,
+    pub synthetic: Option<bool>,
+}
+
 #[derive(Serialize, Debug)]
 #[allow(dead_code)]
 pub struct SarScene {

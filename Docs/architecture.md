@@ -1,98 +1,57 @@
 # System Architecture
 
-## High-Level Overview
+This document details the telemetry and task execution boundaries of the NISAR Pro platform. The system has migrated away from monolithic local sub-processes in favor of a distributed Kubernetes orchestration model.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         User Browser                            │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │ HTTP :8080
-┌─────────────────────────────▼───────────────────────────────────┐
-│                    Kubernetes Cluster                           │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  sar-dashboard (Nginx + React)                          │    │
-│  │  - Serves static frontend                               │    │
-│  │  - Proxies /api/* to Gateway                            │    │
-│  └─────────────────────────┬───────────────────────────────┘    │
-│                            │ /api/*                              │
-│  ┌─────────────────────────▼───────────────────────────────┐    │
-│  │  sar-gateway (Rust + Axum)                              │    │
-│  │  - OAuth2 authentication with ESA                       │    │
-│  │  - Unified API for multiple data sources                │    │
-│  └─────────────────────────┬───────────────────────────────┘    │
-│                            │                                     │
-│  ┌─────────────────────────▼───────────────────────────────┐    │
-│  │  sar-operator (Kubernetes Operator)                     │    │
-│  │  - Watches SARJob CRDs                                  │    │
-│  │  - Spawns sar-processor pods                            │    │
-│  └─────────────────────────┬───────────────────────────────┘    │
-│                            │                                     │
-│  ┌─────────────────────────▼───────────────────────────────┐    │
-│  │  sar-processor (Job Pod)                                │    │
-│  │  - Downloads SAR data (HTTP Range)                      │    │
-│  │  - Processes GeoTIFF/HDF5                               │    │
-│  │  - Outputs analysis results                             │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│                    External APIs                                 │
-│  - ESA Copernicus (Sentinel-1)                                  │
-│  - ISRO Bhoonidhi (RISAT)                                       │
-│  - NASA Earthdata (NISAR)                                       │
-└─────────────────────────────────────────────────────────────────┘
+## Component Network Topology
+
+```text
+[ Browser / Client ] 
+       │
+       ├─ (1) GET /search            --> Queries ESA OData API
+       ├─ (2) POST /jobs             --> Gateway deploys CRD
+       └─ (3) GET /jobs/{id}/logs    --> Gateway pipes SSE stream
+       │
+[ API Gateway (sar-gateway) ]
+       │
+       ├─ Authenticates via ServiceAccount with K8s APIServer
+       ├─ Submits `SarJob` Custom Resources
+       └─ Connects async IO streams to Pod stdouts
+       │
+[ K8s APIServer ]
+       │
+[ Custom Controller (sar_operator_v2) ]
+       │
+       ├─ Watches for new/modified `SarJob` objects
+       ├─ Parses `processing_pipeline` and `ml_models` fields
+       └─ Generates `batch/v1::Job` Pod Specs
+       │
+[ Stateful Workloads (sar_processor) ]
+       │
+       └─ Connects to S3/EFS persistent volumes
+          Executes binary SAR calculations
+          Writes `.png` outputs
 ```
 
-## Component Details
+## Detailed Subsystem Interactions
 
-### 1. sar-dashboard-v3
-- **Tech**: React + Vite + Spline 3D
-- **Purpose**: User interface for searching and viewing SAR data
-- **Key Files**:
-  - `src/components/Hero.jsx` - Search UI with 3D background
-  - `src/components/LiveFeed.jsx` - Job status cards
-  - `nginx.conf` - Reverse proxy config
+### SSE Telemetry Pipeline
+One of the core architectural features is the ability of the frontend React client to view real-time compilation and execution logs of a processing job happening deep inside a remote Kubernetes node.
 
-### 2. sar-gateway
-- **Tech**: Rust + Axum + Tokio
-- **Purpose**: Secure API gateway with OAuth2
-- **Key Files**:
-  - `src/main.rs` - Server setup
-  - `src/handlers.rs` - API endpoints
-  - `src/esa_client.rs` - ESA API integration
+The flow is as follows:
+1. Client requests `POST /jobs`. The Gateway uses `kube-rs` to construct a `SarJob` CRD and posts it.
+2. The Gateway responds synchronously with a generated `Job ID`.
+3. The Client immediately connects to `GET /jobs/{id}/logs` via EventSource.
+4. The Gateway initiates an infinite `tokio` loop that queries the Kubernetes APIServer using a `ListParams` Label Selector (`sarjob={id}`).
+5. Once the Operator generates the `Pod` and it enters the `Running` state, the Gateway triggers `kube::Api::log_stream()`.
+6. This function utilizes `k8s-openapi` to connect an asynchronous network stream directly to the container daemon's stdout file.
+7. The Gateway reads this stream line-by-line and broadcasts it onto the EventSource connection.
 
-### 3. sar-operator
-- **Tech**: Rust + kube-rs
-- **Purpose**: Kubernetes operator for job management
-- **CRD**: `SARJob` custom resource
+### SAR Processor
+The `sar_processor` binary executes in a fire-and-forget capacity managed by the Kubernetes `Job` controller.
+The binary accepts environment variables injected by the Operator:
+- `SAR_SCENE_ID`
+- `SAR_OUTPUT_PATH`
+- `SAR_PIPELINE`
+- `SAR_PURPOSE`
 
-### 4. sar-processor
-- **Tech**: Rust + rustfft + ndarray (Pure Rust, No Python Dependencies)
-- **Purpose**: **Sovereign SAR data processing** - Independent L0→L1→L2 pipeline
-- **Core Algorithms**:
-  - **Range-Doppler Algorithm (RDA)** - Converts raw radar echoes into focused images
-  - **Range Compression** - FFT-based matched filtering
-  - **Azimuth Compression** - Doppler focusing along flight path
-- **NISAR Support**:
-  - L0B (Raw Signal) → L1 (SLC) → L2 (Geocoded) processing chain
-  - L-band and S-band support
-  - Multi-polarization (Single, Dual, Quad)
-- **Key Files**:
-  - `src/rda.rs` - Range-Doppler Algorithm implementation
-  - `src/radar_utils.rs` - Chirp generation, FFT planning
-  - `src/smart_downloader.rs` - HTTP Range requests for partial downloads
-  - `src/algorithm.rs` - AMTAD ship detection
-
-
-## Data Flow
-
-1. User searches for location in Dashboard
-2. Dashboard calls `/api/search?lat=X&lon=Y`
-3. Nginx proxies to Gateway
-4. Gateway authenticates with ESA OAuth2
-5. Gateway queries Copernicus OData API
-6. Results returned to Dashboard
-7. User clicks "Process"
-8. Gateway creates SARJob CR
-9. Operator detects CR, spawns Processor
-10. Processor downloads and analyzes data
+The spatial multilooking algorithm dynamically scales the image slice. By grouping the azimuth and range arrays into N-sized block averages (determined by the length of the coordinate request), speckle noise is virtually eliminated and the resulting PNG overlay is strictly constrained beneath 2048 pixels, preventing dashboard memory faults.

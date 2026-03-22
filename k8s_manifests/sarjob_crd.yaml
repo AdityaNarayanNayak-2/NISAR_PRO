@@ -23,6 +23,14 @@ spec:
                 type: string
               output_storage_path:
                 type: string
+              processing_pipeline:
+                type: string
+              analysis_purpose:
+                type: string
+              ml_models:
+                type: array
+                items:
+                  type: string
             required:
             - scene_id
             - output_storage_path

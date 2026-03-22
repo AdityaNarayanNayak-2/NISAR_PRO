@@ -1,206 +1,81 @@
-# nisar_pro
+# NISAR Pro - Distributed Synthetic Aperture Radar Processor
 
-# SAR Analyzer Documentation
+NISAR Pro is a specialized, distributed software system designed for the ingestion, processing, and visualization of Synthetic Aperture Radar (SAR) datasets (specifically Sentinel-1/Copernicus data). The pipeline is written primarily in Rust for memory safety and concurrency, while relying on Kubernetes for workload orchestration.
 
-Welcome to the SAR Analyzer documentation. This platform processes Synthetic Aperture Radar (SAR) data from multiple space agencies (ESA, ISRO, NASA) for Earth observation and analysis.
+## Core Components
 
-## 📚 Documentation Index
+The repository is structured into four separate deployment units:
 
-| Document | Description |
-|----------|-------------|
-| [Getting Started](./getting-started.md) | Setup your development environment |
-| [Architecture](./architecture.md) | System design and component overview |
-| [API Reference](./api-reference.md) | Gateway API endpoints |
-| [Deployment Guide](./deployment.md) | Deploy to Kubernetes |
-| [Contributing](./contributing.md) | How to contribute to this project |
+### 1. Processing Engine (`sar_processor/`)
+A high-performance Rust binary that directly handles raw SAR signal data. 
+- Utilizes GDAL bindings for GeoTIFF manipulation.
+- Implements sinc-interpolated Range Cell Migration Correction (RCMC) with an 8-point Hamming window.
+- Handles range-dependent azimuth compression.
+- Provides spatial multilooking (block averaging of intensity squared) to reduce speckle noise and cap dimensionality.
 
-## 🏗️ Project Structure
+### 2. Kubernetes Operator (`sar_operator_v2/`)
+A custom Kubernetes controller written using the `kube-rs` crate.
+- Reconciles `SarJob` Custom Resource Definitions (CRDs).
+- Extracts requested ML mapping models and pipeline parameters (e.g., InSAR, PolSAR) from the CRD.
+- Schedules ephemeral `batch/v1::Job` pods injected with the required `SAR_PIPELINE` environment configurations.
 
-```
-sar_analyzer/
-├── sar-dashboard-v3/     # Frontend (React + Vite + Spline 3D)
-├── sar-gateway/          # API Gateway (Rust + Axum)
-├── sar_processor/        # SAR Data Processor (Rust)
-├── sar_operator_v2/      # Kubernetes Operator (Rust + kube-rs)
-├── k8s_manifests/        # Kubernetes YAML files
-├── clusters/             # Flux CD GitOps config
-└── Docs/                 # You are here
-```
+### 3. API Gateway (`sar-gateway/`)
+An asymmetric API gateway written in Rust utilizing the `axum` and `tokio` asynchronous runtimes.
+- Proxies OData queries upstream to the ESA Copernicus API.
+- Replaces local processing queues by acting as a native Kubernetes API client. 
+- Translates client HTTP requests into `SarJob` deployments.
+- Implements a unique asynchronous polling mechanism that attaches `LogParams` streams to deployed Kubernetes Pods, piping standard output over the network back to clients using Server-Sent Events (SSE).
 
-## 🛠️ Tech Stack
+### 4. Client Dashboard (`sar-dashboard-v3/`)
+A Single Page Application built with React and Vite.
+- Discards multi-page wizard navigation in favor of a centralized Inspector UI.
+- Displays processed GeoTIFF SAR overlays directly on a `react-leaflet` map.
+- Consumes the Gateway's SSE stream via a persistent `<Terminal />` component, providing users with raw compilation output.
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React, Vite, Spline 3D, Framer Motion |
-| Backend | Rust, Axum, Tokio |
-| Container | Podman, Docker |
-| Orchestration | Kubernetes (Kind for local) |
-| GitOps | Flux CD |
-| CI/CD | GitLab CI |
-| Registry | GitLab Container Registry |
+## Local Execution Environment
 
-## 🔗 Quick Links
+The application is designed to be deployed to a distributed Kubernetes cluster. For local development, `kind` (Kubernetes in Docker) is the targeted substrate.
 
-- **GitLab Repository**: [gitlab.com/Aditya-Narayan-Nayak/nisar_pro](https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro)
-- **ESA Copernicus**: [dataspace.copernicus.eu](https://dataspace.copernicus.eu)
+### Dependencies
+- `rustc` 1.70+
+- `node` 20+
+- `kubectl`
+- `kind`
+- Container Runtime (`podman` or `docker`)
 
+### Deployment Procedure
 
-# Getting Started
+1. **Establish Cluster:** Mount a local control plane.
+   ```bash
+   kind create cluster --name sar-cluster
+   ```
 
-This guide will help you set up your local development environment.
+2. **Register Custom Resources:** Apply the Operator definitions.
+   ```bash
+   kubectl apply -k k8s_manifests/
+   ```
 
-## Prerequisites
+3. **Initialize Operator:** Start the job reconciler.
+   ```bash
+   cd sar_operator_v2
+   cargo run --release
+   ```
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Rust | 1.70+ | Backend development |
-| Node.js | 20+ | Frontend development |
-| Podman/Docker | Latest | Container builds |
-| Kind | Latest | Local Kubernetes |
-| kubectl | Latest | Cluster management |
+4. **Initialize Gateway:** Provide ESA credentials and bind the HTTP interface.
+   ```bash
+   cd sar-gateway
+   export ESA_USERNAME="user"
+   export ESA_PASSWORD="password"
+   cargo run --release
+   ```
 
-## 1. Clone the Repository
+5. **Start Client:**
+   ```bash
+   cd sar-dashboard-v3
+   npm install && npm run dev
+   ```
 
-```bash
-git clone https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro.git
-cd nisar_pro
-```
-
-## 2. Start the Frontend (Dashboard)
-
-```bash
-cd sar-dashboard-v3
-npm install
-npm run dev
-```
-Open [http://localhost:5173](http://localhost:5173)
-
-## 3. Start the Backend (Gateway)
-
-```bash
-cd sar-gateway
-cargo run
-```
-API available at [http://localhost:3000](http://localhost:3000)
-
-## 4. Local Kubernetes Cluster
-
-```bash
-# Create cluster
-./kind create cluster --name sar-cluster
-
-# Load images
-podman build -t localhost/sar-dashboard:latest sar-dashboard-v3/
-podman save localhost/sar-dashboard:latest -o /tmp/dash.tar
-./kind load image-archive /tmp/dash.tar --name sar-cluster
-
-# Deploy
-kubectl apply -k k8s_manifests/
-
-# Access dashboard
-kubectl port-forward svc/sar-dashboard-svc 8080:80
-```
-
-## 5. Environment Variables
-
-Create `sar-gateway/.env`:
-```env
-ESA_USERNAME=your_esa_email
-ESA_PASSWORD=your_esa_password
-RUST_LOG=info
-```
-
-## Next Steps
-
-- Read the [Architecture](./architecture.md) to understand the system
-- Check [API Reference](./api-reference.md) for endpoint details
-- See [Contributing](./contributing.md) to submit your first PR
-
-# System Architecture
-
-## High-Level Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         User Browser                            │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │ HTTP :8080
-┌─────────────────────────────▼───────────────────────────────────┐
-│                    Kubernetes Cluster                           │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  sar-dashboard (Nginx + React)                          │    │
-│  │  - Serves static frontend                               │    │
-│  │  - Proxies /api/* to Gateway                            │    │
-│  └─────────────────────────┬───────────────────────────────┘    │
-│                            │ /api/*                              │
-│  ┌─────────────────────────▼───────────────────────────────┐    │
-│  │  sar-gateway (Rust + Axum)                              │    │
-│  │  - OAuth2 authentication with ESA                       │    │
-│  │  - Unified API for multiple data sources                │    │
-│  └─────────────────────────┬───────────────────────────────┘    │
-│                            │                                     │
-│  ┌─────────────────────────▼───────────────────────────────┐    │
-│  │  sar-operator (Kubernetes Operator)                     │    │
-│  │  - Watches SARJob CRDs                                  │    │
-│  │  - Spawns sar-processor pods                            │    │
-│  └─────────────────────────┬───────────────────────────────┘    │
-│                            │                                     │
-│  ┌─────────────────────────▼───────────────────────────────┐    │
-│  │  sar-processor (Job Pod)                                │    │
-│  │  - Downloads SAR data (HTTP Range)                      │    │
-│  │  - Processes GeoTIFF/HDF5                               │    │
-│  │  - Outputs analysis results                             │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│                    External APIs                                 │
-│  - ESA Copernicus (Sentinel-1)                                  │
-│  - ISRO Bhoonidhi (RISAT)                                       │
-│  - NASA Earthdata (NISAR)                                       │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Component Details
-
-### 1. sar-dashboard-v3
-- **Tech**: React + Vite + Spline 3D
-- **Purpose**: User interface for searching and viewing SAR data
-- **Key Files**:
-  - `src/components/Hero.jsx` - Search UI with 3D background
-  - `src/components/LiveFeed.jsx` - Job status cards
-  - `nginx.conf` - Reverse proxy config
-
-### 2. sar-gateway
-- **Tech**: Rust + Axum + Tokio
-- **Purpose**: Secure API gateway with OAuth2
-- **Key Files**:
-  - `src/main.rs` - Server setup
-  - `src/handlers.rs` - API endpoints
-  - `src/esa_client.rs` - ESA API integration
-
-### 3. sar-operator
-- **Tech**: Rust + kube-rs
-- **Purpose**: Kubernetes operator for job management
-- **CRD**: `SARJob` custom resource
-
-### 4. sar-processor
-- **Tech**: Rust + GDAL bindings
-- **Purpose**: Actual SAR data processing
-- **Features**:
-  - Smart Downloader (HTTP Range requests)
-  - GeoTIFF/HDF5 parsing
-  - Ship detection, flood mapping
-
-## Data Flow
-
-1. User searches for location in Dashboard
-2. Dashboard calls `/api/search?lat=X&lon=Y`
-3. Nginx proxies to Gateway
-4. Gateway authenticates with ESA OAuth2
-5. Gateway queries Copernicus OData API
-6. Results returned to Dashboard
-7. User clicks "Process"
-8. Gateway creates SARJob CR
-9. Operator detects CR, spawns Processor
-10. Processor downloads and analyzes data
+## Documentation Reference
+See the `/Docs` directory for deep-dives into specific subsystems:
+- `Docs/architecture.md` - Detailed overview of the kube-rs API bindings and SSE pipeline.
+- `Docs/deployment.md` - Remote VM cluster topology instructions.

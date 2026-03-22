@@ -1,7 +1,7 @@
 //! NISAR HDF5 Product Parser
 //!
-//! Parses NISAR Beta RSLC (and GSLC) HDF5 files into complex arrays
-//! suitable for the RDA processing pipeline.
+//! Parses NISAR Beta products (RSLC, GSLC, GCOV, GUNW) into arrays
+//! suitable for the processing and visualization pipeline.
 //!
 //! NISAR L-band RSLC data hierarchy:
 //! ```text
@@ -52,95 +52,205 @@ pub struct NisarRadarParams {
 /// A parsed NISAR product ready for the RDA pipeline
 pub struct NisarProduct {
     /// Complex SLC array [azimuth × range]
+    /// For GCOV products, the diagonal term (e.g. HHHH) is stored as
+    /// magnitude in the real part with zero imaginary.
     pub slc: Array2<Complex32>,
     /// Radar parameters from file metadata
     pub params: NisarRadarParams,
     /// Polarization channel actually read
     pub polarization: String,
+    /// Product type detected from filename
+    pub product_type: NisarProductType,
+}
+
+/// NISAR product type, auto-detected from filename
+#[derive(Debug, Clone, PartialEq)]
+pub enum NisarProductType {
+    RSLC, // Level-1 Range-Doppler SLC (radar coords)
+    GSLC, // Level-2 Geocoded SLC (map coords)
+    GCOV, // Level-2 Geocoded Polarimetric Covariance
+    GUNW, // Level-2 Geocoded Unwrapped Interferogram
 }
 
 // ───────────────────────────────────────────────────────────────────────────
 // Main Entry Point
 // ───────────────────────────────────────────────────────────────────────────
 
-/// Parse a NISAR RSLC HDF5 file and return a product ready for the RDA pipeline.
+/// Auto-detect product type from filename and parse accordingly.
 ///
-/// # Arguments
-/// * `path`         — path to the `.h5` RSLC file
-/// * `polarization` — e.g. `"HH"`, `"VV"`, `"HV"` (case-insensitive)
+/// Supports: RSLC, GSLC, GCOV, GUNW
+pub fn parse_nisar_auto(path: &Path, polarization: &str) -> Result<NisarProduct> {
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    let product_type = if filename.contains("_RSLC_") {
+        NisarProductType::RSLC
+    } else if filename.contains("_GSLC_") {
+        NisarProductType::GSLC
+    } else if filename.contains("_GCOV_") {
+        NisarProductType::GCOV
+    } else if filename.contains("_GUNW_") {
+        NisarProductType::GUNW
+    } else {
+        info!("Cannot detect product type from filename, assuming RSLC");
+        NisarProductType::RSLC
+    };
+
+    info!("Detected NISAR product type: {:?}", product_type);
+
+    match product_type {
+        NisarProductType::RSLC => parse_nisar_rslc(path, polarization),
+        NisarProductType::GSLC => parse_nisar_gslc(path, polarization),
+        NisarProductType::GCOV => parse_nisar_gcov(path, polarization),
+        NisarProductType::GUNW => parse_nisar_gunw(path, polarization),
+    }
+}
+
+/// Parse a NISAR RSLC HDF5 file (Level-1, radar coordinates)
 pub fn parse_nisar_rslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
     let pol = polarization.to_uppercase();
-    info!("Opening NISAR HDF5: {:?} (pol={})", path, pol);
+    info!("Opening NISAR RSLC: {:?} (pol={})", path, pol);
 
     let file = File::open(path).with_context(|| format!("Failed to open HDF5 file: {:?}", path))?;
+    let params = extract_radar_params(&file, "RSLC")?;
 
-    // ── 1. Read metadata ──────────────────────────────────────────────────
-    let params = extract_radar_params(&file)
-        .context("Failed to extract NISAR radar parameters from metadata")?;
-
-    info!(
-        "NISAR params: fc={:.3} GHz  BW={:.1} MHz  PRF={:.1} Hz  pulse={:.2} µs",
-        params.center_frequency / 1e9,
-        params.range_bandwidth / 1e6,
-        params.prf,
-        params.pulse_duration * 1e6,
-    );
-
-    // ── 2. Read SLC complex data ──────────────────────────────────────────
     let slc_path = format!("/science/LSAR/RSLC/swaths/frequencyA/{}", pol);
-    info!("Reading SLC from HDF5 path: {}", slc_path);
+    let slc = read_complex_dataset(&file, &slc_path)?;
 
-    let slc = read_complex_dataset(&file, &slc_path)
-        .with_context(|| format!("Failed to read SLC dataset '{}'. Check polarization.", pol))?;
+    info!("RSLC loaded: {} × {}", slc.nrows(), slc.ncols());
+    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::RSLC })
+}
 
-    info!(
-        "SLC loaded: {} azimuth lines × {} range samples",
-        slc.nrows(),
-        slc.ncols()
-    );
+/// Parse a NISAR GSLC HDF5 file (Level-2, geocoded SLC)
+fn parse_nisar_gslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
+    let pol = polarization.to_uppercase();
+    info!("Opening NISAR GSLC: {:?} (pol={})", path, pol);
 
-    Ok(NisarProduct {
-        slc,
-        params,
-        polarization: pol,
-    })
+    let file = File::open(path).with_context(|| format!("Failed to open HDF5 file: {:?}", path))?;
+    let params = extract_radar_params(&file, "GSLC")?;
+
+    let slc_path = format!("/science/LSAR/GSLC/grids/frequencyA/{}", pol);
+    let slc = read_complex_dataset(&file, &slc_path)?;
+
+    info!("GSLC loaded: {} × {}", slc.nrows(), slc.ncols());
+    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GSLC })
+}
+
+/// Parse a NISAR GCOV HDF5 file (Level-2, polarimetric covariance)
+///
+/// GCOV stores real-valued covariance terms like HHHH, HVHV at:
+///   /science/LSAR/GCOV/grids/frequencyA/HHHH
+/// We read the diagonal term (real-valued intensity) and wrap it
+/// as Complex32 (magnitude in real, zero imaginary) for pipeline compat.
+fn parse_nisar_gcov(path: &Path, polarization: &str) -> Result<NisarProduct> {
+    let pol = polarization.to_uppercase();
+    // For GCOV, "HH" maps to diagonal term "HHHH", "HV" → "HVHV", etc.
+    let cov_term = format!("{}{}", pol, pol);
+    info!("Opening NISAR GCOV: {:?} (term={})", path, cov_term);
+
+    let file = File::open(path).with_context(|| format!("Failed to open HDF5 file: {:?}", path))?;
+    let params = extract_radar_params(&file, "GCOV")?;
+
+    let data_path = format!("/science/LSAR/GCOV/grids/frequencyA/{}", cov_term);
+    info!("Reading GCOV covariance from: {}", data_path);
+
+    let data = read_real_dataset(&file, &data_path)
+        .with_context(|| format!("Failed to read GCOV term '{}'", cov_term))?;
+
+    info!("GCOV loaded: {} × {} (real-valued covariance)", data.nrows(), data.ncols());
+
+    // Wrap as Complex32 for pipeline compatibility
+    let slc = data.mapv(|v| Complex32::new(v, 0.0));
+
+    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GCOV })
+}
+
+/// Parse a NISAR GUNW HDF5 file (Level-2, unwrapped interferogram)
+fn parse_nisar_gunw(path: &Path, polarization: &str) -> Result<NisarProduct> {
+    let pol = polarization.to_uppercase();
+    info!("Opening NISAR GUNW: {:?} (pol={})", path, pol);
+
+    let file = File::open(path).with_context(|| format!("Failed to open HDF5 file: {:?}", path))?;
+    let params = extract_radar_params(&file, "GUNW")?;
+
+    // GUNW unwrapped phase at /science/LSAR/GUNW/grids/frequencyA/unwrappedPhase
+    let phase_path = "/science/LSAR/GUNW/grids/frequencyA/unwrappedPhase";
+    info!("Reading GUNW unwrapped phase from: {}", phase_path);
+
+    let phase = read_real_dataset(&file, phase_path)
+        .with_context(|| "Failed to read GUNW unwrapped phase")?;
+
+    info!("GUNW loaded: {} × {} (unwrapped phase)", phase.nrows(), phase.ncols());
+
+    // Convert phase to complex (unit magnitude, phase angle)
+    let slc = phase.mapv(|phi| Complex32::from_polar(1.0, phi));
+
+    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GUNW })
 }
 
 // ───────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ───────────────────────────────────────────────────────────────────────────
 
-/// Extract radar timing/frequency parameters from NISAR metadata group.
-/// Falls back to L-band NISAR defaults for any missing fields
-/// (common in Beta pre-calibration products).
-fn extract_radar_params(file: &File) -> Result<NisarRadarParams> {
-    let base = "/science/LSAR/RSLC/metadata/processingInformation/parameters";
+/// Extract radar parameters from NISAR metadata.
+/// The `product_type` arg determines which metadata path to try.
+fn extract_radar_params(file: &File, product_type: &str) -> Result<NisarRadarParams> {
+    // Try product-specific metadata path first, fall back to RSLC path
+    let bases = [
+        format!("/science/LSAR/{}/metadata/processingInformation/parameters", product_type),
+        "/science/LSAR/RSLC/metadata/processingInformation/parameters".to_string(),
+    ];
 
-    let center_frequency =
-        read_scalar_f64(file, &format!("{}/centerFrequency", base)).unwrap_or(1_257_500_000.0); // 1.2575 GHz L-band
+    let mut center_frequency = None;
+    let mut range_bandwidth = None;
+    let mut pulse_duration = None;
+    let mut chirp_rate = None;
+    let mut prf = None;
+    let mut sample_rate = None;
 
-    let range_bandwidth =
-        read_scalar_f64(file, &format!("{}/rangeBandwidth", base)).unwrap_or(80_000_000.0); // 80 MHz
+    for base in &bases {
+        if center_frequency.is_none() {
+            center_frequency = read_scalar_f64(file, &format!("{}/centerFrequency", base));
+        }
+        if range_bandwidth.is_none() {
+            range_bandwidth = read_scalar_f64(file, &format!("{}/rangeBandwidth", base));
+        }
+        if pulse_duration.is_none() {
+            pulse_duration = read_scalar_f64(file, &format!("{}/chirpDuration", base));
+        }
+        if chirp_rate.is_none() {
+            chirp_rate = read_scalar_f64(file, &format!("{}/rangeChirpRate", base));
+        }
+        if prf.is_none() {
+            prf = read_scalar_f64(file, &format!("{}/nominalAcquisitionPRF", base));
+        }
+        if sample_rate.is_none() {
+            sample_rate = read_scalar_f64(file, &format!("{}/rangeSamplingFrequency", base));
+        }
+    }
 
-    let pulse_duration =
-        read_scalar_f64(file, &format!("{}/chirpDuration", base)).unwrap_or(40.0e-6); // 40 µs
+    let bw = range_bandwidth.unwrap_or(80_000_000.0);
+    let tau = pulse_duration.unwrap_or(40.0e-6);
 
-    let chirp_rate = read_scalar_f64(file, &format!("{}/rangeChirpRate", base))
-        .unwrap_or(range_bandwidth / pulse_duration);
+    let params = NisarRadarParams {
+        center_frequency: center_frequency.unwrap_or(1_257_500_000.0),
+        range_bandwidth: bw,
+        pulse_duration: tau,
+        chirp_rate: chirp_rate.unwrap_or(bw / tau),
+        prf: prf.unwrap_or(1_600.0),
+        sample_rate: sample_rate.unwrap_or(bw * 1.2),
+    };
 
-    let prf = read_scalar_f64(file, &format!("{}/nominalAcquisitionPRF", base)).unwrap_or(1_600.0); // 1600 Hz
+    info!(
+        "NISAR params: fc={:.3} GHz  BW={:.1} MHz  PRF={:.1} Hz",
+        params.center_frequency / 1e9,
+        params.range_bandwidth / 1e6,
+        params.prf,
+    );
 
-    let sample_rate = read_scalar_f64(file, &format!("{}/rangeSamplingFrequency", base))
-        .unwrap_or(range_bandwidth * 1.2); // 20% oversampling
-
-    Ok(NisarRadarParams {
-        center_frequency,
-        range_bandwidth,
-        pulse_duration,
-        chirp_rate,
-        prf,
-        sample_rate,
-    })
+    Ok(params)
 }
 
 /// Read a scalar f64 from an HDF5 dataset.
@@ -152,15 +262,19 @@ fn read_scalar_f64(file: &File, path: &str) -> Option<f64> {
 
 /// Read a complex float32 SLC dataset.
 ///
-/// NISAR stores SLC data as flat interleaved float32 (re, im, re, im, …)
-/// in row-major (azimuth-major) order. The HDF5 dataset shape is [n_az, n_rg]
-/// but the actual data length is n_az × n_rg × 2 float32 values.
+/// NISAR stores SLC data as an HDF5 compound type `{float32 re, float32 im}`.
+/// The high-level `read_f32()` API rejects compound types, so we use the
+/// low-level `rustyhdf5_format` crate to read raw bytes directly (works for
+/// both contiguous and chunked layouts), then reinterpret as Complex32.
+///
+/// The compound type has the exact same binary layout as interleaved
+/// `(re, im, re, im, …)` float32 pairs.
 fn read_complex_dataset(file: &File, path: &str) -> Result<Array2<Complex32>> {
     let dataset = file
         .dataset(path)
         .with_context(|| format!("HDF5 dataset not found: {}", path))?;
 
-    // Shape returns [n_az, n_rg] for a 2-D SLC
+    // Shape via high-level API
     let shape = dataset
         .shape()
         .with_context(|| format!("Cannot read shape of dataset '{}'", path))?;
@@ -174,34 +288,128 @@ fn read_complex_dataset(file: &File, path: &str) -> Result<Array2<Complex32>> {
     }
     let n_az = shape[0] as usize;
     let n_rg = shape[1] as usize;
+    let n_pixels = n_az * n_rg;
 
-    info!("  SLC shape: {} azimuth × {} range", n_az, n_rg);
+    info!("  SLC shape: {} azimuth × {} range ({} complex samples)", n_az, n_rg, n_pixels);
 
-    // Read as f32 — interleaved (re, im) pairs
-    let raw: Vec<f32> = dataset
-        .read_f32()
-        .with_context(|| format!("Failed to read float32 data from '{}'", path))?;
+    // ── Try high-level read_f32 first (works for plain float32 datasets) ──
+    if let Ok(raw_f32) = dataset.read_f32() {
+        let expected = n_pixels * 2;
+        if raw_f32.len() == expected {
+            info!("  Read via high-level float32 API ({} MB)", raw_f32.len() * 4 / (1024 * 1024));
+            let complex_vec: Vec<Complex32> = raw_f32
+                .chunks_exact(2)
+                .map(|pair| Complex32::new(pair[0], pair[1]))
+                .collect();
+            return Array2::from_shape_vec((n_az, n_rg), complex_vec)
+                .context("Failed to reshape SLC data into 2D array");
+        }
+    }
 
-    // Validate: each complex sample = 2 × f32 values
-    let expected = n_az * n_rg * 2;
-    if raw.len() != expected {
+    // ── High-level API failed (compound type) — use low-level raw bytes ───
+    info!("  High-level read failed (compound type), using low-level raw bytes reader");
+
+    // Get the raw file buffer and superblock info from the File
+    let file_data = file.as_bytes();
+    let sb = file.superblock();
+    let os = sb.offset_size;
+    let ls = sb.length_size;
+
+    // Re-resolve the dataset path at the format level to get ObjectHeader
+    let addr = rustyhdf5_format::group_v2::resolve_path_any(file_data, sb, path)
+        .with_context(|| format!("Cannot resolve HDF5 path: {}", path))?;
+
+    let header = rustyhdf5_format::object_header::ObjectHeader::parse(file_data, addr as usize, os, ls)
+        .with_context(|| format!("Cannot parse object header for: {}", path))?;
+
+    // Extract DataLayout, Dataspace, Datatype, and FilterPipeline from the header
+    use rustyhdf5_format::message_type::MessageType;
+
+    let dl_msg = header.messages.iter()
+        .find(|m| m.msg_type == MessageType::DataLayout)
+        .ok_or_else(|| anyhow::anyhow!("No DataLayout message in '{}'", path))?;
+    let dl = rustyhdf5_format::data_layout::DataLayout::parse(&dl_msg.data, os, ls)
+        .with_context(|| format!("Cannot parse DataLayout for '{}'", path))?;
+
+    let ds_msg = header.messages.iter()
+        .find(|m| m.msg_type == MessageType::Dataspace)
+        .ok_or_else(|| anyhow::anyhow!("No Dataspace message in '{}'", path))?;
+    let ds = rustyhdf5_format::dataspace::Dataspace::parse(&ds_msg.data, ls)
+        .with_context(|| format!("Cannot parse Dataspace for '{}'", path))?;
+
+    let dt_msg = header.messages.iter()
+        .find(|m| m.msg_type == MessageType::Datatype)
+        .ok_or_else(|| anyhow::anyhow!("No Datatype message in '{}'", path))?;
+    let (dt, _) = rustyhdf5_format::datatype::Datatype::parse(&dt_msg.data)
+        .with_context(|| format!("Cannot parse Datatype for '{}'", path))?;
+
+    let pipeline = header.messages.iter()
+        .find(|m| m.msg_type == MessageType::FilterPipeline)
+        .and_then(|msg| rustyhdf5_format::filter_pipeline::FilterPipeline::parse(&msg.data).ok());
+
+    // Read raw bytes — works for contiguous, compact, AND chunked layouts
+    let raw_bytes = rustyhdf5_format::data_read::read_raw_data_full(
+        file_data, &dl, &ds, &dt, pipeline.as_ref(), os, ls,
+    ).with_context(|| format!("Failed to read raw data from '{}'", path))?;
+
+    let expected_bytes = n_pixels * 8; // compound {f32, f32} = 8 bytes per sample
+    info!("  Read {} MB raw bytes (expected {} MB)",
+        raw_bytes.len() / (1024 * 1024),
+        expected_bytes / (1024 * 1024));
+
+    if raw_bytes.len() != expected_bytes {
         bail!(
-            "Dataset '{}' size mismatch: got {} f32 values, expected {} ({}×{}×2)",
-            path,
-            raw.len(),
-            expected,
-            n_az,
-            n_rg
+            "Dataset '{}' raw size mismatch: got {} bytes, expected {} ({}×8)",
+            path, raw_bytes.len(), expected_bytes, n_pixels
         );
     }
 
-    let complex_vec: Vec<Complex32> = raw
-        .chunks_exact(2)
-        .map(|pair| Complex32::new(pair[0], pair[1]))
+    // Reinterpret raw bytes as (re, im) float32 pairs → Complex32
+    let complex_vec: Vec<Complex32> = raw_bytes
+        .chunks_exact(8)
+        .map(|chunk| {
+            let re = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            let im = f32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+            Complex32::new(re, im)
+        })
         .collect();
+
+    info!("  Decoded {} complex samples from compound type", complex_vec.len());
 
     Array2::from_shape_vec((n_az, n_rg), complex_vec)
         .context("Failed to reshape SLC data into 2D array")
+}
+
+/// Read a real-valued float32 dataset (used for GCOV diagonal terms, GUNW phase).
+fn read_real_dataset(file: &File, path: &str) -> Result<Array2<f32>> {
+    let dataset = file
+        .dataset(path)
+        .with_context(|| format!("HDF5 dataset not found: {}", path))?;
+
+    let shape = dataset.shape()
+        .with_context(|| format!("Cannot read shape of dataset '{}'", path))?;
+
+    if shape.len() != 2 {
+        bail!("Expected 2D dataset at '{}', got {}D", path, shape.len());
+    }
+    let n_rows = shape[0] as usize;
+    let n_cols = shape[1] as usize;
+
+    info!("  Dataset shape: {} × {}", n_rows, n_cols);
+
+    let raw: Vec<f32> = dataset.read_f32()
+        .with_context(|| format!("Failed to read float32 data from '{}'", path))?;
+
+    let expected = n_rows * n_cols;
+    if raw.len() != expected {
+        bail!(
+            "Dataset '{}' size mismatch: got {} values, expected {} ({}×{})",
+            path, raw.len(), expected, n_rows, n_cols
+        );
+    }
+
+    Array2::from_shape_vec((n_rows, n_cols), raw)
+        .context("Failed to reshape data into 2D array")
 }
 
 // ───────────────────────────────────────────────────────────────────────────

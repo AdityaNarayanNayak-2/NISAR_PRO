@@ -162,20 +162,22 @@ impl SARProcessor {
             range_doppler
         };
 
-        // 3. Apply Azimuth Matched Filter
-        info!("  Applying azimuth matched filter...");
+        // 3. Apply Azimuth Matched Filter (range-dependent FM rate)
+        info!("  Applying azimuth matched filter (range-dependent Doppler rate)...");
         let mut filtered = rcmc_corrected.clone();
 
-        // Simple matched filter based on Doppler history
-        // For more accuracy, this should vary with range
-        let doppler_rate = 2.0
-            * self
-                .rcmc_params
-                .as_ref()
-                .map(|p| p.velocity.powi(2) / (p.wavelength * p.near_range))
-                .unwrap_or(1000.0);
+        // Range spacing for computing per-bin slant range
+        let c = 299792458.0_f32;
+        let range_spacing = c / (2.0 * self.sample_rate);
+        let (wavelength, velocity, near_range) = self.rcmc_params.as_ref()
+            .map(|p| (p.wavelength, p.velocity, p.near_range))
+            .unwrap_or((0.055, 7500.0, 800_000.0));
 
         for col_idx in 0..cols {
+            // Range-dependent: FM rate varies with slant range
+            let slant_range = near_range + (col_idx as f32) * range_spacing;
+            let doppler_rate = 2.0 * velocity.powi(2) / (wavelength * slant_range);
+
             for dop_idx in 0..rows {
                 // Doppler frequency
                 let f_dop = ((dop_idx as f32) - (rows as f32 / 2.0)) * self.prf / (rows as f32);

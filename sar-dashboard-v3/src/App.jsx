@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
@@ -19,13 +19,20 @@ import ResultsPage from './pages/app/ResultsPage'
 import './App.css'
 
 function App() {
+  const location = useLocation();
+  const isAppDashboard = location.pathname.startsWith('/app');
+
   return (
     <>
       {/* Background Effects */}
-      <div className="bg-gradient-mesh" />
-      <div className="bg-grid" />
+      {!isAppDashboard && (
+        <>
+          <div className="bg-gradient-mesh" />
+          <div className="bg-grid" />
+        </>
+      )}
 
-      <Navbar />
+      {!isAppDashboard && <Navbar />}
 
       <AnimatePresence mode="wait">
         <Routes>
@@ -47,7 +54,7 @@ function App() {
         </Routes>
       </AnimatePresence>
 
-      <Footer />
+      {!isAppDashboard && <Footer />}
     </>
   )
 }

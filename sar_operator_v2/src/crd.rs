@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 pub struct SarJobSpec {
     pub scene_id: String,
     pub output_storage_path: String,
+    pub processing_pipeline: Option<String>,
+    pub analysis_purpose: Option<String>,
+    pub ml_models: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Default, PartialEq, JsonSchema)]

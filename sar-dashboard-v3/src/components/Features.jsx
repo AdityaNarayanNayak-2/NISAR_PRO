@@ -27,7 +27,7 @@ const features = [
     description: 'Native parsing and decoding for NISAR L1/L2 and Sentinel-1 SAFE formats.',
     gradient: 'radial-gradient(ellipse at bottom left, rgba(52, 211, 153, 0.15), transparent 70%)',
     colSpan: 1,
-    rowSpan: 2 // Tall card
+    rowSpan: 1 // Standard height
   },
   {
     icon: <Zap size={28} className="text-yellow-400" />,

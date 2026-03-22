@@ -37,10 +37,11 @@ pub async fn fetch_sentinel1_data(scene_id: &str) -> Result<Array2<f32>> {
 /// Save a SAR focused image as PNG.
 ///
 /// Applies industry-standard SAR display processing:
-/// 1. Compute intensity (magnitude squared)
-/// 2. Log10 scaling (dB-like, adds 1e-10 to avoid log(0))
-/// 3. Percentile-based contrast stretch (2nd–98th percentile)
-/// 4. Gamma correction (γ = 0.6) to brighten mid-tones
+/// 1. Calculate intensity (magnitude squared)
+/// 2. Spatial Multilooking (block averaging) to reduce dimensions and speckle
+/// 3. Log10 scaling (dB-like, adds 1e-10 to avoid log(0))
+/// 4. Percentile-based contrast stretch (2nd–98th percentile)
+/// 5. Gamma correction (γ = 0.6) to brighten mid-tones
 pub fn save_sar_image(
     complex_image: ArrayView2<num_complex::Complex32>,
     output_filename: &str,
@@ -48,40 +49,87 @@ pub fn save_sar_image(
     let rows = complex_image.nrows();
     let cols = complex_image.ncols();
 
+    // ── 1. Determine Downsampling (Multilooking) Factor ──────────────────
+    let max_dimension = 2048;
+    let factor = (rows.max(cols) as f32 / max_dimension as f32)
+        .ceil()
+        .max(1.0) as usize;
+
+    let out_rows = rows / factor;
+    let out_cols = cols / factor;
+
     info!(
-        "Rendering SAR image: {}×{} → {}",
-        rows, cols, output_filename
+        "Rendering SAR image: {}×{} → downsampled {}x ({}×{}) → {}",
+        rows, cols, factor, out_rows, out_cols, output_filename
     );
 
-    // ── 1. Intensity + log scale ──────────────────────────────────────────
-    let log_intensity: Vec<f32> = complex_image
-        .iter()
-        .map(|c| (c.re.powi(2) + c.im.powi(2) + 1e-10).log10())
-        .collect();
+    // ── 2. Block Averaging of Intensity ───────────────────────────────────
+    let mut num_finite = 0;
+    let mut log_intensity = Vec::with_capacity(out_rows * out_cols);
 
-    // ── 2. Percentile stretch (2nd–98th) ─────────────────────────────────
-    let mut sorted = log_intensity.clone();
-    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let n = sorted.len();
-    let p2 = sorted[(n as f32 * 0.02) as usize];
-    let p98 = sorted[(n as f32 * 0.98) as usize];
+    for out_r in 0..out_rows {
+        for out_c in 0..out_cols {
+            let mut sum_intensity = 0.0_f32;
+            let mut count = 0;
+
+            let r_start = out_r * factor;
+            let c_start = out_c * factor;
+            let r_end = (r_start + factor).min(rows);
+            let c_end = (c_start + factor).min(cols);
+
+            for r in r_start..r_end {
+                for c in c_start..c_end {
+                    let pixel = complex_image[[r, c]];
+                    if pixel.re.is_finite() && pixel.im.is_finite() {
+                        sum_intensity += pixel.re.powi(2) + pixel.im.powi(2);
+                        count += 1;
+                    }
+                }
+            }
+
+            if count > 0 {
+                let mean_intensity = sum_intensity / count as f32;
+                log_intensity.push((mean_intensity + 1e-10).log10());
+                num_finite += 1;
+            } else {
+                log_intensity.push(f32::NAN);
+            }
+        }
+    }
+
+    // ── 3. Percentile stretch (2nd–98th) ─────────────────────────────────
+    let mut sorted: Vec<f32> = log_intensity.iter().copied().filter(|v| v.is_finite()).collect();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let (p2, p98) = if sorted.is_empty() {
+        info!("Warning: no finite values found, using default stretch");
+        (0.0_f32, 1.0_f32)
+    } else {
+        let n = sorted.len();
+        let lo = sorted[(n as f32 * 0.02) as usize];
+        let hi = sorted[((n as f32 * 0.98) as usize).min(n - 1)];
+        (lo, hi)
+    };
     let stretch_range = (p98 - p2).max(1e-6);
 
-    info!("Contrast stretch: [{:.2}, {:.2}] dB", p2, p98);
+    info!("Contrast stretch: [{:.2}, {:.2}] dB (based on {} valid blocks)", p2, p98, num_finite);
 
-    // ── 3. Gamma + quantize to u8 ─────────────────────────────────────────
+    // ── 4. Gamma + quantize to u8 ─────────────────────────────────────────
     let gamma = 0.6_f32;
     let pixels: Vec<u8> = log_intensity
         .iter()
         .map(|&v| {
+            if !v.is_finite() {
+                return 0u8; // NaN/Inf → black
+            }
             let normalized = ((v - p2) / stretch_range).clamp(0.0, 1.0);
             let gamma_corrected = normalized.powf(gamma);
             (gamma_corrected * 255.0) as u8
         })
         .collect();
 
-    // ── 4. Write PNG ──────────────────────────────────────────────────────
-    let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(cols as u32, rows as u32);
+    // ── 5. Write PNG ──────────────────────────────────────────────────────
+    let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(out_cols as u32, out_rows as u32);
     for (idx, pixel) in img.pixels_mut().enumerate() {
         let v = pixels[idx];
         *pixel = Rgb([v, v, v]); // Grayscale
