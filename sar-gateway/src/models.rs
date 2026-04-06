@@ -14,7 +14,23 @@ pub struct ProcessRequest {
     pub synthetic: Option<bool>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct NisarSearchQuery {
+    pub bbox: String, // format: "minLon,minLat,maxLon,maxLat"
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+}
+
 #[derive(Serialize, Debug)]
+pub struct NisarScene {
+    pub id: String,
+    pub date: String,
+    pub footprint: serde_json::Value,
+    pub download_url: String,
+    pub size_bytes: String,
+}
+
+#[derive(Serialize, Debug, Clone)]
 #[allow(dead_code)]
 pub struct SarScene {
     pub id: String,

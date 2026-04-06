@@ -1,5 +1,6 @@
 pub mod models;
 pub mod esa_client;
+pub mod nasa_client;
 pub mod handlers;
 pub mod jobs;
 
@@ -32,6 +33,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/search", get(handlers::search_handler))
+        .route("/search/nisar", get(handlers::search_nisar_handler))
         .route("/jobs", post(handlers::start_job_handler))
         .route("/jobs/:id", get(handlers::get_job_handler))
         .route("/jobs/:id/logs", get(handlers::stream_logs_handler))

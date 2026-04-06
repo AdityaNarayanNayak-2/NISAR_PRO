@@ -1,81 +1,101 @@
-# NISAR Pro - Distributed Synthetic Aperture Radar Processor
+# NISAR Pro - Distributed SAR Web Intelligence Platform
 
-NISAR Pro is a specialized, distributed software system designed for the ingestion, processing, and visualization of Synthetic Aperture Radar (SAR) datasets (specifically Sentinel-1/Copernicus data). The pipeline is written primarily in Rust for memory safety and concurrency, while relying on Kubernetes for workload orchestration.
+NISAR Pro is an enterprise-grade, distributed Synthetic Aperture Radar (SAR) processing platform designed explicitly for the upcoming NASA-ISRO (NISAR) mission. It provides a complete geospatial intelligence workflow: discovering raw NASA Earthdata, triggering on-demand Kubernetes cluster processing ("Hot Processing"), and generating deep-zoom XYZ optical slippy maps for the browser.
 
-## Core Components
+---
 
-The repository is structured into four separate deployment units:
+## 🚀 Step-by-Step Installation & Execution Tutorial
 
-### 1. Processing Engine (`sar_processor/`)
-A high-performance Rust binary that directly handles raw SAR signal data. 
-- Utilizes GDAL bindings for GeoTIFF manipulation.
-- Implements sinc-interpolated Range Cell Migration Correction (RCMC) with an 8-point Hamming window.
-- Handles range-dependent azimuth compression.
-- Provides spatial multilooking (block averaging of intensity squared) to reduce speckle noise and cap dimensionality.
+Follow these instructions to deploy the entire NISAR Pro stack locally on your machine.
 
-### 2. Kubernetes Operator (`sar_operator_v2/`)
-A custom Kubernetes controller written using the `kube-rs` crate.
-- Reconciles `SarJob` Custom Resource Definitions (CRDs).
-- Extracts requested ML mapping models and pipeline parameters (e.g., InSAR, PolSAR) from the CRD.
-- Schedules ephemeral `batch/v1::Job` pods injected with the required `SAR_PIPELINE` environment configurations.
+### Step 1: System Prerequisites
+Ensure you have the following installed on your Linux/macOS machine:
+- **Rust (Cargo):** `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- **Node.js (v20+):** Required for the React frontend.
+- **Docker / Podman:** Required to run the local Kubernetes nodes.
+- **Kind (Kubernetes in Docker):** `go install sigs.k8s.io/kind@v0.20.0`
+- **Kubectl:** The Kubernetes command-line tool.
 
-### 3. API Gateway (`sar-gateway/`)
-An asymmetric API gateway written in Rust utilizing the `axum` and `tokio` asynchronous runtimes.
-- Proxies OData queries upstream to the ESA Copernicus API.
-- Replaces local processing queues by acting as a native Kubernetes API client. 
-- Translates client HTTP requests into `SarJob` deployments.
-- Implements a unique asynchronous polling mechanism that attaches `LogParams` streams to deployed Kubernetes Pods, piping standard output over the network back to clients using Server-Sent Events (SSE).
+---
 
-### 4. Client Dashboard (`sar-dashboard-v3/`)
-A Single Page Application built with React and Vite.
-- Discards multi-page wizard navigation in favor of a centralized Inspector UI.
-- Displays processed GeoTIFF SAR overlays directly on a `react-leaflet` map.
-- Consumes the Gateway's SSE stream via a persistent `<Terminal />` component, providing users with raw compilation output.
+### Step 2: Initialize the Kubernetes Cluster
+NISAR Pro relies a distributed Kubernetes architecture to orchestrate massive 7GB image array matrices without crashing the main application thread.
 
-## Local Execution Environment
-
-The application is designed to be deployed to a distributed Kubernetes cluster. For local development, `kind` (Kubernetes in Docker) is the targeted substrate.
-
-### Dependencies
-- `rustc` 1.70+
-- `node` 20+
-- `kubectl`
-- `kind`
-- Container Runtime (`podman` or `docker`)
-
-### Deployment Procedure
-
-1. **Establish Cluster:** Mount a local control plane.
+1. **Create the local development cluster:**
    ```bash
    kind create cluster --name sar-cluster
    ```
-
-2. **Register Custom Resources:** Apply the Operator definitions.
+2. **Define the custom `SarJob` operations pipeline:**
    ```bash
    kubectl apply -k k8s_manifests/
    ```
 
-3. **Initialize Operator:** Start the job reconciler.
-   ```bash
-   cd sar_operator_v2
-   cargo run --release
-   ```
+---
 
-4. **Initialize Gateway:** Provide ESA credentials and bind the HTTP interface.
-   ```bash
-   cd sar-gateway
-   export ESA_USERNAME="user"
-   export ESA_PASSWORD="password"
-   cargo run --release
-   ```
+### Step 3: Boot the Backend Microservices
+Open **three separate terminal window tabs**, as each component runs continuously.
 
-5. **Start Client:**
-   ```bash
-   cd sar-dashboard-v3
-   npm install && npm run dev
-   ```
+#### Terminal 1: The Kubernetes Operator
+This controller watches the cluster for new processing requests and spins up processor pods.
+```bash
+cd sar_operator_v2
+RUST_LOG=info cargo run --release
+```
 
-## Documentation Reference
-See the `/Docs` directory for deep-dives into specific subsystems:
-- `Docs/architecture.md` - Detailed overview of the kube-rs API bindings and SSE pipeline.
-- `Docs/deployment.md` - Remote VM cluster topology instructions.
+#### Terminal 2: The API Gateway
+This gateway proxies the dashboard's NASA searches and pipes the Kubernetes processing logs back to the browser via Server-Sent Events (SSE).
+```bash
+cd sar-gateway
+# Optional: Provide NASA Earthdata credentials if pulling private Level-0 data
+export ESA_USERNAME="your_username"
+export ESA_PASSWORD="your_password"
+RUST_LOG=info cargo run --release
+```
+
+#### Terminal 3: The React Frontend
+This is the mission control dashboard.
+```bash
+cd sar-dashboard-v3
+npm install
+npm run dev
+```
+
+---
+
+### Step 4: How to Use the Application
+
+Once all three terminals are running, open your browser to **`http://localhost:5173`**.
+
+1. **Global Search (Left Panel):**
+   - Use the Leaflet map to pan over your target country (e.g., Japan, Algeria).
+   - Enter a date range and click **"QUERY NASA ASF"**.
+   - The Gateway will fetch genuine NISAR acquisitions from the NASA Alaska Satellite Facility DAAC.
+
+2. **Scene Selection:**
+   - Scroll through the resulting dataset cards. 
+   - Hovering over a card will draw a glowing footprint on the map.
+   - Click a card to **Lock** it into your Mission Control panel.
+
+3. **Hot Processing (Right Panel):**
+   - With a scene locked, the **Active Scene ID** will illuminate.
+   - Select your ML Mapping Models (e.g., Ship Detection).
+   - Click **"Initiate Orbital Scan"**.
+
+4. **Live Telemetry & Render:**
+   - The bottom **Terminal** will slide up and stream raw compilation logs (Range-Doppler Algorithm focusing, Rayon XYZ Web Tiling, Frost Speckle Filtering).
+   - Once the K8s pod finishes, the dashboard will seamlessly overlay the newly generated Deep-Zoom XYZ tiles onto the geographic map!
+
+---
+
+## 📂 Core Repository Architecture
+
+- **`sar_processor/`**: The core mathematical Rust engine. Handles HDF5 ingest, RCMC, Azimuth Compression, and Frost Speckle XYZ Web Tiling (`io.rs`).
+- **`sar_operator_v2/`**: The custom `kube-rs` controller managing the distributed processing fleet.
+- **`sar-gateway/`**: The Axum HTTP bridge handling REST interfaces and live SSE multiplexing.
+- **`sar-dashboard-v3/`**: The EOS Landviewer-inspired React/Leaflet mission control UI.
+- **`k8s_manifests/`**: The CRDs defining the `SarJob` specification.
+
+## 📚 Documentation Reference
+- `Docs/concept.md` - Start Here: High-level overview of why this system exists and how it works.
+- `Docs/architecture.md` - Technical specifics on the Kubernetes SSE telemetry and Gateway proxy.
+- `Docs/deployment.md` - Remote cluster node specifications.

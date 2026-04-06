@@ -1044,6 +1044,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
+ "rayon",
 ]
 
 [[package]]
@@ -1441,6 +1442,7 @@ dependencies = [
  "ndarray",
  "num-complex",
  "num-traits",
+ "rayon",
  "reqwest",
  "rustfft",
  "rustyhdf5",

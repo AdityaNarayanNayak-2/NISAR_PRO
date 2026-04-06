@@ -2,57 +2,62 @@ import { motion } from 'framer-motion'
 
 const technologies = [
     {
-        category: 'Core Processing',
-        description: 'High-performance SAR signal processing',
+        category: 'SAR Processing Engine',
+        description: 'Production-grade signal processing in Rust',
         items: [
-            { name: 'Rust', description: 'Memory-safe, zero-cost abstractions for real-time processing' },
-            { name: 'ISCE3', description: 'NASA JPL InSAR Scientific Computing Environment integration' },
-            { name: 'NumPy/SciPy', description: 'Scientific computing for validation and prototyping' }
+            { name: 'Range-Doppler Algorithm', description: 'Zero-padded FFT convolution, corrected azimuth matched filter, optimized memory allocation' },
+            { name: 'Range Cell Migration Correction', description: 'Sinc-interpolated RCMC with configurable kernel width for sub-pixel accuracy' },
+            { name: 'Lee Sigma Filter', description: 'Adaptive 7×7 statistical speckle filtering with edge-preserving sigma bounds' },
+            { name: 'Frost Filter', description: 'Exponentially weighted speckle reduction using local statistics' },
+            { name: 'CLAHE', description: 'Contrast Limited Adaptive Histogram Equalization (8×8 grid) for terrain detail recovery' },
+            { name: 'Pauli Decomposition', description: 'Polarimetric RGB composites — Double-bounce (red), Volume (green), Surface (blue)' },
         ]
     },
     {
-        category: 'Infrastructure',
-        description: 'Enterprise-grade deployment stack',
+        category: 'InSAR & Infrastructure Health',
+        description: 'Interferometric analysis for structural monitoring',
         items: [
-            { name: 'Red Hat Enterprise Linux 10', description: 'Production-grade OS with extended lifecycle support' },
-            { name: 'Podman', description: 'Rootless container runtime for secure workloads' },
-            { name: 'Kubernetes', description: 'Container orchestration for distributed processing' }
-        ]
-    },
-    {
-        category: 'Infrastructure as Code',
-        description: 'Reproducible, auditable deployments',
-        items: [
-            { name: 'OpenTofu', description: 'Open-source infrastructure provisioning' },
-            { name: 'Helm', description: 'Kubernetes package management' },
-            { name: 'FluxCD', description: 'GitOps continuous delivery and reconciliation' }
-        ]
-    },
-    {
-        category: 'DevOps & CI/CD',
-        description: 'Automated build and deployment pipeline',
-        items: [
-            { name: 'GitLab', description: 'Source control, CI/CD pipelines, container registry' },
-            { name: 'Renovate', description: 'Automated dependency updates' },
-            { name: 'Trivy', description: 'Container and infrastructure security scanning' }
+            { name: 'Interferogram Formation', description: 'SLC₁ × conj(SLC₂) complex phase differencing between temporal acquisitions' },
+            { name: 'Coherence Estimation', description: 'Normalized cross-correlation for persistent scatterer identification' },
+            { name: 'Goldstein Phase Filter', description: 'Adaptive spectral filtering for noise reduction while preserving fringe edges' },
+            { name: 'Health Classification', description: 'Displacement thresholding: STABLE (<2mm) → CAUTION → ALERT → CRITICAL (>25mm)' },
         ]
     },
     {
         category: 'Data Pipeline',
-        description: 'Multi-source SAR data ingestion',
+        description: 'Multi-format SAR data ingestion',
         items: [
-            { name: 'NISAR', description: 'NASA-ISRO L-band/S-band L1/L2 products' },
-            { name: 'Sentinel-1', description: 'ESA SAFE format C-band SAR data' },
-            { name: 'S3 Compatible Storage', description: 'Petabyte-scale object storage' }
+            { name: 'NISAR HDF5 Parser', description: 'Reads RSLC, GSLC, GCOV, GUNW products — complex SLC extraction from compound datatypes' },
+            { name: 'WGS84 Georeferencing', description: 'Bounding box extraction from coordinate grids and identification metadata' },
+            { name: 'NASA ASF Integration', description: 'Direct catalog search via Copernicus/ASF APIs with footprint rendering' },
+        ]
+    },
+    {
+        category: 'Infrastructure',
+        description: 'Local-first, cloud-ready deployment',
+        items: [
+            { name: 'Axum Gateway', description: 'Rust HTTP server with SSE log streaming, job management, and static file serving' },
+            { name: 'Local Subprocess Mode', description: 'Spawns sar_processor as tokio::process::Command — no K8s required for development' },
+            { name: 'kube-rs Operator', description: 'Custom SarJob CRD controller that reconciles processing jobs into Kubernetes batch pods' },
+            { name: 'Podman / Kind', description: 'Rootless containers and local Kubernetes clusters for testing and production' },
+        ]
+    },
+    {
+        category: 'Frontend',
+        description: 'Real-time geospatial intelligence dashboard',
+        items: [
+            { name: 'React + Leaflet', description: 'Live map with grayscale dark tiles, scene footprints, and processed image overlays' },
+            { name: 'SSE Terminal', description: 'Real-time log streaming from the processor — watch radar parameters scroll as data is processed' },
+            { name: 'NASA ASF Catalog', description: 'Search panel with date range, spatial target, and NISAR product type filtering' },
         ]
     }
 ]
 
 const metrics = [
-    { value: '10x', label: 'Faster', sublabel: 'vs Python implementations' },
-    { value: '<13dB', label: 'PSLR', sublabel: 'Production quality focus' },
-    { value: '99.9%', label: 'Uptime', sublabel: 'Cloud-native reliability' },
-    { value: '0', label: 'Memory Leaks', sublabel: 'Rust ownership model' }
+    { value: '6.4 GB', label: 'RSLC Processed', sublabel: '840M complex samples' },
+    { value: '~3 min', label: 'Processing Time', sublabel: 'Release binary, local' },
+    { value: '6.3 MB', label: 'Binary Size', sublabel: 'Optimized Rust release' },
+    { value: '0', label: 'Python Dependencies', sublabel: 'Pure Rust pipeline' },
 ]
 
 function TechnologyPage() {
@@ -82,10 +87,11 @@ function TechnologyPage() {
                             Technology Stack
                         </div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: 600, marginBottom: 'var(--space-md)' }}>
-                            Enterprise-Grade Infrastructure
+                            What's Actually Running
                         </h1>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', lineHeight: 1.6 }}>
-                            Built on proven open-source technologies for reliability, security, and performance at scale.
+                            Every component listed here is implemented, compiled, and tested — not planned, not aspirational.
+                            The SAR processor is a single Rust binary with zero Python dependencies.
                         </p>
                     </motion.div>
                 </div>
@@ -164,7 +170,7 @@ function TechnologyPage() {
                                 {/* Items */}
                                 <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(3, 1fr)',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
                                     gap: 'var(--space-md)'
                                 }}>
                                     {category.items.map((tech) => (
@@ -179,7 +185,9 @@ function TechnologyPage() {
                                         >
                                             <div style={{
                                                 fontWeight: 600,
-                                                marginBottom: 'var(--space-xs)'
+                                                marginBottom: 'var(--space-xs)',
+                                                fontFamily: 'var(--font-mono)',
+                                                fontSize: '0.9rem'
                                             }}>
                                                 {tech.name}
                                             </div>
@@ -235,31 +243,33 @@ function TechnologyPage() {
                                 lineHeight: 1.6,
                                 margin: 0
                             }}>
-                                {`┌────────────────────────────────────────────────────────────────────────┐
-│                        SAR PROCESSING PLATFORM                         │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  ┌──────────────┐      ┌───────────────┐      ┌──────────────────┐    │
-│  │   GitLab     │─────▶│   Dashboard   │◀────▶│    Gateway       │    │
-│  │  CI/CD       │      │   (React)     │      │    (Go/Rust)     │    │
-│  └──────────────┘      └───────────────┘      └────────┬─────────┘    │
-│         │                                              │              │
-│         ▼                                              ▼              │
-│  ┌──────────────┐      ┌───────────────┐      ┌──────────────────┐    │
-│  │   Podman     │      │   Operator    │─────▶│   Processor      │    │
-│  │   Registry   │      │   (Rust)      │      │   (Rust/ISCE3)   │    │
-│  └──────────────┘      └───────────────┘      └──────────────────┘    │
-│                                                                        │
-│  ══════════════════════════════════════════════════════════════════   │
-│                    Kubernetes on Red Hat Enterprise Linux 10           │
-│  ══════════════════════════════════════════════════════════════════   │
-│                                                                        │
-│  ┌──────────────┐      ┌───────────────┐      ┌──────────────────┐    │
-│  │  Raw Data    │      │   Processed   │      │    OpenTofu      │    │
-│  │  (S3)        │      │   (S3)        │      │    State         │    │
-│  └──────────────┘      └───────────────┘      └──────────────────┘    │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘`}
+                                {`┌──────────────────────────────────────────────────────────────────────────┐
+│                      NISAR Pro — System Architecture                      │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────────┐      ┌────────────────┐      ┌─────────────────┐  │
+│  │   React + Leaflet │◀────▶│   Axum Gateway  │─────▶│  sar_processor  │  │
+│  │   Dashboard       │ SSE  │   (Rust)        │spawn │  (Rust binary)  │  │
+│  │   + Live Terminal │      │   Port 3000     │      │  RDA / InSAR    │  │
+│  └──────────────────┘      └────────────────┘      └─────────────────┘  │
+│           │                        │                        │            │
+│           │                        │ (optional)             ▼            │
+│           │                 ┌──────┴──────┐      ┌─────────────────┐    │
+│           │                 │  kube-rs     │      │  Output:        │    │
+│           │                 │  Operator    │      │  • PNG image    │    │
+│           │                 │  (SarJob CRD)│      │  • .geo.json    │    │
+│           │                 └─────────────┘      │  • health.json  │    │
+│           │                                      └─────────────────┘    │
+│           ▼                                                              │
+│  ┌──────────────────┐      ┌────────────────┐                           │
+│  │  NASA ASF Catalog │      │  NISAR HDF5    │                           │
+│  │  Search API       │      │  RSLC / GCOV   │                           │
+│  └──────────────────┘      └────────────────┘                           │
+│                                                                          │
+│  ════════════════════════════════════════════════════════════════════    │
+│              Podman + Kind (Kubernetes) on Linux                         │
+│  ════════════════════════════════════════════════════════════════════    │
+└──────────────────────────────────────────────────────────────────────────┘`}
                             </pre>
                         </div>
                     </motion.div>

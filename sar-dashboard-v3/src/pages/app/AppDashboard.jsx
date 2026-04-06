@@ -2,95 +2,184 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, ImageOverlay, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Terminal, Crosshair, Play, ChevronDown, CheckCircle, AlertTriangle, Loader, FileText, Settings, Activity, Database, ShieldAlert, Cpu } from 'lucide-react';
+import { Terminal, Play, ChevronDown, ChevronUp, CheckCircle, AlertTriangle, Loader, FileText, Search, FolderOpen, Satellite, Eye, Download, ArrowLeft, MapPin, Calendar, Layers, X } from 'lucide-react';
 
-// Maps hook to auto-center when region changes
+// --- Map Utility Hooks ---
 function MapFlyTo({ center }) {
     const map = useMap();
     useEffect(() => {
-        if (center) map.flyTo([center.lat, center.lon], 6, { duration: 1.5 });
+        if (center) map.flyTo(center, 8, { duration: 1.5 });
     }, [center, map]);
     return null;
 }
 
-// Maps hook for live coordinates HUD
-function LiveCoordinates({ setCoords }) {
+function MapEventTracker({ setCoords, setMapBounds }) {
+    const map = useMap();
     useMapEvents({
         mousemove(e) {
             setCoords({ lat: e.latlng.lat.toFixed(4), lon: e.latlng.lng.toFixed(4) });
+        },
+        moveend(e) {
+            setMapBounds(e.target.getBounds());
         }
     });
+    useEffect(() => {
+        setMapBounds(map.getBounds());
+    }, [map]);
     return null;
 }
 
+// --- Shared Styles ---
+const panelStyle = {
+    position: 'absolute', top: '16px', left: '16px', bottom: '16px',
+    width: '380px', zIndex: 800,
+    background: 'rgba(2, 6, 23, 0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(30, 41, 59, 0.8)', borderRadius: '12px',
+    display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+};
+
+const sectionLabel = {
+    fontSize: '0.6rem', fontWeight: 700, letterSpacing: '1.5px',
+    color: '#64748b', textTransform: 'uppercase', marginBottom: '10px',
+    fontFamily: '"JetBrains Mono", monospace',
+};
+
+const inputStyle = {
+    width: '100%', padding: '10px 12px', background: 'rgba(15, 23, 42, 0.8)',
+    border: '1px solid #334155', color: '#e2e8f0', fontSize: '0.8rem',
+    fontFamily: '"Inter", sans-serif', boxSizing: 'border-box', outline: 'none',
+    borderRadius: '6px', transition: 'border-color 0.2s',
+};
+
+const btnPrimary = {
+    width: '100%', padding: '12px', background: 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)',
+    color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.85rem',
+    fontWeight: 600, cursor: 'pointer', display: 'flex', justifyContent: 'center',
+    alignItems: 'center', gap: '8px', transition: 'all 0.2s',
+    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+};
+
+const btnSecondary = {
+    width: '100%', padding: '10px', background: 'transparent',
+    color: '#94a3b8', border: '1px solid #334155', borderRadius: '6px',
+    fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer',
+    display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px',
+    transition: 'all 0.2s',
+};
+
 function AppDashboard() {
-    // --- Configuration State ---
-    const presetRegions = [
-        { id: 'san_andreas', name: 'SAN_ANDREAS_FAULT', bounds: [[35.5, -121.0], [36.0, -120.0]], lat: 35.8, lon: -120.5 },
-        { id: 'amazon', name: 'AMAZON_BASIN', bounds: [[-3.5, -60.5], [-3.0, -60.0]], lat: -3.2, lon: -60.2 },
-        { id: 'gulf_mexico', name: 'GULF_OF_MEXICO', bounds: [[28.5, -90.5], [29.0, -90.0]], lat: 28.8, lon: -90.2 },
-        { id: 'synthetic', name: 'SYNTHETIC_TARGET_01', bounds: [[28.5, -0.6], [28.8, -0.4]], lat: 28.65, lon: -0.53 }
-    ];
-
-    const [selectedRegion, setSelectedRegion] = useState(presetRegions[3]);
-    const [analysisPurpose, setAnalysisPurpose] = useState('MARITIME_SURVEILLANCE');
-    const [processingPipeline, setProcessingPipeline] = useState('STANDARD_RDA');
-    const [mlModels, setMlModels] = useState({ shipDetection: true, floodMask: false });
+    // --- State ---
     const [mouseCoords, setMouseCoords] = useState({ lat: '0.0000', lon: '0.0000' });
-    
-    // Remote Volume Configuration
-    const [dataSourceType, setDataSourceType] = useState('SYNTHETIC_SIGNAL');
-    const [dataSourceUri, setDataSourceUri] = useState('internal://generate_test_pattern');
+    const [mapBounds, setMapBounds] = useState(null);
+    const [flyToCenter, setFlyToCenter] = useState(null);
 
-    // Jobs State
+    // Data Source
+    const [dataMode, setDataMode] = useState('local'); // 'local' | 'catalog'
+    const [localFilePath, setLocalFilePath] = useState('/home/aditya/Desktop/nisar_data/NISAR_L1_PR_RSLC_010_165_D_100_2005_DHDH_M_20260120T155930_20260120T155950_X05010_N_P_J_001.h5');
+    const [selectedScene, setSelectedScene] = useState(null);
+
+    // Catalog Search
+    const [startDate, setStartDate] = useState('2026-01-01');
+    const [endDate, setEndDate] = useState('2026-06-01');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    // Processing
+    const [pipeline, setPipeline] = useState('standard_rda');
+
+    // Jobs & Results
     const [jobs, setJobs] = useState({});
     const [activeJobId, setActiveJobId] = useState(null);
-
-    // Terminal & Result State
     const [terminalOpen, setTerminalOpen] = useState(false);
     const [logs, setLogs] = useState({});
     const terminalRef = useRef(null);
     const [viewingResult, setViewingResult] = useState(null);
 
-    // --- Start Processing Job ---
+    // --- Helpers ---
+    const formatBytes = (bytes) => {
+        const b = parseInt(bytes, 10);
+        if (isNaN(b) || b === 0) return '0 B';
+        const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(b) / Math.log(k));
+        return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    const getInputFile = () => {
+        if (dataMode === 'catalog' && selectedScene) return selectedScene.download_url;
+        if (dataMode === 'local' && localFilePath) return localFilePath;
+        return null;
+    };
+
+    const getInputLabel = () => {
+        if (dataMode === 'catalog' && selectedScene) return selectedScene.id;
+        if (dataMode === 'local' && localFilePath) return localFilePath.split('/').pop();
+        return null;
+    };
+
+    // --- Catalog Search ---
+    const handleSearch = async () => {
+        if (!mapBounds) return;
+        setIsSearching(true);
+        try {
+            const bbox = `${mapBounds.getWest()},${mapBounds.getSouth()},${mapBounds.getEast()},${mapBounds.getNorth()}`;
+            const res = await fetch(`http://localhost:3000/search/nisar?bbox=${bbox}&start_date=${startDate}T00:00:00Z&end_date=${endDate}T23:59:59Z`);
+            const data = await res.json();
+            setSearchResults(data);
+        } catch (err) {
+            console.error('Catalog search failed:', err);
+            setSearchResults([]);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    // --- Start Job ---
     const startJob = async () => {
+        const inputFile = getInputFile();
+        if (!inputFile) return;
+
         try {
             const res = await fetch('http://localhost:3000/jobs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    input_file: dataSourceType === 'SYNTHETIC_SIGNAL' ? null : dataSourceUri,
-                    synthetic: dataSourceType === 'SYNTHETIC_SIGNAL' 
-                }) 
+                body: JSON.stringify({ input_file: inputFile, synthetic: false })
             });
             const data = await res.json();
             const id = data.job_id;
-            
-            setJobs(prev => ({ 
-                ...prev, 
-                [id]: { 
-                    id, 
-                    status: 'running', 
-                    name: `${selectedRegion.name}_ANALYSIS`,
-                    bounds: selectedRegion.bounds
-                } 
+
+            setJobs(prev => ({
+                ...prev,
+                [id]: { id, status: 'running', name: getInputLabel(), bounds: null, bbox: null }
             }));
-            setLogs(prev => ({ ...prev, [id]: [] }));
             setActiveJobId(id);
             setTerminalOpen(true);
-            
-            // Connect SSE
+
+            // SSE Log Stream
             const sse = new EventSource(`http://localhost:3000/jobs/${id}/logs`);
-            sse.onmessage = (e) => {
-                const line = e.data;
-                setLogs(prev => ({
-                    ...prev,
-                    [id]: [...(prev[id] || []), line]
-                }));
+            sse.onmessage = (event) => {
+                const line = event.data;
+
+                // Parse georef events
+                if (line.startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(line);
+                        if (parsed.event === 'georef' && parsed.bbox) {
+                            const { north, south, east, west } = parsed.bbox;
+                            if (Math.abs(north - south) > 0.0001 && Math.abs(east - west) > 0.0001) {
+                                const bounds = [[south, west], [north, east]];
+                                setJobs(prev => ({ ...prev, [id]: { ...prev[id], bounds } }));
+                                setFlyToCenter([(north + south) / 2, (east + west) / 2]);
+                            }
+                        }
+                    } catch (err) { /* not JSON */ }
+                }
+
+                setLogs(prev => ({ ...prev, [id]: [...(prev[id] || []), line] }));
                 if (terminalRef.current) {
                     terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
                 }
-                
+
                 if (line.includes('[SYSTEM] PROCESS_COMPLETED') || line.includes('[SYSTEM] PROCESS_FAILED')) {
                     sse.close();
                 }
@@ -110,346 +199,421 @@ function AppDashboard() {
                 try {
                     const res = await fetch(`http://localhost:3000/jobs/${id}`);
                     const data = await res.json();
-                    
+
                     if (data.status === 'completed' && jobs[id].status !== 'completed') {
-                        setViewingResult({
-                            url: `http://localhost:3000${data.output_path}`,
-                            bounds: jobs[id].bounds
-                        });
+                        const jobBounds = jobs[id].bounds || (data.bbox ? [[data.bbox.south, data.bbox.west], [data.bbox.north, data.bbox.east]] : null);
+                        if (jobBounds) {
+                            setViewingResult({ url: `http://localhost:3000${data.output_path}`, bounds: jobBounds });
+                        } else {
+                            setViewingResult({ url: `http://localhost:3000${data.output_path}`, bounds: null });
+                        }
                     }
-                    
+
                     setJobs(prev => ({
                         ...prev,
                         [id]: { ...prev[id], status: data.status, output_path: data.output_path }
                     }));
-                } catch(e) {}
+                } catch (e) {}
             }
         }, 3000);
         return () => clearInterval(interval);
     }, [jobs]);
 
+    const pipelines = [
+        { id: 'standard_rda', label: 'Standard SAR Focus', desc: 'Range-Doppler Algorithm with RCMC, speckle filtering, and CLAHE' },
+        { id: 'insar', label: 'InSAR Analysis', desc: 'Interferometric comparison of two temporal acquisitions' },
+        { id: 'polsar', label: 'Polarimetric', desc: 'Pauli decomposition RGB composite (HH, HV, VV)' },
+    ];
+
+    const completedJobs = Object.values(jobs).filter(j => j.status === 'completed');
+    const runningJobs = Object.values(jobs).filter(j => j.status === 'running');
+
     return (
-        <div style={{ display: 'flex', width: '100%', height: '100vh', backgroundColor: '#000000', color: '#e2e8f0', fontFamily: '"Inter", sans-serif', overflow: 'hidden' }}>
-            
-            {/* 1. LEFT NAVIGATION DASHBOARD (Thin strip) */}
-            <div style={{ width: '60px', borderRight: '1px solid #1e293b', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', background: '#050505', zIndex: 10 }}>
-                <div style={{ color: '#0ea5e9', marginBottom: '40px' }}><Crosshair size={24} /></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', color: '#64748b' }}>
-                    <Activity size={20} style={{ cursor: 'pointer', color: '#e2e8f0' }} />
-                    <Database size={20} style={{ cursor: 'pointer' }} />
-                    <Cpu size={20} style={{ cursor: 'pointer' }} />
-                    <Settings size={20} style={{ cursor: 'pointer' }} />
-                </div>
-            </div>
+        <div style={{ width: '100%', height: '100vh', position: 'relative', backgroundColor: '#000', overflow: 'hidden' }}>
 
-            {/* 2. CENTRAL VIEWER (Map + HUD) */}
-            <div style={{ flex: 1, position: 'relative', background: '#020617' }}>
-                <MapContainer 
-                    center={[selectedRegion.lat, selectedRegion.lon]} 
-                    zoom={6} 
-                    style={{ height: '100%', width: '100%', cursor: 'crosshair', filter: 'grayscale(100%) contrast(1.2) brightness(0.8)' }}
-                    zoomControl={false}
-                    attributionControl={false}
-                >
-                    <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}" />
-                    <MapFlyTo center={selectedRegion} />
-                    <LiveCoordinates setCoords={setMouseCoords} />
+            {/* ═══ FULL-SCREEN MAP ═══ */}
+            <MapContainer
+                center={[28.65, -0.53]}
+                zoom={5}
+                style={{ width: '100%', height: '100%', cursor: 'crosshair' }}
+                zoomControl={false}
+                attributionControl={false}
+            >
+                <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}" />
+                <MapEventTracker setCoords={setMouseCoords} setMapBounds={setMapBounds} />
+                {flyToCenter && <MapFlyTo center={flyToCenter} />}
 
-                    {viewingResult && (
-                        <ImageOverlay
-                            url={viewingResult.url}
-                            bounds={viewingResult.bounds}
-                            opacity={0.85}
-                        />
-                    )}
-                </MapContainer>
+                {selectedScene && selectedScene.footprint && (
+                    <GeoJSON
+                        key={selectedScene.id}
+                        data={selectedScene.footprint}
+                        style={{ color: '#0ea5e9', weight: 1.5, fillOpacity: 0.08, dashArray: '6' }}
+                    />
+                )}
 
-                {/* HUD Overlay - Grid Lines */}
-                <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(rgba(14, 165, 233, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(14, 165, 233, 0.03) 1px, transparent 1px)', backgroundSize: '100px 100px', zIndex: 400 }} />
+                {viewingResult && viewingResult.bounds && (
+                    <ImageOverlay url={viewingResult.url} bounds={viewingResult.bounds} opacity={0.85} />
+                )}
+            </MapContainer>
 
-                {/* HUD Overlay - Center Crosshair */}
-                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 400, opacity: 0.5 }}>
-                    <div style={{ width: '40px', height: '1px', background: '#0ea5e9', position: 'absolute', top: '0', left: '-20px' }} />
-                    <div style={{ width: '1px', height: '40px', background: '#0ea5e9', position: 'absolute', top: '-20px', left: '0' }} />
-                    <div style={{ width: '8px', height: '8px', border: '1px solid #0ea5e9', borderRadius: '50%', position: 'absolute', top: '-4px', left: '-4px' }} />
-                </div>
+            {/* ═══ FLOATING WORKFLOW PANEL ═══ */}
+            <div style={panelStyle}>
 
-                {/* HUD Overlay - Coordinates */}
-                <div style={{ position: 'absolute', bottom: '20px', left: '20px', zIndex: 1000, fontFamily: '"JetBrains Mono", monospace', fontSize: '0.75rem', color: '#0ea5e9', display: 'flex', gap: '16px', background: 'rgba(2, 6, 23, 0.7)', padding: '6px 12px', border: '1px solid #1e293b', backdropFilter: 'blur(4px)' }}>
-                    <span>LAT: {mouseCoords.lat}°</span>
-                    <span>LON: {mouseCoords.lon}°</span>
-                    <span style={{ color: '#64748b' }}>| SYS: ALIVE</span>
+                {/* Panel Header */}
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(30, 41, 59, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #2563eb, #0ea5e9)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Satellite size={15} color="#fff" />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f8fafc' }}>NISAR Pro</div>
+                            <div style={{ fontSize: '0.6rem', color: '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>SAR Processing Console</div>
+                        </div>
+                    </div>
+                    <a href="/" style={{ color: '#64748b', textDecoration: 'none', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <ArrowLeft size={12} /> Home
+                    </a>
                 </div>
 
-                {/* Global Status Header */}
-                <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 1000, background: 'rgba(2, 6, 23, 0.8)', border: '1px solid #1e293b', padding: '12px 20px', backdropFilter: 'blur(4px)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '2px', color: '#0ea5e9', fontFamily: '"JetBrains Mono", monospace' }}>NISAR_PRO // TACTICAL VIEW</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 300, color: '#f8fafc', letterSpacing: '1px' }}>GLOBAL ORBITAL GRID</div>
-                </div>
+                {/* SCROLLABLE CONTENT */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
 
-                {/* Render Result Overlay Card */}
-                <AnimatePresence>
-                    {viewingResult && (
-                        <motion.div 
-                            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                            style={{ position: 'absolute', top: '100px', left: '20px', zIndex: 1000, background: 'rgba(2, 6, 23, 0.85)', padding: '16px 20px', border: '1px solid #0ea5e9', backdropFilter: 'blur(8px)', width: '320px', fontFamily: '"JetBrains Mono", monospace' }}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                                <div style={{ width: '8px', height: '8px', background: '#10b981', borderRadius: '50%', boxShadow: '0 0 8px #10b981' }} />
-                                <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#e2e8f0', letterSpacing: '1px' }}>DATA.RENDER_COMPLETE</span>
-                            </div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '4px' }}>FILE: {viewingResult.url.split('/').pop()}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#0ea5e9', marginBottom: '16px' }}>PIPELINE: {processingPipeline}</div>
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px', fontSize: '0.65rem' }}>
-                                <div style={{ background: '#0f172a', padding: '6px', border: '1px solid #1e293b' }}>
-                                    <div style={{ color: '#64748b', marginBottom: '2px' }}>BACKSCATTER</div>
-                                    <div style={{ color: '#f8fafc' }}>CALIBRATED</div>
-                                </div>
-                                <div style={{ background: '#0f172a', padding: '6px', border: '1px solid #1e293b' }}>
-                                    <div style={{ color: '#64748b', marginBottom: '2px' }}>RESOLUTION</div>
-                                    <div style={{ color: '#f8fafc' }}>&lt; 10M / PX</div>
-                                </div>
-                            </div>
+                    {/* ── STEP 1: SELECT DATA ── */}
+                    <div style={{ marginBottom: '24px' }}>
+                        <div style={sectionLabel}>
+                            <span style={{ color: '#2563eb', marginRight: '6px' }}>①</span> Select Data Source
+                        </div>
 
-                            <button onClick={() => setViewingResult(null)} style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', padding: '6px 0', fontSize: '0.7rem', width: '100%', cursor: 'pointer', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', transition: 'all 0.2s' }} onMouseOver={e=> {e.target.style.background = 'rgba(239, 68, 68, 0.1)'}} onMouseOut={e=> {e.target.style.background = 'transparent'}}>
-                                CLEAR_OVERLAY
+                        {/* Mode Tabs */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                            <button
+                                onClick={() => setDataMode('local')}
+                                style={{
+                                    ...btnSecondary, padding: '10px 8px', fontSize: '0.75rem',
+                                    background: dataMode === 'local' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                                    borderColor: dataMode === 'local' ? '#2563eb' : '#334155',
+                                    color: dataMode === 'local' ? '#60a5fa' : '#64748b',
+                                }}
+                            >
+                                <FolderOpen size={14} /> Local File
                             </button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
-
-            {/* 3. RIGHT PANEL (Mission Control Inspector) */}
-            <div style={{ width: '420px', borderLeft: '1px solid #1e293b', background: '#020617', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-                
-                {/* Header */}
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid #1e293b', background: '#0f172a' }}>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '2px', color: '#64748b', fontFamily: '"JetBrains Mono", monospace', marginBottom: '4px' }}>TELEMETRY & COMMAND</div>
-                    <div style={{ fontSize: '1.1rem', color: '#f8fafc', fontWeight: 400, letterSpacing: '0.5px' }}>MISSION_PARAMETERS</div>
-                </div>
-                
-                {/* Configuration Section */}
-                <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    
-                    {/* Region */}
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <label style={{ fontSize: '0.65rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '1px', fontFamily: '"JetBrains Mono", monospace' }}>TARGET_AREA</label>
-                            <span style={{ fontSize: '0.65rem', color: '#0ea5e9', fontFamily: '"JetBrains Mono", monospace' }}>[LOCKED]</span>
+                            <button
+                                onClick={() => setDataMode('catalog')}
+                                style={{
+                                    ...btnSecondary, padding: '10px 8px', fontSize: '0.75rem',
+                                    background: dataMode === 'catalog' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                                    borderColor: dataMode === 'catalog' ? '#2563eb' : '#334155',
+                                    color: dataMode === 'catalog' ? '#60a5fa' : '#64748b',
+                                }}
+                            >
+                                <Satellite size={14} /> NASA Catalog
+                            </button>
                         </div>
-                        <select 
-                            value={selectedRegion.id}
-                            onChange={e => setSelectedRegion(presetRegions.find(p => p.id === e.target.value))}
-                            style={{ width: '100%', padding: '10px 12px', background: 'transparent', border: '1px solid #334155', color: '#f8fafc', fontSize: '0.85rem', fontFamily: '"JetBrains Mono", monospace', outline: 'none', appearance: 'none' }}
-                        >
-                            {presetRegions.map(r => (
-                                <option key={r.id} value={r.id} style={{ background: '#0f172a' }}>{r.name}</option>
-                            ))}
-                        </select>
-                        <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: '6px', fontFamily: '"JetBrains Mono", monospace' }}>BOUNDS: {selectedRegion.bounds[0].map(v => v.toFixed(2)).join(',')} : {selectedRegion.bounds[1].map(v => v.toFixed(2)).join(',')}</div>
-                    </div>
 
-                    {/* Purpose */}
-                    <div>
-                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '1px', fontFamily: '"JetBrains Mono", monospace', marginBottom: '8px', display: 'block' }}>ANALYSIS_PURPOSE</label>
-                        <select 
-                            value={analysisPurpose}
-                            onChange={e => setAnalysisPurpose(e.target.value)}
-                            style={{ width: '100%', padding: '10px 12px', background: '#0f172a', border: '1px solid #334155', color: '#f8fafc', fontSize: '0.85rem', fontFamily: '"JetBrains Mono", monospace', outline: 'none', appearance: 'none' }}
-                        >
-                            <option value="AGRICULTURE">AGRICULTURE_YIELD_01</option>
-                            <option value="MARITIME_SURVEILLANCE">MARITIME_SURVEILLANCE_OP</option>
-                            <option value="URBAN_PLANNING">URBAN_SUBSIDENCE_TRACK</option>
-                            <option value="FLOOD_DETECTION">FLOOD_DETECTION_MASK</option>
-                        </select>
-                    </div>
-
-                    {/* Pipeline */}
-                    <div>
-                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '1px', fontFamily: '"JetBrains Mono", monospace', marginBottom: '8px', display: 'block' }}>K8S_PROCESSING_PIPELINE</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }}>
-                            {['STANDARD_RDA', 'INSAR_C_BAND', 'POLSAR_QUAD'].map(pipe => (
-                                <div key={pipe} onClick={() => setProcessingPipeline(pipe)} style={{ padding: '8px 12px', background: processingPipeline === pipe ? 'rgba(14, 165, 233, 0.1)' : 'transparent', border: processingPipeline === pipe ? '1px solid #0ea5e9' : '1px solid #1e293b', color: processingPipeline === pipe ? '#0ea5e9' : '#64748b', fontSize: '0.75rem', fontFamily: '"JetBrains Mono", monospace', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                    &gt; {pipe}
+                        {/* Local File Mode */}
+                        {dataMode === 'local' && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0 }}>
+                                <input
+                                    type="text"
+                                    value={localFilePath}
+                                    onChange={e => setLocalFilePath(e.target.value)}
+                                    placeholder="/path/to/NISAR_L1_*.h5"
+                                    style={{ ...inputStyle, borderColor: localFilePath ? '#2563eb' : '#334155' }}
+                                />
+                                <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: '6px' }}>
+                                    Path to a NISAR HDF5 file (RSLC, GSLC, GCOV, or GUNW)
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* ML Models */}
-                    <div>
-                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '1px', fontFamily: '"JetBrains Mono", monospace', marginBottom: '8px', display: 'block' }}>ML_INFERENCE_MODELS</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            <div onClick={() => setMlModels({...mlModels, shipDetection: !mlModels.shipDetection})} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: mlModels.shipDetection ? '#1e293b' : 'transparent', border: mlModels.shipDetection ? '1px solid #64748b' : '1px solid #1e293b', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                <div style={{ width: '12px', height: '12px', background: mlModels.shipDetection ? '#10b981' : 'transparent', border: '1px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
-                                <span style={{ fontSize: '0.7rem', color: mlModels.shipDetection ? '#f8fafc' : '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>SHIP_DETECT_V2</span>
-                            </div>
-                            <div onClick={() => setMlModels({...mlModels, floodMask: !mlModels.floodMask})} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: mlModels.floodMask ? '#1e293b' : 'transparent', border: mlModels.floodMask ? '1px solid #64748b' : '1px solid #1e293b', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                <div style={{ width: '12px', height: '12px', background: mlModels.floodMask ? '#10b981' : 'transparent', border: '1px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
-                                <span style={{ fontSize: '0.7rem', color: mlModels.floodMask ? '#f8fafc' : '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>FLOOD_MASK_AI</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Data Source Mount */}
-                    <div>
-                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '1px', fontFamily: '"JetBrains Mono", monospace', marginBottom: '8px', display: 'block' }}>DATA_SOURCE_MOUNT // STORAGE_VOLUME</label>
-                        <select 
-                            value={dataSourceType}
-                            onChange={e => {
-                                setDataSourceType(e.target.value);
-                                if (e.target.value === 'SYNTHETIC_SIGNAL') setDataSourceUri('internal://generate_test_pattern');
-                                else if (e.target.value === 'NASA_EARTHDATA_S3') setDataSourceUri('s3://nasa-asf-cumulus/sentinel-1/SLC/NisarpRSLCHDF5.h5');
-                                else setDataSourceUri('/mnt/k8s/pvc-nisar-data/RSLC/NisarpRSLCHDF5.h5');
-                            }}
-                            style={{ width: '100%', padding: '10px 12px', background: '#0f172a', border: '1px solid #334155', color: '#f8fafc', fontSize: '0.85rem', fontFamily: '"JetBrains Mono", monospace', outline: 'none', appearance: 'none', marginBottom: '6px' }}
-                        >
-                            <option value="SYNTHETIC_SIGNAL">[INTERNAL] SYNTHETIC_SCATTER_TEST</option>
-                            <option value="NASA_EARTHDATA_S3">[REMOTE_S3] NASA_EARTHDATA_ASF</option>
-                            <option value="LOCAL_K8S_PVC">[NFS_VOLUME] K8S_PERSISTENT_CLAIM</option>
-                        </select>
-                        <input 
-                            type="text"
-                            value={dataSourceUri}
-                            onChange={e => setDataSourceUri(e.target.value)}
-                            disabled={dataSourceType === 'SYNTHETIC_SIGNAL'}
-                            style={{ width: '100%', padding: '8px 12px', background: dataSourceType === 'SYNTHETIC_SIGNAL' ? 'rgba(15, 23, 42, 0.5)' : '#0f172a', border: '1px solid #334155', color: dataSourceType === 'SYNTHETIC_SIGNAL' ? '#475569' : '#0ea5e9', fontSize: '0.75rem', fontFamily: '"JetBrains Mono", monospace', outline: 'none' }}
-                            placeholder="s3:// or /mnt/ absolute URI"
-                        />
-                    </div>
-
-                    {/* Run Button */}
-                    <button 
-                        onClick={startJob} 
-                        style={{ background: '#0ea5e9', color: '#fff', padding: '14px', border: 'none', fontSize: '0.85rem', fontFamily: '"JetBrains Mono", monospace', letterSpacing: '1px', fontWeight: 600, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginTop: '10px', textTransform: 'uppercase' }}
-                        onMouseOver={e=> {e.target.style.background = '#0284c7'}} onMouseOut={e=> {e.target.style.background = '#0ea5e9'}}
-                    >
-                        <Play size={16} fill="#fff" /> INITIATE_ORBITAL_SCAN
-                    </button>
-                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: '#475569', fontFamily: '"JetBrains Mono", monospace' }}>WARNING: CONSUMES CLUSTER COMPUTE CREDITS</div>
-                </div>
-
-                {/* Job Tracking Section */}
-                <div style={{ padding: '0 24px 24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ paddingBottom: '12px', borderBottom: '1px solid #1e293b', marginBottom: '16px' }}>
-                        <label style={{ fontSize: '0.65rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '1px', fontFamily: '"JetBrains Mono", monospace' }}>ACTIVE_WORKLOADS // K8S</label>
-                    </div>
-
-                    {Object.values(jobs).length === 0 ? (
-                        <div style={{ padding: '30px 20px', textAlign: 'center', color: '#475569', fontSize: '0.75rem', fontFamily: '"JetBrains Mono", monospace', border: '1px dashed #1e293b' }}>
-                            [NO_ACTIVE_DEPLOYMENTS]
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {Object.values(jobs).map(job => (
-                                <div key={job.id} 
-                                    onClick={() => { setActiveJobId(job.id); setTerminalOpen(true); }}
-                                    style={{ background: '#0f172a', border: '1px solid', borderColor: activeJobId === job.id ? '#0ea5e9' : '#1e293b', padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-                                >
-                                    {/* Scanning background effect for running jobs */}
-                                    {job.status === 'running' && (
-                                        <motion.div animate={{ y: ['-100%', '200%'] }} transition={{ repeat: Infinity, duration: 2, ease: 'linear' }} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50px', background: 'linear-gradient(to bottom, transparent, rgba(14, 165, 233, 0.05), transparent)', pointerEvents: 'none' }} />
-                                    )}
-
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc', wordBreak: 'break-all', fontFamily: '"JetBrains Mono", monospace' }}>{job.name}</div>
-                                        {job.status === 'running' ? <Loader className="animate-spin" size={16} color="#0ea5e9" /> :
-                                         job.status === 'completed' ? <CheckCircle size={16} color="#10b981" /> :
-                                         <AlertTriangle size={16} color="#ef4444" />}
+                                {localFilePath && (
+                                    <div style={{ marginTop: '8px', padding: '8px 10px', background: 'rgba(37, 99, 235, 0.05)', border: '1px solid rgba(37, 99, 235, 0.2)', borderRadius: '6px', fontSize: '0.7rem', color: '#60a5fa', fontFamily: '"JetBrains Mono", monospace', wordBreak: 'break-all' }}>
+                                        ✓ {localFilePath.split('/').pop()}
                                     </div>
-                                    <div style={{ fontSize: '0.65rem', color: '#64748b', fontFamily: '"JetBrains Mono", monospace', marginBottom: '16px' }}>TX_ID: {job.id.split('-')[0].toUpperCase()}</div>
-                                    
-                                    {/* Action Buttons for Completed Jobs */}
-                                    {job.status === 'completed' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: `http://localhost:3000${job.output_path}`, bounds: job.bounds }); }} style={{ width: '100%', padding: '10px', background: 'transparent', color: '#10b981', border: '1px solid #10b981', fontSize: '0.7rem', fontFamily: '"JetBrains Mono", monospace', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', letterSpacing: '1px' }} onMouseOver={e=> {e.target.style.background = 'rgba(16, 185, 129, 0.1)'}} onMouseOut={e=> {e.target.style.background = 'transparent'}}>
-                                                MOUNT_VISUAL_OVERLAY
-                                            </button>
-                                            <button onClick={(e) => { e.stopPropagation(); alert('PDF Report Compilation Triggered.'); }} style={{ width: '100%', padding: '10px', background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155', fontSize: '0.7rem', fontFamily: '"JetBrains Mono", monospace', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', transition: 'all 0.2s', letterSpacing: '1px' }} onMouseOver={e=> {e.target.style.background = '#1e293b'}} onMouseOut={e=> {e.target.style.background = '#0f172a'}}>
-                                                <FileText size={14} /> EXPORT_INTEL_PDF
-                                            </button>
-                                        </div>
-                                    )}
+                                )}
+                            </motion.div>
+                        )}
+
+                        {/* Catalog Mode */}
+                        {dataMode === 'catalog' && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '0.6rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Start Date</label>
+                                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, fontSize: '0.75rem' }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.6rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>End Date</label>
+                                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, fontSize: '0.75rem' }} />
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '0.65rem', color: '#475569', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <MapPin size={10} /> Uses current map viewport as search area
+                                </div>
+                                <button onClick={handleSearch} disabled={isSearching} style={{ ...btnSecondary, borderColor: '#0ea5e9', color: '#0ea5e9' }}>
+                                    <Search size={14} /> {isSearching ? 'Searching...' : 'Search NASA Catalog'}
+                                </button>
+
+                                {/* Search Results */}
+                                {searchResults.length > 0 && (
+                                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <div style={{ fontSize: '0.65rem', color: '#64748b' }}>{searchResults.length} scene{searchResults.length > 1 ? 's' : ''} found</div>
+                                        {searchResults.map(scene => (
+                                            <div
+                                                key={scene.id}
+                                                onClick={() => setSelectedScene(scene)}
+                                                style={{
+                                                    padding: '10px 12px', background: selectedScene?.id === scene.id ? 'rgba(37, 99, 235, 0.1)' : 'rgba(15, 23, 42, 0.6)',
+                                                    border: `1px solid ${selectedScene?.id === scene.id ? '#2563eb' : '#1e293b'}`,
+                                                    borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s',
+                                                }}
+                                            >
+                                                <div style={{ fontSize: '0.7rem', color: '#e2e8f0', wordBreak: 'break-all', marginBottom: '6px' }}>{scene.id}</div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#64748b' }}>
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={10} /> {scene.date?.split('T')[0]}</span>
+                                                    <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}><Layers size={10} /> {formatBytes(scene.size_bytes)}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {searchResults.length === 0 && !isSearching && (
+                                    <div style={{ marginTop: '10px', padding: '14px', textAlign: 'center', color: '#475569', fontSize: '0.7rem', border: '1px dashed #1e293b', borderRadius: '6px' }}>
+                                        No results yet. Pan the map and search.
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, #1e293b, transparent)', marginBottom: '24px' }} />
+
+                    {/* ── STEP 2: PROCESSING MODE ── */}
+                    <div style={{ marginBottom: '24px' }}>
+                        <div style={sectionLabel}>
+                            <span style={{ color: '#2563eb', marginRight: '6px' }}>②</span> Processing Mode
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {pipelines.map(p => (
+                                <div
+                                    key={p.id}
+                                    onClick={() => setPipeline(p.id)}
+                                    style={{
+                                        padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
+                                        background: pipeline === p.id ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                                        border: `1px solid ${pipeline === p.id ? '#2563eb' : '#1e293b'}`,
+                                    }}
+                                >
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 500, color: pipeline === p.id ? '#60a5fa' : '#94a3b8', marginBottom: '2px' }}>
+                                        {p.label}
+                                    </div>
+                                    <div style={{ fontSize: '0.65rem', color: '#475569' }}>{p.desc}</div>
                                 </div>
                             ))}
                         </div>
-                    )}
-                </div>
-            </div>
+                    </div>
 
-            {/* 4. BLACK OPS TERMINAL */}
-            <AnimatePresence>
-                {terminalOpen && activeJobId && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 100 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 100 }}
-                        transition={{ type: 'spring', damping: 30, stiffness: 400 }}
+                    {/* Start Button */}
+                    <button
+                        onClick={startJob}
+                        disabled={!getInputFile() || runningJobs.length > 0}
                         style={{
-                            position: 'absolute', bottom: '0', left: '60px', right: '420px', height: '300px',
-                            background: 'rgba(0, 0, 0, 0.95)', borderTop: '1px solid #0ea5e9',
-                            zIndex: 1000, display: 'flex', flexDirection: 'column', backdropFilter: 'blur(10px)'
+                            ...btnPrimary, marginBottom: '24px',
+                            opacity: (!getInputFile() || runningJobs.length > 0) ? 0.4 : 1,
+                            cursor: (!getInputFile() || runningJobs.length > 0) ? 'not-allowed' : 'pointer',
                         }}
                     >
-                        {/* Terminal Header */}
-                        <div style={{ padding: '8px 16px', background: '#020617', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#0ea5e9', fontSize: '0.7rem', fontFamily: '"JetBrains Mono", monospace', letterSpacing: '1px' }}>
-                                <Terminal size={14} /> KUBE_RS_STREAM :: {activeJobId.split('-')[0].toUpperCase()}
-                                <span style={{ padding: '2px 6px', background: 'rgba(14, 165, 233, 0.1)', border: '1px solid #0ea5e9', color: '#0ea5e9', fontSize: '0.6rem', marginLeft: '10px' }}>LIVE</span>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button onClick={() => setTerminalOpen(false)} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}>
-                                    <ChevronDown size={14} />
-                                </button>
-                            </div>
+                        <Play size={16} fill="#fff" />
+                        {runningJobs.length > 0 ? 'Processing...' : 'Start Processing'}
+                    </button>
+
+                    {/* Divider */}
+                    <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, #1e293b, transparent)', marginBottom: '24px' }} />
+
+                    {/* ── STEP 3: RESULTS ── */}
+                    <div>
+                        <div style={sectionLabel}>
+                            <span style={{ color: '#2563eb', marginRight: '6px' }}>③</span> Results
                         </div>
-                        {/* Terminal Output */}
-                        <div ref={terminalRef} style={{ flex: 1, padding: '16px', overflowY: 'auto', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: '0.75rem', color: '#cbd5e1', lineHeight: 1.6 }}>
-                            {(!logs[activeJobId] || logs[activeJobId].length === 0) ? (
-                                <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ display: 'inline-block', width: '8px', height: '14px', background: '#0ea5e9', animation: 'blink 1s step-end infinite' }} />
-                                    AWAITING_POD_SCHEDULING...
-                                </div>
-                            ) : (
-                                logs[activeJobId].map((line, idx) => {
-                                    const isError = line.includes('ERROR') || line.includes('Failed') || line.includes('FAILED');
-                                    const isSuccess = line.includes('✓') || line.includes('COMPLETED');
-                                    const isSys = line.includes('[SYSTEM]');
-                                    
-                                    return (
-                                        <div key={idx} style={{ 
-                                            color: isError ? '#ef4444' : isSuccess ? '#10b981' : isSys ? '#0ea5e9' : '#cbd5e1',
-                                            wordBreak: 'break-all',
-                                            paddingLeft: '16px',
-                                            textIndent: '-16px'
-                                        }}>
-                                            <span style={{ color: '#475569', marginRight: '8px' }}>&gt;</span>
-                                            {line}
+
+                        {Object.values(jobs).length === 0 ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#475569', fontSize: '0.75rem', border: '1px dashed #1e293b', borderRadius: '8px' }}>
+                                No jobs yet. Select data and start processing.
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {Object.values(jobs).map(job => (
+                                    <div
+                                        key={job.id}
+                                        onClick={() => { setActiveJobId(job.id); setTerminalOpen(true); }}
+                                        style={{
+                                            padding: '12px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', position: 'relative', overflow: 'hidden',
+                                            background: activeJobId === job.id ? 'rgba(37, 99, 235, 0.05)' : 'rgba(15, 23, 42, 0.5)',
+                                            border: `1px solid ${activeJobId === job.id ? '#2563eb' : '#1e293b'}`,
+                                        }}
+                                    >
+                                        {/* Running animation */}
+                                        {job.status === 'running' && (
+                                            <motion.div
+                                                animate={{ y: ['-100%', '200%'] }}
+                                                transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+                                                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '40px', background: 'linear-gradient(to bottom, transparent, rgba(37, 99, 235, 0.06), transparent)', pointerEvents: 'none' }}
+                                            />
+                                        )}
+
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 500, color: '#e2e8f0', wordBreak: 'break-all' }}>
+                                                {job.name}
+                                            </div>
+                                            {job.status === 'running' ? <Loader className="animate-spin" size={14} color="#2563eb" /> :
+                                             job.status === 'completed' ? <CheckCircle size={14} color="#10b981" /> :
+                                             <AlertTriangle size={14} color="#ef4444" />}
                                         </div>
-                                    );
-                                })
-                            )}
+
+                                        <div style={{ fontSize: '0.6rem', color: '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>
+                                            {job.status === 'running' ? 'Processing...' : job.status === 'completed' ? 'Completed' : 'Failed'}
+                                        </div>
+
+                                        {/* Actions for completed jobs */}
+                                        {job.status === 'completed' && activeJobId === job.id && (
+                                            <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setViewingResult({ url: `http://localhost:3000${job.output_path}`, bounds: job.bounds }); }}
+                                                    style={{ ...btnSecondary, flex: 1, padding: '8px', fontSize: '0.7rem', borderColor: '#10b981', color: '#10b981' }}
+                                                >
+                                                    <Eye size={12} /> View on Map
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); window.open(`http://localhost:3000${job.output_path}`, '_blank'); }}
+                                                    style={{ ...btnSecondary, flex: 1, padding: '8px', fontSize: '0.7rem' }}
+                                                >
+                                                    <Download size={12} /> Download
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* ═══ RESULT OVERLAY INFO CARD ═══ */}
+            <AnimatePresence>
+                {viewingResult && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+                        style={{
+                            position: 'absolute', bottom: terminalOpen ? '280px' : '60px', right: '20px', zIndex: 900,
+                            background: 'rgba(2, 6, 23, 0.9)', backdropFilter: 'blur(12px)',
+                            padding: '14px 18px', border: '1px solid #10b981', borderRadius: '10px',
+                            width: '280px', boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: '6px', height: '6px', background: '#10b981', borderRadius: '50%', boxShadow: '0 0 8px #10b981' }} />
+                                <span style={{ fontWeight: 600, fontSize: '0.75rem', color: '#e2e8f0' }}>Result Ready</span>
+                            </div>
+                            <button onClick={() => setViewingResult(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '2px' }}>
+                                <X size={14} />
+                            </button>
                         </div>
-                        <style dangerouslySetInnerHTML={{__html: `
-                            @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-                            ::-webkit-scrollbar { width: 8px; height: 8px; }
-                            ::-webkit-scrollbar-track { background: #020617; border-left: 1px solid #1e293b; }
-                            ::-webkit-scrollbar-thumb { background: #334155; }
-                            ::-webkit-scrollbar-thumb:hover { background: #475569; }
-                        `}} />
+                        <div style={{ fontSize: '0.65rem', color: '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>
+                            {viewingResult.url.split('/').pop()}
+                        </div>
+                        {!viewingResult.bounds && (
+                            <div style={{ fontSize: '0.6rem', color: '#f59e0b', marginTop: '6px' }}>
+                                ⚠ No georef data — overlay not shown on map
+                            </div>
+                        )}
                     </motion.div>
                 )}
             </AnimatePresence>
-            
-            {/* Terminal minimized indicator */}
+
+            {/* ═══ COORDINATES HUD ═══ */}
+            <div style={{
+                position: 'absolute', bottom: terminalOpen ? '280px' : '16px', left: '410px', zIndex: 900,
+                fontFamily: '"JetBrains Mono", monospace', fontSize: '0.7rem', color: '#0ea5e9',
+                display: 'flex', gap: '14px', background: 'rgba(2, 6, 23, 0.75)', padding: '6px 12px',
+                border: '1px solid rgba(30, 41, 59, 0.6)', borderRadius: '6px', backdropFilter: 'blur(8px)',
+                transition: 'bottom 0.25s ease',
+            }}>
+                <span>LAT: {mouseCoords.lat}°</span>
+                <span>LON: {mouseCoords.lon}°</span>
+                <span style={{ color: '#10b981' }}>● ONLINE</span>
+            </div>
+
+            {/* ═══ TERMINAL DRAWER ═══ */}
+            <div style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000,
+                height: terminalOpen && activeJobId ? '260px' : '0px',
+                overflow: 'hidden', transition: 'height 0.25s ease',
+                background: 'rgba(2, 6, 23, 0.97)', borderTop: '1px solid #1e293b',
+                display: 'flex', flexDirection: 'column',
+                backdropFilter: 'blur(12px)',
+            }}>
+                {/* Terminal Header */}
+                <div style={{ padding: '8px 16px', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8', fontSize: '0.7rem', fontFamily: '"JetBrains Mono", monospace' }}>
+                        <Terminal size={14} color="#2563eb" />
+                        <span>Processing Log</span>
+                        {jobs[activeJobId]?.status === 'running' && (
+                            <span style={{ padding: '2px 6px', background: 'rgba(37, 99, 235, 0.1)', border: '1px solid #2563eb', color: '#60a5fa', fontSize: '0.55rem', borderRadius: '3px' }}>LIVE</span>
+                        )}
+                    </div>
+                    <button onClick={() => setTerminalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}>
+                        <ChevronDown size={14} />
+                    </button>
+                </div>
+                {/* Terminal Output */}
+                <div ref={terminalRef} style={{ flex: 1, padding: '12px 16px', overflowY: 'auto', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: '0.72rem', color: '#94a3b8', lineHeight: 1.7 }}>
+                    {(!logs[activeJobId] || logs[activeJobId].length === 0) ? (
+                        <div style={{ color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ display: 'inline-block', width: '8px', height: '14px', background: '#2563eb', animation: 'blink 1s step-end infinite' }} />
+                            Waiting for processor output...
+                        </div>
+                    ) : (
+                        logs[activeJobId].map((line, idx) => {
+                            const isError = line.includes('ERROR') || line.includes('Failed') || line.includes('FAILED');
+                            const isSuccess = line.includes('✓') || line.includes('COMPLETED');
+                            const isSys = line.includes('[SYSTEM]');
+                            return (
+                                <div key={idx} style={{ color: isError ? '#ef4444' : isSuccess ? '#10b981' : isSys ? '#60a5fa' : '#94a3b8', wordBreak: 'break-all', paddingLeft: '14px', textIndent: '-14px' }}>
+                                    <span style={{ color: '#334155', marginRight: '6px' }}>›</span>
+                                    {line}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+                <style dangerouslySetInnerHTML={{__html: `
+                    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+                    ::-webkit-scrollbar { width: 6px; }
+                    ::-webkit-scrollbar-track { background: transparent; }
+                    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+                    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+                    .animate-spin { animation: spin 1s linear infinite; }
+                    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                `}} />
+            </div>
+
+            {/* ═══ MINIMIZED TERMINAL BUTTON ═══ */}
             {!terminalOpen && activeJobId && (
                 <motion.button
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                     onClick={() => setTerminalOpen(true)}
-                    style={{ position: 'absolute', bottom: '20px', left: '80px', background: '#020617', color: '#0ea5e9', border: '1px solid #0ea5e9', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', zIndex: 1000, fontSize: '0.7rem', fontWeight: 600, fontFamily: '"JetBrains Mono", monospace', letterSpacing: '1px', textTransform: 'uppercase' }}
+                    style={{
+                        position: 'absolute', bottom: '16px', right: '20px', zIndex: 900,
+                        background: 'rgba(2, 6, 23, 0.9)', color: '#60a5fa',
+                        border: '1px solid #2563eb', borderRadius: '8px',
+                        padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px',
+                        cursor: 'pointer', fontSize: '0.7rem', fontWeight: 500,
+                        fontFamily: '"JetBrains Mono", monospace',
+                        backdropFilter: 'blur(8px)', boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+                    }}
                 >
-                    <Terminal size={14} /> EXPAN_TELEMETRY_DATALINK [{logs[activeJobId]?.length || 0}]
+                    <Terminal size={14} />
+                    Show Log [{logs[activeJobId]?.length || 0} lines]
                     {jobs[activeJobId]?.status === 'running' && <Loader className="animate-spin" size={12} />}
                 </motion.button>
             )}

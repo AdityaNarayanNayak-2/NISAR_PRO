@@ -1,0 +1,81 @@
+warning: unused import: `ArrayView1`
+ --> src/radar_utils.rs:1:23
+  |
+1 | ...1, ArrayView1};
+  |       ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `BufReader` and `Read`
+  --> src/safe_parser.rs:12:15
+   |
+12 | ...::{BufReader, Read};
+   |       ^^^^^^^^^  ^^^^
+
+warning: fields `chirp` and `input_size` are never read
+   --> src/isce3_ffi.rs:114:5
+    |
+113 | pub struct Isce3RangeComp {
+    |            -------------- fields in this struct
+114 |     chirp: Vec<ComplexF32>,
+    |     ^^^^^
+115 |     input_size: usize,
+    |     ^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `len` is never read
+  --> src/radar_utils.rs:43:5
+   |
+40 | pub struct FFTProcessor {
+   |            ------------ field in this struct
+...
+43 |     len: usize,
+   |     ^^^
+
+warning: `sar_processor` (lib) generated 4 warnings (run `cargo fix --lib -p sar_processor` to apply 2 suggestions)
+warning: unreachable pattern
+   --> src/main.rs:101:29
+    |
+101 | ...   _ => "...
+    |       ^ no value can reach this
+    |
+note: multiple earlier patterns match some of the same values
+   --> src/main.rs:101:29
+    |
+ 97 | ...   NisarProductType::RSLC =>...
+    |       ---------------------- matches some of the same values
+ 98 | ...   NisarProductType::GSLC =>...
+    |       ---------------------- matches some of the same values
+ 99 | ...   NisarProductType::GCOV =>...
+    |       ---------------------- matches some of the same values
+100 | ...   NisarProductType::GUNW =>...
+    |       ---------------------- matches some of the same values
+101 | ...   _ => "Unknown",
+    |       ^ collectively making this unreachable
+    = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sar_processor` (bin "sar_processor") generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.20s
+     Running `target/release/sar_processor --input /home/aditya/Desktop/nisar_data/NISAR_L1_PR_RSLC_010_165_D_100_2005_DHDH_M_20260120T155930_20260120T155950_X05010_N_P_J_001.h5 -p HH --output local_rslc_test.png`
+[2026-03-23T13:50:09Z INFO  sar_processor] ╔══════════════════════════════════════════════╗
+[2026-03-23T13:50:09Z INFO  sar_processor] ║       NISAR SAR Processor  v0.2.0            ║
+[2026-03-23T13:50:09Z INFO  sar_processor] ║   Range-Doppler Algorithm (RDA) Pipeline     ║
+[2026-03-23T13:50:09Z INFO  sar_processor] ╚══════════════════════════════════════════════╝
+[2026-03-23T13:50:09Z INFO  sar_processor] Mode: NISAR HDF5  →  "/home/aditya/Desktop/nisar_data/NISAR_L1_PR_RSLC_010_165_D_100_2005_DHDH_M_20260120T155930_20260120T155950_X05010_N_P_J_001.h5"
+[2026-03-23T13:50:09Z INFO  sar_processor::nisar_parser] Detected NISAR product type: RSLC
+[2026-03-23T13:50:09Z INFO  sar_processor::nisar_parser] Opening NISAR RSLC: "/home/aditya/Desktop/nisar_data/NISAR_L1_PR_RSLC_010_165_D_100_2005_DHDH_M_20260120T155930_20260120T155950_X05010_N_P_J_001.h5" (pol=HH)
+[2026-03-23T13:50:09Z INFO  sar_processor::nisar_parser] NISAR params: fc=1.258 GHz  BW=80.0 MHz  PRF=1600.0 Hz
+[2026-03-23T13:50:09Z INFO  sar_processor::nisar_parser]   SLC shape: 31920 azimuth × 26338 range (840708960 complex samples)
+[2026-03-23T13:51:23Z INFO  sar_processor::nisar_parser]   High-level read failed (compound type), using low-level raw bytes reader
+[2026-03-23T13:52:23Z INFO  sar_processor::nisar_parser]   Read 6414 MB raw bytes (expected 6414 MB)
+[2026-03-23T13:52:33Z INFO  sar_processor::nisar_parser]   Decoded 840708960 complex samples from compound type
+[2026-03-23T13:52:34Z INFO  sar_processor::nisar_parser] RSLC loaded: 31920 × 26338
+[2026-03-23T13:52:34Z INFO  sar_processor] Product type: RSLC
+[2026-03-23T13:52:34Z INFO  sar_processor] Product is already focused (Range-compressed SLC), skipping RDA pipeline (use --process to override)
+[2026-03-23T13:52:34Z INFO  sar_processor] Rendering pre-processed data directly (31920×26338)
+[2026-03-23T13:52:34Z INFO  sar_processor] Saving SAR image → local_rslc_test.png
+[2026-03-23T13:52:34Z INFO  sar_processor::io] Rendering SAR image: 31920×26338 → downsampled 16x (1995×1646) → local_rslc_test.png
+[2026-03-23T13:52:36Z INFO  sar_processor::io] Contrast stretch: [-1.35, -0.16] dB (based on 3283770 valid blocks)
+[2026-03-23T13:52:36Z INFO  sar_processor::io] SAR image saved: local_rslc_test.png
+[2026-03-23T13:52:36Z INFO  sar_processor] ✓ Done. Output written to: local_rslc_test.png

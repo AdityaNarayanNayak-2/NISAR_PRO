@@ -3,7 +3,7 @@ use clap::Parser;
 use log::info;
 use ndarray::Array2;
 use num_complex::Complex32;
-use sar_processor::io::save_sar_image;
+use sar_processor::io::{save_sar_image, generate_xyz_tiles};
 use sar_processor::nisar_parser;
 use sar_processor::nisar_parser::NisarProductType;
 use sar_processor::rcmc::RcmcParams;
@@ -45,6 +45,10 @@ struct Cli {
     /// Force full RDA processing even on already-focused products (RSLC/GSLC/GCOV/GUNW)
     #[arg(long)]
     process: bool,
+    
+    /// Target directory to output Deep Zoom XYZ Web Tiles
+    #[arg(long)]
+    tiles_dir: Option<String>,
 }
 
 #[tokio::main]
@@ -59,11 +63,11 @@ async fn main() -> Result<()> {
     info!("╚══════════════════════════════════════════════╝");
 
     // ── Build processor + raw data ─────────────────────────────────────────
-    let (processor, raw_data, skip_rda) = if cli.synthetic {
+    let (processor, raw_data, skip_rda, bbox) = if cli.synthetic {
         info!("Mode: Synthetic test data (1024 × 1024 zeros + point target)");
         let proc = build_synthetic_processor(cli.no_rcmc);
         let data = generate_synthetic_point_target(1024, 1024, 512, 512);
-        (proc, data, false)
+        (proc, data, false, None)
     } else {
         let input = cli
             .input
@@ -98,9 +102,11 @@ async fn main() -> Result<()> {
                             NisarProductType::GSLC => "Geocoded SLC",
                             NisarProductType::GCOV => "Geocoded Covariance",
                             NisarProductType::GUNW => "Unwrapped Interferogram",
-                            _ => "Unknown",
                         });
                 }
+
+                // Extract bbox for georeferencing (will be written as sidecar)
+                let bbox = product.bbox.clone();
 
                 let p = &product.params;
                 let mut proc = SARProcessor::new(
@@ -122,17 +128,18 @@ async fn main() -> Result<()> {
                     proc = proc.with_rcmc_params(rcmc);
                 }
 
-                let data = if cli.limit_lines > 0 && cli.limit_lines < product.slc.nrows() {
-                    info!("Limiting to {} azimuth lines", cli.limit_lines);
+                let data = if cli.limit_lines > 0 {
+                    let limit = cli.limit_lines.min(product.slc.nrows());
+                    info!("Limiting to {} azimuth lines", limit);
                     product
                         .slc
-                        .slice(ndarray::s![..cli.limit_lines, ..])
+                        .slice(ndarray::s![..limit, ..])
                         .to_owned()
                 } else {
                     product.slc
                 };
 
-                (proc, data, should_skip_rda)
+                (proc, data, should_skip_rda, bbox)
             }
             _ => {
                 anyhow::bail!(
@@ -153,9 +160,37 @@ async fn main() -> Result<()> {
     };
 
     // ── Save Output ────────────────────────────────────────────────────────
-    info!("Saving SAR image → {}", cli.output);
-    save_sar_image(focused.view(), &cli.output)?;
-    info!("✓ Done. Output written to: {}", cli.output);
+    if let Some(tile_dir) = cli.tiles_dir {
+        info!("Generating deep-zoom XYZ tiles → {}", tile_dir);
+        generate_xyz_tiles(focused.view(), &tile_dir, 0)?;
+        info!("✓ Done. Web tiles written to: {}", tile_dir);
+
+        // Write georeference sidecar alongside tiles
+        if let Some(ref bb) = bbox {
+            let geo_path = format!("{}/geo.json", tile_dir);
+            let geo_json = serde_json::to_string_pretty(bb)?;
+            std::fs::write(&geo_path, &geo_json)?;
+            info!("✓ Georeference written: {}", geo_path);
+            // Emit structured bbox to stdout for Gateway SSE capture
+            println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}", 
+                bb.south, bb.north, bb.west, bb.east);
+        }
+    } else {
+        info!("Saving SAR image → {}", cli.output);
+        save_sar_image(focused.view(), &cli.output)?;
+        info!("✓ Done. Output written to: {}", cli.output);
+
+        // Write georeference sidecar alongside PNG
+        if let Some(ref bb) = bbox {
+            let geo_path = cli.output.replace(".png", ".geo.json");
+            let geo_json = serde_json::to_string_pretty(bb)?;
+            std::fs::write(&geo_path, &geo_json)?;
+            info!("✓ Georeference written: {}", geo_path);
+            // Emit structured bbox to stdout for Gateway SSE capture
+            println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}", 
+                bb.south, bb.north, bb.west, bb.east);
+        }
+    }
 
     Ok(())
 }
@@ -209,8 +244,8 @@ fn generate_synthetic_point_target(
             let range_chirp = Complex32::from_polar(1.0, PI * chirp_rate * t * t);
             let az_phase = Complex32::from_polar(1.0, -PI * 1000.0 * eta * eta);
 
-            let envelope_r = (-((t * sample_rate).powi(2)) / (2.0 * 20.0_f32.powi(2))).exp();
-            let envelope_az = (-((eta * prf).powi(2)) / (2.0 * 50.0_f32.powi(2))).exp();
+            let envelope_r  = (-(t.powi(2)) / (2.0 * (10.0 / sample_rate).powi(2))).exp();
+            let envelope_az = (-(eta.powi(2)) / (2.0 * (30.0 / prf).powi(2))).exp();
 
             data[[az, rg]] = range_chirp * az_phase * envelope_r * envelope_az;
         }

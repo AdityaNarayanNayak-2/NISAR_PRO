@@ -7,7 +7,6 @@ const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/use-cases', label: 'Use Cases' },
     { path: '/technology', label: 'Technology' },
-    { path: '/demo', label: 'Demo' },
 ]
 
 function Navbar() {
@@ -79,7 +78,7 @@ function Navbar() {
                             alignItems: 'center',
                             gap: '2px'
                         }}>
-                            SAR<span style={{ color: '#60a5fa' }}>Analyzer</span>
+                            NISAR<span style={{ color: '#60a5fa' }}>Pro</span>
                         </span>
                     </motion.div>
                 </Link>

@@ -1,237 +1,122 @@
-# SAR Processor Infrastructure - Main Configuration
-# OpenTofu/Terraform compatible
+# SAR Processor Infrastructure - Kind + Azure Hybrid
 #
 # This configuration deploys:
-# - Kubernetes cluster for SAR processing
-# - Object storage for SAR data
-# - Container registry for images
-# - Networking infrastructure
+# - Local Kubernetes cluster using `tehcyx/kind` over Podman/Docker.
+# - Azure Container Registry (ACR) for NISAR microservices.
+# - Azure Blob Storage for raw and processed SAR data telemetry.
 
 terraform {
   required_version = ">= 1.5.0"
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+    kind = {
+      source  = "tehcyx/kind"
+      version = "~> 0.6.0"
     }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.23"
-    }
-    helm = {
-      source  = "hashicorp/helm"
-      version = "~> 2.11"
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
     }
   }
-
-  # Backend configuration - uncomment for production
-  # backend "s3" {
-  #   bucket         = "sar-processor-tfstate"
-  #   key            = "terraform.tfstate"
-  #   region         = "ap-south-1"
-  #   encrypt        = true
-  #   dynamodb_table = "sar-processor-tfstate-lock"
-  # }
 }
 
-# Local variables
+provider "kind" {}
+
+provider "azurerm" {
+  features {}
+}
+
 locals {
-  common_tags = {
-    Project     = "SAR-Processor"
-    Environment = var.environment
-    ManagedBy   = "OpenTofu"
-    Owner       = var.owner
-  }
-
-  cluster_name = "${var.project_name}-${var.environment}"
+  safe_name = replace("${var.project_name}${var.environment}", "-", "")
 }
 
 # =============================================================================
-# Networking Module
+# Local Compute: Kind (Kubernetes IN Docker/Podman)
 # =============================================================================
 
-module "networking" {
-  source = "./modules/networking"
+resource "kind_cluster" "sar_local" {
+  name           = var.kind_cluster_name
+  node_image     = "kindest/node:v1.31.0"
+  wait_for_ready = true
 
-  project_name       = var.project_name
-  environment        = var.environment
-  region             = var.region
-  vpc_cidr           = var.vpc_cidr
-  availability_zones = var.availability_zones
-  
-  tags = local.common_tags
-}
+  kind_config {
+    kind        = "Cluster"
+    api_version = "kind.x-k8s.io/v1alpha4"
 
-# =============================================================================
-# Storage Module (S3 buckets for SAR data)
-# =============================================================================
-
-module "storage" {
-  source = "./modules/storage"
-
-  project_name = var.project_name
-  environment  = var.environment
-  region       = var.region
-  
-  # Bucket configuration
-  raw_data_retention_days       = var.raw_data_retention_days
-  processed_data_retention_days = var.processed_data_retention_days
-  enable_versioning             = var.environment == "prod"
-  
-  tags = local.common_tags
-}
-
-# =============================================================================
-# Kubernetes Cluster Module (EKS)
-# =============================================================================
-
-module "k8s_cluster" {
-  source = "./modules/k8s-cluster"
-
-  cluster_name    = local.cluster_name
-  cluster_version = var.kubernetes_version
-  
-  vpc_id          = module.networking.vpc_id
-  subnet_ids      = module.networking.private_subnet_ids
-  
-  # Node group configuration
-  node_instance_types = var.node_instance_types
-  node_desired_size   = var.node_desired_size
-  node_min_size       = var.node_min_size
-  node_max_size       = var.node_max_size
-  node_disk_size      = var.node_disk_size
-  
-  # GPU nodes for SAR processing (optional)
-  enable_gpu_nodes       = var.enable_gpu_nodes
-  gpu_instance_types     = var.gpu_instance_types
-  gpu_node_desired_size  = var.gpu_node_desired_size
-  
-  tags = local.common_tags
-  
-  depends_on = [module.networking]
-}
-
-# =============================================================================
-# Container Registry (ECR)
-# =============================================================================
-
-resource "aws_ecr_repository" "sar_processor" {
-  name                 = "${var.project_name}-processor"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_ecr_repository" "sar_gateway" {
-  name                 = "${var.project_name}-gateway"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_ecr_repository" "sar_dashboard" {
-  name                 = "${var.project_name}-dashboard"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = local.common_tags
-}
-
-# ECR lifecycle policy - keep last 10 images
-resource "aws_ecr_lifecycle_policy" "cleanup" {
-  for_each   = toset(["${var.project_name}-processor", "${var.project_name}-gateway", "${var.project_name}-dashboard"])
-  repository = each.key
-
-  policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep last 10 images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
+    node {
+      role = "control-plane"
+      
+      kubeadm_config_patches = [
+        "kind: InitConfiguration\nnodeRegistration:\n  kubeletExtraArgs:\n    node-labels: \"ingress-ready=true\"\n"
+      ]
+      
+      extra_port_mappings {
+        container_port = 80
+        host_port      = 80
+        protocol       = "TCP"
       }
-      action = {
-        type = "expire"
+      extra_port_mappings {
+        container_port = 443
+        host_port      = 443
+        protocol       = "TCP"
       }
-    }]
-  })
+    }
 
-  depends_on = [
-    aws_ecr_repository.sar_processor,
-    aws_ecr_repository.sar_gateway,
-    aws_ecr_repository.sar_dashboard
-  ]
-}
-
-# =============================================================================
-# Kubernetes Resources (deployed via Helm/kubectl)
-# =============================================================================
-
-# Configure kubernetes provider after cluster is created
-provider "kubernetes" {
-  host                   = module.k8s_cluster.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.k8s_cluster.cluster_ca_certificate)
-  
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", local.cluster_name]
-  }
-}
-
-provider "helm" {
-  kubernetes {
-    host                   = module.k8s_cluster.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.k8s_cluster.cluster_ca_certificate)
-    
-    exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", local.cluster_name]
+    # Add 2 worker nodes for processing heavy SAR payloads
+    node {
+      role = "worker"
+    }
+    node {
+      role = "worker"
     }
   }
 }
 
-# Namespace for SAR processor
-resource "kubernetes_namespace" "sar_processor" {
-  metadata {
-    name = "sar-processor"
-    
-    labels = {
-      "app.kubernetes.io/managed-by" = "terraform"
-    }
-  }
+# =============================================================================
+# Cloud Components: Azure Resource Group
+# =============================================================================
 
-  depends_on = [module.k8s_cluster]
+resource "azurerm_resource_group" "sar_rg" {
+  name     = "${var.project_name}-rg-${var.environment}"
+  location = var.azure_region
 }
 
-# FluxCD for GitOps (optional)
-resource "helm_release" "flux" {
-  count = var.enable_gitops ? 1 : 0
+# =============================================================================
+# Cloud Components: Azure Container Registry (ACR)
+# =============================================================================
 
-  name       = "flux"
-  repository = "https://fluxcd-community.github.io/helm-charts"
-  chart      = "flux2"
-  namespace  = "flux-system"
-  
-  create_namespace = true
+resource "azurerm_container_registry" "acr" {
+  name                = "${local.safe_name}acr"
+  resource_group_name = azurerm_resource_group.sar_rg.name
+  location            = azurerm_resource_group.sar_rg.location
+  sku                 = "Standard"
+  admin_enabled       = true
+}
 
-  depends_on = [module.k8s_cluster]
+# =============================================================================
+# Cloud Components: Azure Storage Account & Containers
+# =============================================================================
+
+resource "azurerm_storage_account" "sar_storage" {
+  name                     = "${local.safe_name}storage"
+  resource_group_name      = azurerm_resource_group.sar_rg.name
+  location                 = azurerm_resource_group.sar_rg.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+
+  blob_properties {
+    versioning_enabled = var.environment == "prod"
+  }
+}
+
+resource "azurerm_storage_container" "raw_data" {
+  name                  = "raw-data"
+  storage_account_name  = azurerm_storage_account.sar_storage.name
+  container_access_type = "private"
+}
+
+resource "azurerm_storage_container" "processed_tiles" {
+  name                  = "processed-xyz-tiles"
+  storage_account_name  = azurerm_storage_account.sar_storage.name
+  container_access_type = "blob" # Allow read-only public access to XYZ tiles for the dashboard
 }

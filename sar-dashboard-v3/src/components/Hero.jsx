@@ -206,7 +206,7 @@ function Hero() {
                     letterSpacing: '0.2rem',
                     fontFamily: 'system-ui, -apple-system, sans-serif'
                 }}>
-                    SARX
+                    NISAR PRO
                 </div>
             </header>
         </section>

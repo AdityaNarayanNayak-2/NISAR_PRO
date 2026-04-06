@@ -189,7 +189,7 @@ function Footer() {
                         color: 'var(--text-tertiary)',
                         fontSize: '0.85rem'
                     }}>
-                        © 2026 SAR Analyzer. Built with 🦀 Rust & ❤️
+                        © 2026 NISAR Pro. Built with 🦀 Rust & ❤️
                     </p>
                     <div style={{
                         display: 'flex',

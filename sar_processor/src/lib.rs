@@ -7,12 +7,14 @@
 //! - Sentinel-1 SAFE format parsing
 //! - NISAR HDF5 format parsing
 //! - Anomaly detection (AMTAD)
+//! - Polarimetric SAR decomposition (PolSAR)
 
 pub mod algorithm;
 pub mod errors;
 pub mod io;
 pub mod isce3_ffi;
 pub mod nisar_parser;
+pub mod polsar;
 pub mod radar_utils;
 pub mod rcmc;
 pub mod rda;

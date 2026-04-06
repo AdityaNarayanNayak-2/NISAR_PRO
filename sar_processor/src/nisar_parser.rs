@@ -32,6 +32,45 @@ use std::path::Path;
 // Public types
 // ───────────────────────────────────────────────────────────────────────────
 
+/// WGS84 bounding box for georeferenced map placement
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GeoBoundingBox {
+    /// Southern latitude (degrees)
+    pub south: f64,
+    /// Northern latitude (degrees)
+    pub north: f64,
+    /// Western longitude (degrees)
+    pub west: f64,
+    /// Eastern longitude (degrees)
+    pub east: f64,
+}
+
+impl GeoBoundingBox {
+    /// Create a bbox from min/max lat/lon arrays
+    pub fn from_bounds(lats: &[f64], lons: &[f64]) -> Option<Self> {
+        if lats.is_empty() || lons.is_empty() {
+            return None;
+        }
+        let south = lats.iter().copied().fold(f64::MAX, f64::min);
+        let north = lats.iter().copied().fold(f64::MIN, f64::max);
+        let west = lons.iter().copied().fold(f64::MAX, f64::min);
+        let east = lons.iter().copied().fold(f64::MIN, f64::max);
+        
+        // Reject invalid coordinates
+        if south.abs() > 90.0 || north.abs() > 90.0 || west.abs() > 360.0 || east.abs() > 360.0 {
+            return None;
+        }
+        // Reject degenerate (zero-area) or all-zero bounding boxes
+        if (south - north).abs() < 1e-6 || (west - east).abs() < 1e-6 {
+            return None;
+        }
+        if south == 0.0 && north == 0.0 && west == 0.0 && east == 0.0 {
+            return None;
+        }
+        Some(Self { south, north, west, east })
+    }
+}
+
 /// Radar acquisition parameters extracted from NISAR metadata
 #[derive(Debug, Clone)]
 pub struct NisarRadarParams {
@@ -61,6 +100,8 @@ pub struct NisarProduct {
     pub polarization: String,
     /// Product type detected from filename
     pub product_type: NisarProductType,
+    /// WGS84 bounding box (None if not available in metadata)
+    pub bbox: Option<GeoBoundingBox>,
 }
 
 /// NISAR product type, auto-detected from filename
@@ -119,8 +160,17 @@ pub fn parse_nisar_rslc(path: &Path, polarization: &str) -> Result<NisarProduct>
     let slc_path = format!("/science/LSAR/RSLC/swaths/frequencyA/{}", pol);
     let slc = read_complex_dataset(&file, &slc_path)?;
 
+    // RSLC is in radar coordinates — try to extract bbox from identification metadata
+    let bbox = extract_bbox_from_identification(&file);
+    if let Some(ref bb) = bbox {
+        info!("RSLC geolocation: [{:.4}°N, {:.4}°E] → [{:.4}°N, {:.4}°E]",
+            bb.south, bb.west, bb.north, bb.east);
+    } else {
+        info!("RSLC: No geographic bounding box found in metadata");
+    }
+
     info!("RSLC loaded: {} × {}", slc.nrows(), slc.ncols());
-    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::RSLC })
+    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::RSLC, bbox })
 }
 
 /// Parse a NISAR GSLC HDF5 file (Level-2, geocoded SLC)
@@ -134,8 +184,16 @@ fn parse_nisar_gslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
     let slc_path = format!("/science/LSAR/GSLC/grids/frequencyA/{}", pol);
     let slc = read_complex_dataset(&file, &slc_path)?;
 
+    // GSLC is geocoded — extract bbox from coordinate grids
+    let bbox = extract_bbox_from_grids(&file, "GSLC")
+        .or_else(|| extract_bbox_from_identification(&file));
+    if let Some(ref bb) = bbox {
+        info!("GSLC geolocation: [{:.4}°N, {:.4}°E] → [{:.4}°N, {:.4}°E]",
+            bb.south, bb.west, bb.north, bb.east);
+    }
+
     info!("GSLC loaded: {} × {}", slc.nrows(), slc.ncols());
-    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GSLC })
+    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GSLC, bbox })
 }
 
 /// Parse a NISAR GCOV HDF5 file (Level-2, polarimetric covariance)
@@ -164,7 +222,15 @@ fn parse_nisar_gcov(path: &Path, polarization: &str) -> Result<NisarProduct> {
     // Wrap as Complex32 for pipeline compatibility
     let slc = data.mapv(|v| Complex32::new(v, 0.0));
 
-    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GCOV })
+    // GCOV is geocoded — extract bbox from coordinate grids
+    let bbox = extract_bbox_from_grids(&file, "GCOV")
+        .or_else(|| extract_bbox_from_identification(&file));
+    if let Some(ref bb) = bbox {
+        info!("GCOV geolocation: [{:.4}°N, {:.4}°E] → [{:.4}°N, {:.4}°E]",
+            bb.south, bb.west, bb.north, bb.east);
+    }
+
+    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GCOV, bbox })
 }
 
 /// Parse a NISAR GUNW HDF5 file (Level-2, unwrapped interferogram)
@@ -187,7 +253,15 @@ fn parse_nisar_gunw(path: &Path, polarization: &str) -> Result<NisarProduct> {
     // Convert phase to complex (unit magnitude, phase angle)
     let slc = phase.mapv(|phi| Complex32::from_polar(1.0, phi));
 
-    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GUNW })
+    // GUNW is geocoded — extract bbox from coordinate grids
+    let bbox = extract_bbox_from_grids(&file, "GUNW")
+        .or_else(|| extract_bbox_from_identification(&file));
+    if let Some(ref bb) = bbox {
+        info!("GUNW geolocation: [{:.4}°N, {:.4}°E] → [{:.4}°N, {:.4}°E]",
+            bb.south, bb.west, bb.north, bb.east);
+    }
+
+    Ok(NisarProduct { slc, params, polarization: pol, product_type: NisarProductType::GUNW, bbox })
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -258,6 +332,69 @@ fn extract_radar_params(file: &File, product_type: &str) -> Result<NisarRadarPar
 fn read_scalar_f64(file: &File, path: &str) -> Option<f64> {
     let dataset = file.dataset(path).ok()?;
     dataset.read_f64().ok()?.into_iter().next()
+}
+
+/// Extract WGS84 bounding box from geocoded product coordinate grids.
+///
+/// NISAR geocoded products (GSLC/GCOV/GUNW) store 1D coordinate arrays:
+///   /science/LSAR/{type}/grids/frequencyA/xCoordinates  (longitude)
+///   /science/LSAR/{type}/grids/frequencyA/yCoordinates  (latitude)
+fn extract_bbox_from_grids(file: &File, product_type: &str) -> Option<GeoBoundingBox> {
+    let x_path = format!("/science/LSAR/{}/grids/frequencyA/xCoordinates", product_type);
+    let y_path = format!("/science/LSAR/{}/grids/frequencyA/yCoordinates", product_type);
+
+    let x_coords = read_1d_f64(file, &x_path)?;
+    let y_coords = read_1d_f64(file, &y_path)?;
+
+    info!("  Found coordinate grids: {} × {} points", y_coords.len(), x_coords.len());
+
+    // For projected coordinates (UTM), these could be meters not degrees.
+    // Check if values look like geographic degrees (lat: -90..90, lon: -180..360)
+    let looks_geographic = y_coords.iter().all(|&v| v.abs() <= 90.0)
+        && x_coords.iter().all(|&v| v.abs() <= 360.0);
+
+    if looks_geographic {
+        GeoBoundingBox::from_bounds(&y_coords, &x_coords)
+    } else {
+        info!("  Coordinate grids appear projected (not geographic), skipping");
+        None
+    }
+}
+
+/// Extract WGS84 bounding box from the /identification group.
+///
+/// NISAR products commonly store scene-level bounding coordinates:
+///   /science/LSAR/identification/boundingPolygon
+/// or individual corner attributes:
+///   /science/LSAR/identification/zeroDopplerStartTime etc.
+/// Some products store explicit lat/lon bounding attributes.
+fn extract_bbox_from_identification(file: &File) -> Option<GeoBoundingBox> {
+    let base = "/science/LSAR/identification";
+
+    // Try explicit bounding box attributes first
+    let south = read_scalar_f64(file, &format!("{}/boundingBox/southLatitude", base))
+        .or_else(|| read_scalar_f64(file, &format!("{}/southBoundLatitude", base)));
+    let north = read_scalar_f64(file, &format!("{}/boundingBox/northLatitude", base))
+        .or_else(|| read_scalar_f64(file, &format!("{}/northBoundLatitude", base)));
+    let west = read_scalar_f64(file, &format!("{}/boundingBox/westLongitude", base))
+        .or_else(|| read_scalar_f64(file, &format!("{}/westBoundLongitude", base)));
+    let east = read_scalar_f64(file, &format!("{}/boundingBox/eastLongitude", base))
+        .or_else(|| read_scalar_f64(file, &format!("{}/eastBoundLongitude", base)));
+
+    if let (Some(s), Some(n), Some(w), Some(e)) = (south, north, west, east) {
+        info!("  Found identification bbox: [{:.4}, {:.4}] → [{:.4}, {:.4}]", s, w, n, e);
+        return Some(GeoBoundingBox { south: s, north: n, west: w, east: e });
+    }
+
+    None
+}
+
+/// Read a 1D float64 coordinate array from HDF5.
+fn read_1d_f64(file: &File, path: &str) -> Option<Vec<f64>> {
+    let dataset = file.dataset(path).ok()?;
+    let data = dataset.read_f64().ok()?;
+    if data.is_empty() { return None; }
+    Some(data)
 }
 
 /// Read a complex float32 SLC dataset.

@@ -1,5 +1,6 @@
 use crate::esa_client::EsaClient;
-use crate::models::{SarScene, SearchQuery, ProcessRequest};
+use crate::nasa_client::NasaClient;
+use crate::models::{SarScene, SearchQuery, ProcessRequest, NisarSearchQuery, NisarScene};
 use axum::{
     extract::{Path, Query, State},
     response::sse::{Event, Sse},
@@ -13,15 +14,24 @@ use futures_util::stream::Stream;
 use serde_json::json;
 
 pub async fn search_handler(Query(params): Query<SearchQuery>) -> Json<Vec<SarScene>> {
-    let mut client = EsaClient::new();
-    // In a real app, we would handle errors better than unwrap
-    // Using user's current format
+    let client = EsaClient::new();
     let result = client.search_scenes(params.lat, params.lon, params.start_date, params.end_date).await;
     match result {
         Ok(scenes) => Json(scenes),
         Err(e) => {
             log::error!("Search failed: {}", e);
-            Json(vec![]) // Return empty list on error for now
+            Json(vec![])
+        }
+    }
+}
+
+pub async fn search_nisar_handler(Query(params): Query<NisarSearchQuery>) -> Json<Vec<NisarScene>> {
+    let client = NasaClient::new();
+    match client.search_nisar(params).await {
+        Ok(scenes) => Json(scenes),
+        Err(e) => {
+            log::error!("NASA ASF Search failed: {}", e);
+            Json(vec![])
         }
     }
 }
@@ -50,6 +60,7 @@ pub async fn get_job_handler(
             id: metadata.id.clone(),
             status: metadata.status.clone(),
             output_path: metadata.output_path.clone(),
+            bbox: metadata.bbox.clone(),
         }))
     } else {
         Err(StatusCode::NOT_FOUND)
@@ -82,7 +93,7 @@ pub async fn stream_logs_handler(
     let live_stream = BroadcastStream::new(receiver)
         .filter_map(|msg| match msg {
             Ok(line) => Some(Ok(Event::default().data(line))),
-            Err(_) => None, // Ignore lagged receiver warnings safely
+            Err(_) => None,
         });
 
     let combined_stream = history_stream.chain(live_stream);

@@ -9,89 +9,45 @@ const pageVariants = {
 
 const useCases = [
     {
-        id: 'agriculture',
-        icon: '🌾',
-        title: 'Agriculture',
-        tagline: 'Precision farming powered by radar',
-        color: '#22c55e',
-        applications: [
-            { name: 'Crop Health Monitoring', desc: 'Track vegetation indices and growth patterns' },
-            { name: 'Soil Moisture Analysis', desc: 'L-band penetration for subsurface moisture' },
-            { name: 'Irrigation Mapping', desc: 'Optimize water usage with temporal analysis' },
-            { name: 'Yield Prediction', desc: 'ML models on multi-temporal SAR data' },
-            { name: 'Damage Assessment', desc: 'Post-storm crop loss for insurance claims' },
-        ]
-    },
-    {
-        id: 'mining',
-        icon: '⛏️',
-        title: 'Mining & Resources',
-        tagline: 'Subsurface intelligence at scale',
+        id: 'infrastructure',
+        icon: '🏗️',
+        title: 'Bridge & Dam Monitoring',
+        tagline: 'Millimeter-precision structural health from orbit',
         color: '#f59e0b',
-        applications: [
-            { name: 'Deposit Detection', desc: 'Identify mineral-rich geological formations' },
-            { name: 'Illegal Mining Detection', desc: 'Change detection for unauthorized activity' },
-            { name: 'Land Stability Monitoring', desc: 'InSAR for subsidence and slope movement' },
-            { name: 'Excavation Tracking', desc: 'Volume estimation from DEM differencing' },
-            { name: 'Environmental Compliance', desc: 'Monitor rehabilitation and reclamation' },
-        ]
+        status: 'IN DEVELOPMENT',
+        description: 'Using InSAR phase differencing to detect sub-centimeter deformation in bridges, dams, and critical infrastructure. NISAR images every bridge on Earth twice every 12 days — making proactive maintenance possible at global scale.',
+        techniques: ['Multi-Temporal InSAR', 'Persistent Scatterer Detection', 'Coherence Mapping', 'Phase-to-Displacement Conversion'],
     },
     {
-        id: 'urban',
-        icon: '🏙️',
-        title: 'Urban Planning',
-        tagline: 'Smart city infrastructure insights',
-        color: '#8b5cf6',
-        applications: [
-            { name: 'Urban Growth Monitoring', desc: 'Track expansion and densification patterns' },
-            { name: 'Infrastructure Assessment', desc: 'Bridge, dam, and building stability' },
-            { name: 'Land Subsidence', desc: 'mm-level ground deformation detection' },
-            { name: 'Construction Progress', desc: 'Automated site monitoring from orbit' },
-            { name: 'Transportation Networks', desc: 'Road and rail infrastructure analysis' },
-        ]
-    },
-    {
-        id: 'environment',
+        id: 'displacement',
         icon: '🌍',
-        title: 'Environmental',
-        tagline: 'Climate action through observation',
+        title: 'Land Displacement',
+        tagline: 'Ground deformation and subsidence detection',
+        color: '#8b5cf6',
+        status: 'IN DEVELOPMENT',
+        description: 'Detecting land subsidence, tectonic deformation, and slope instability using differential InSAR. Critical for urban planning in areas prone to groundwater extraction, mining-induced collapse, or seismic activity.',
+        techniques: ['DInSAR', 'Time-Series Analysis', 'Goldstein Phase Filtering', 'Displacement Rate Estimation'],
+    },
+    {
+        id: 'maritime',
+        icon: '🚢',
+        title: 'Ship Detection & Monitoring',
+        tagline: 'All-weather maritime surveillance',
         color: '#06b6d4',
-        applications: [
-            { name: 'Deforestation Tracking', desc: 'Near real-time forest loss alerts' },
-            { name: 'Glacier Monitoring', desc: 'Ice flow velocity and mass balance' },
-            { name: 'Oil Spill Detection', desc: 'Ocean surface anomaly identification' },
-            { name: 'Wetland Mapping', desc: 'Flood extent and water body changes' },
-            { name: 'Carbon Estimation', desc: 'Biomass quantification for carbon credits' },
-        ]
+        status: 'PLANNED',
+        description: 'Bright radar returns on dark ocean backgrounds make SAR ideal for vessel detection. CFAR (Constant False Alarm Rate) thresholding on calibrated backscatter identifies ships regardless of weather, cloud cover, or time of day.',
+        techniques: ['CFAR Detection', 'Backscatter Calibration', 'Wake Analysis', 'AIS Correlation'],
     },
     {
-        id: 'defense',
-        icon: '🛡️',
-        title: 'Defense & Security',
-        tagline: 'Tactical advantage through SAR',
+        id: 'waste',
+        icon: '🏭',
+        title: 'Industrial Waste Pond Detection',
+        tagline: 'Environmental compliance monitoring',
         color: '#ef4444',
-        applications: [
-            { name: 'ISR Missions', desc: 'Intelligence, Surveillance, Reconnaissance' },
-            { name: 'Change Detection', desc: 'Identify new structures or movements' },
-            { name: 'Maritime Surveillance', desc: 'Ship detection and tracking' },
-            { name: 'Border Security', desc: 'All-weather monitoring capabilities' },
-            { name: 'Terrain Analysis', desc: 'Mission planning and route optimization' },
-        ]
+        status: 'PLANNED',
+        description: 'SAR coherence drops sharply over liquid surfaces while maintaining high coherence over surrounding industrial structures. This contrast enables automated detection and monitoring of waste ponds, tailings dams, and unauthorized discharge sites.',
+        techniques: ['Coherence Change Detection', 'Polarimetric Decomposition', 'Multi-Temporal Differencing', 'Anomaly Mapping'],
     },
-    {
-        id: 'disaster',
-        icon: '🚨',
-        title: 'Disaster Management',
-        tagline: 'Rapid response when it matters',
-        color: '#ec4899',
-        applications: [
-            { name: 'Flood Mapping', desc: 'Real-time inundation extent assessment' },
-            { name: 'Earthquake Damage', desc: 'Building damage classification' },
-            { name: 'Landslide Detection', desc: 'InSAR for slope failure prediction' },
-            { name: 'Volcanic Activity', desc: 'Deformation monitoring and alerts' },
-            { name: 'GLOF Prediction', desc: 'Glacial lake outburst early warning' },
-        ]
-    }
 ]
 
 function UseCasesPage() {
@@ -113,8 +69,8 @@ function UseCasesPage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 }}
                     >
-                        <span className="section-label">Applications</span>
-                        <h1>SAR for <span className="text-gradient">Every Industry</span></h1>
+                        <span className="section-label">Active Development</span>
+                        <h1>What We're <span className="text-gradient">Building</span></h1>
                         <p style={{
                             color: 'var(--text-secondary)',
                             maxWidth: '700px',
@@ -122,20 +78,20 @@ function UseCasesPage() {
                             marginTop: 'var(--space-lg)',
                             fontSize: '1.1rem'
                         }}>
-                            From precision agriculture to national security — unlock insights from
-                            any SAR data source with our open-source processing platform
+                            Real SAR applications backed by working algorithms — not marketing promises.
+                            Every use case listed here has a clear path to implementation on the NISAR Pro platform.
                         </p>
                     </motion.div>
                 </div>
             </section>
 
-            {/* Use Cases Grid */}
+            {/* Use Cases */}
             <section className="section" style={{ paddingTop: 0 }}>
                 <div className="container">
                     <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-                        gap: 'var(--space-xl)'
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-2xl)'
                     }}>
                         {useCases.map((useCase, index) => (
                             <motion.div
@@ -143,11 +99,14 @@ function UseCasesPage() {
                                 initial={{ opacity: 0, y: 30 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.3 + index * 0.1 }}
-                                whileHover={{ y: -5 }}
                                 className="card"
                                 style={{
                                     position: 'relative',
-                                    overflow: 'hidden'
+                                    overflow: 'hidden',
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1fr',
+                                    gap: 'var(--space-2xl)',
+                                    alignItems: 'start'
                                 }}
                             >
                                 {/* Color accent bar */}
@@ -160,81 +119,100 @@ function UseCasesPage() {
                                     background: useCase.color
                                 }} />
 
-                                {/* Header */}
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-md)',
-                                    marginBottom: 'var(--space-lg)'
-                                }}>
+                                {/* Left: Description */}
+                                <div>
                                     <div style={{
-                                        width: '56px',
-                                        height: '56px',
-                                        borderRadius: 'var(--radius-md)',
-                                        background: `${useCase.color}20`,
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '1.8rem'
+                                        gap: 'var(--space-md)',
+                                        marginBottom: 'var(--space-lg)'
                                     }}>
-                                        {useCase.icon}
-                                    </div>
-                                    <div>
-                                        <h3 style={{ marginBottom: '2px' }}>{useCase.title}</h3>
-                                        <p style={{
-                                            color: 'var(--text-tertiary)',
-                                            fontSize: '0.85rem',
-                                            margin: 0
+                                        <div style={{
+                                            width: '56px',
+                                            height: '56px',
+                                            borderRadius: 'var(--radius-md)',
+                                            background: `${useCase.color}20`,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '1.8rem'
                                         }}>
-                                            {useCase.tagline}
-                                        </p>
+                                            {useCase.icon}
+                                        </div>
+                                        <div>
+                                            <h3 style={{ marginBottom: '2px' }}>{useCase.title}</h3>
+                                            <p style={{
+                                                color: 'var(--text-tertiary)',
+                                                fontSize: '0.85rem',
+                                                margin: 0
+                                            }}>
+                                                {useCase.tagline}
+                                            </p>
+                                        </div>
                                     </div>
+                                    <p style={{
+                                        color: 'var(--text-secondary)',
+                                        lineHeight: 1.7,
+                                        fontSize: '0.95rem'
+                                    }}>
+                                        {useCase.description}
+                                    </p>
                                 </div>
 
-                                {/* Applications List */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                                    {useCase.applications.map((app, i) => (
-                                        <motion.div
-                                            key={app.name}
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: 0.5 + index * 0.1 + i * 0.05 }}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'flex-start',
-                                                gap: 'var(--space-sm)',
-                                                padding: 'var(--space-sm)',
-                                                borderRadius: 'var(--radius-sm)',
-                                                background: 'var(--bg-tertiary)',
-                                                transition: 'background var(--transition-fast)'
-                                            }}
-                                            whileHover={{ background: 'var(--bg-elevated)' }}
-                                        >
-                                            <div style={{
-                                                width: '6px',
-                                                height: '6px',
-                                                borderRadius: '50%',
-                                                background: useCase.color,
-                                                marginTop: '6px',
-                                                flexShrink: 0
-                                            }} />
-                                            <div>
-                                                <div style={{
-                                                    fontWeight: 500,
-                                                    fontSize: '0.9rem',
-                                                    marginBottom: '2px'
+                                {/* Right: Techniques + Status */}
+                                <div>
+                                    <div style={{
+                                        display: 'inline-block',
+                                        padding: '4px 12px',
+                                        background: useCase.status === 'IN DEVELOPMENT' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(100, 116, 139, 0.1)',
+                                        border: `1px solid ${useCase.status === 'IN DEVELOPMENT' ? '#f59e0b' : '#64748b'}`,
+                                        borderRadius: 'var(--radius-sm)',
+                                        fontSize: '0.7rem',
+                                        fontFamily: 'var(--font-mono)',
+                                        fontWeight: 600,
+                                        color: useCase.status === 'IN DEVELOPMENT' ? '#f59e0b' : '#64748b',
+                                        letterSpacing: '0.05em',
+                                        marginBottom: 'var(--space-lg)'
+                                    }}>
+                                        {useCase.status}
+                                    </div>
+
+                                    <div style={{ marginBottom: 'var(--space-sm)' }}>
+                                        <div style={{
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            color: 'var(--text-tertiary)',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            marginBottom: 'var(--space-sm)'
+                                        }}>
+                                            SAR Techniques Used
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            {useCase.techniques.map(tech => (
+                                                <div key={tech} style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px',
+                                                    padding: '8px 12px',
+                                                    background: 'var(--bg-tertiary)',
+                                                    borderRadius: 'var(--radius-sm)',
+                                                    fontSize: '0.85rem',
+                                                    fontFamily: 'var(--font-mono)',
+                                                    color: 'var(--text-secondary)'
                                                 }}>
-                                                    {app.name}
+                                                    <div style={{
+                                                        width: '6px',
+                                                        height: '6px',
+                                                        borderRadius: '50%',
+                                                        background: useCase.color,
+                                                        flexShrink: 0
+                                                    }} />
+                                                    {tech}
                                                 </div>
-                                                <div style={{
-                                                    color: 'var(--text-tertiary)',
-                                                    fontSize: '0.8rem'
-                                                }}>
-                                                    {app.desc}
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))}
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </motion.div>
                         ))}
@@ -242,112 +220,16 @@ function UseCasesPage() {
                 </div>
             </section>
 
-            {/* Comparison Section */}
+            {/* Data Sources */}
             <section className="section" style={{
                 background: 'linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%)'
             }}>
                 <div className="container">
                     <motion.div
-                        className="section-header"
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                    >
-                        <span className="section-label">Why SAR Analyzer</span>
-                        <h2>The <span className="text-gradient">Open Processing</span> Layer</h2>
-                        <p style={{
-                            color: 'var(--text-secondary)',
-                            maxWidth: '600px',
-                            margin: 'var(--space-md) auto 0'
-                        }}>
-                            While others build proprietary hardware, we provide the universal
-                            software layer that works with <strong>any</strong> SAR data
-                        </p>
-                    </motion.div>
-
-                    {/* Comparison Table */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="card card-glass"
-                        style={{
-                            maxWidth: '900px',
-                            margin: '0 auto',
-                            overflow: 'hidden'
-                        }}
-                    >
-                        <table style={{
-                            width: '100%',
-                            borderCollapse: 'collapse',
-                            fontSize: '0.9rem'
-                        }}>
-                            <thead>
-                                <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
-                                    <th style={{
-                                        padding: 'var(--space-lg)',
-                                        textAlign: 'left',
-                                        fontWeight: 600
-                                    }}>Feature</th>
-                                    <th style={{
-                                        padding: 'var(--space-lg)',
-                                        textAlign: 'center',
-                                        color: 'var(--accent-primary)',
-                                        fontWeight: 600
-                                    }}>SAR Analyzer</th>
-                                    <th style={{
-                                        padding: 'var(--space-lg)',
-                                        textAlign: 'center',
-                                        color: 'var(--text-tertiary)',
-                                        fontWeight: 600
-                                    }}>Hardware Vendors</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {[
-                                    ['Open Source', '✅ MIT License', '❌ Proprietary'],
-                                    ['Data Source', '✅ Any (NISAR, Sentinel, ICEYE, etc)', '⚠️ Own sensors only'],
-                                    ['Deployment', '✅ Cloud, On-Prem, Edge', '⚠️ Vendor cloud'],
-                                    ['Customization', '✅ Full code access', '❌ Black box'],
-                                    ['Cost', '✅ Free + cloud compute', '💰 $$$$ licensing'],
-                                    ['RDA + RCMC', '✅ Production-grade Rust', '✅ Varies'],
-                                    ['ISCE3 Integration', '✅ Optional hybrid', '❌ N/A'],
-                                ].map(([feature, ours, theirs], i) => (
-                                    <tr
-                                        key={feature}
-                                        style={{
-                                            borderBottom: i < 6 ? '1px solid var(--border-subtle)' : 'none'
-                                        }}
-                                    >
-                                        <td style={{
-                                            padding: 'var(--space-md) var(--space-lg)',
-                                            fontWeight: 500
-                                        }}>{feature}</td>
-                                        <td style={{
-                                            padding: 'var(--space-md) var(--space-lg)',
-                                            textAlign: 'center',
-                                            color: 'var(--text-primary)'
-                                        }}>{ours}</td>
-                                        <td style={{
-                                            padding: 'var(--space-md) var(--space-lg)',
-                                            textAlign: 'center',
-                                            color: 'var(--text-tertiary)'
-                                        }}>{theirs}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </motion.div>
-
-                    {/* Data Sources */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        style={{
-                            marginTop: 'var(--space-3xl)',
-                            textAlign: 'center'
-                        }}
+                        style={{ textAlign: 'center' }}
                     >
                         <p style={{
                             color: 'var(--text-tertiary)',
@@ -364,18 +246,16 @@ function UseCasesPage() {
                             flexWrap: 'wrap'
                         }}>
                             {[
-                                { name: 'NISAR', org: 'NASA-ISRO' },
-                                { name: 'Sentinel-1', org: 'ESA' },
-                                { name: 'ICEYE', org: 'Commercial' },
-                                { name: 'Capella', org: 'Commercial' },
-                                { name: 'ALOS-2', org: 'JAXA' },
+                                { name: 'NISAR', org: 'NASA-ISRO', active: true },
+                                { name: 'Sentinel-1', org: 'ESA', active: false },
+                                { name: 'ALOS-2', org: 'JAXA', active: false },
                             ].map((source) => (
                                 <div key={source.name} style={{ textAlign: 'center' }}>
                                     <div style={{
                                         fontFamily: 'var(--font-mono)',
                                         fontWeight: 600,
                                         fontSize: '1.1rem',
-                                        color: 'var(--text-primary)'
+                                        color: source.active ? 'var(--accent-primary)' : 'var(--text-primary)'
                                     }}>
                                         {source.name}
                                     </div>
@@ -385,6 +265,17 @@ function UseCasesPage() {
                                     }}>
                                         {source.org}
                                     </div>
+                                    {source.active && (
+                                        <div style={{
+                                            fontSize: '0.6rem',
+                                            color: '#10b981',
+                                            fontWeight: 600,
+                                            fontFamily: 'var(--font-mono)',
+                                            marginTop: '4px'
+                                        }}>
+                                            ACTIVE
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -400,17 +291,17 @@ function UseCasesPage() {
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                     >
-                        <h2>Ready to Process Your SAR Data?</h2>
+                        <h2>Ready to Process Real SAR Data?</h2>
                         <p style={{
                             color: 'var(--text-secondary)',
                             marginTop: 'var(--space-md)',
                             marginBottom: 'var(--space-xl)'
                         }}>
-                            Get started with our open-source platform today
+                            Launch the dashboard and process NISAR RSLC files directly from your browser
                         </p>
                         <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'center' }}>
-                            <Link to="/demo" className="btn btn-primary">
-                                Try Live Demo
+                            <Link to="/app" className="btn btn-primary">
+                                Launch Dashboard
                             </Link>
                             <a
                                 href="https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro"
