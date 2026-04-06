@@ -4,59 +4,74 @@ NISAR Pro is an enterprise-grade, distributed Synthetic Aperture Radar (SAR) pro
 
 ---
 
-## 🚀 Step-by-Step Installation & Execution Tutorial
+## 🚀 Getting Started
 
-Follow these instructions to deploy the entire NISAR Pro stack locally on your machine.
+NISAR Pro supports two execution modes: **Local Subprocess Mode** (easiest for testing, no Kubernetes required) and **Kubernetes Orchestration Mode** (for scalable distributed processing).
 
-### Step 1: System Prerequisites
-Ensure you have the following installed on your Linux/macOS machine:
+### Prerequisites
+Ensure you have the following installed:
 - **Rust (Cargo):** `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 - **Node.js (v20+):** Required for the React frontend.
-- **Docker / Podman:** Required to run the local Kubernetes nodes.
-- **Kind (Kubernetes in Docker):** `go install sigs.k8s.io/kind@v0.20.0`
-- **Kubectl:** The Kubernetes command-line tool.
+- **Docker / Podman & Kind:** (Only required for Kubernetes mode).
 
 ---
 
-### Step 2: Initialize the Kubernetes Cluster
-NISAR Pro relies a distributed Kubernetes architecture to orchestrate massive 7GB image array matrices without crashing the main application thread.
+## 🛠️ Option A: Local Mode (No Kubernetes Required)
 
-1. **Create the local development cluster:**
-   ```bash
-   kind create cluster --name sar-cluster
-   ```
-2. **Define the custom `SarJob` operations pipeline:**
-   ```bash
-   kubectl apply -k k8s_manifests/
-   ```
+This mode runs the SAR processor as a direct system process, bypassing Kubernetes entirely. Perfect for testing and rapid development.
+
+**1. Compile the Processor**
+```bash
+cd sar_processor
+cargo build --release
+```
+
+**2. Run the API Gateway in Local Mode**
+Provide the `LOCAL_MODE=true` environment variable to instruct the gateway to spawn the binary directly.
+```bash
+cd sar-gateway
+LOCAL_MODE=true RUST_LOG=info cargo run
+```
+
+**3. Start the Mission Control Dashboard**
+```bash
+cd sar-dashboard-v3
+npm install
+npm run dev
+```
 
 ---
 
-### Step 3: Boot the Backend Microservices
-Open **three separate terminal window tabs**, as each component runs continuously.
+## ☸️ Option B: Kubernetes Cluster Deployment
 
-#### Terminal 1: The Kubernetes Operator
-This controller watches the cluster for new processing requests and spins up processor pods.
+For authentic distributed orchestration of massive 7GB image matrices using the custom `kube-rs` operator.
+
+### 1. Initialize the Cluster
+```bash
+kind create cluster --name sar-cluster
+kubectl apply -k k8s_manifests/
+```
+
+### 2. Boot the Backend Microservices
+Open three separate terminals:
+
+**Terminal 1: The Kubernetes Operator**
 ```bash
 cd sar_operator_v2
 RUST_LOG=info cargo run --release
 ```
 
-#### Terminal 2: The API Gateway
-This gateway proxies the dashboard's NASA searches and pipes the Kubernetes processing logs back to the browser via Server-Sent Events (SSE).
+**Terminal 2: The API Gateway**
 ```bash
 cd sar-gateway
-# Optional: Provide NASA Earthdata credentials if pulling private Level-0 data
-export ESA_USERNAME="your_username"
-export ESA_PASSWORD="your_password"
+export NASA_USERNAME="your_username"
+export NASA_PASSWORD="your_password"
 RUST_LOG=info cargo run --release
 ```
 
-#### Terminal 3: The React Frontend
-This is the mission control dashboard.
+**Terminal 3: The React Frontend**
 ```bash
 cd sar-dashboard-v3
-npm install
 npm run dev
 ```
 
