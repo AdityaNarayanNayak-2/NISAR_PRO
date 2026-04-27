@@ -6,7 +6,8 @@ import { Satellite, Rocket, ChevronRight, Github } from 'lucide-react'
 const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/use-cases', label: 'Use Cases' },
-    { path: '/technology', label: 'Technology' },
+    { path: '/academy', label: 'Academy' },
+    { path: '/docs', label: 'Docs' },
 ]
 
 function Navbar() {
@@ -39,52 +40,19 @@ function Navbar() {
             }}
         >
             <div className="container" style={{
-                display: 'flex',
-                justifyContent: 'space-between',
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr',
                 alignItems: 'center',
                 maxWidth: '1400px',
                 margin: '0 auto',
                 padding: '0 2rem'
             }}>
-                {/* Logo */}
-                <Link to="/" style={{ textDecoration: 'none' }}>
-                    <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px'
-                        }}
-                    >
-                        <div style={{
-                            width: '32px',
-                            height: '32px',
-                            background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)'
-                        }}>
-                            <Satellite size={18} color="white" />
-                        </div>
-                        <span style={{
-                            fontFamily: '"JetBrains Mono", monospace',
-                            fontWeight: 600,
-                            fontSize: '1rem',
-                            color: '#ffffff',
-                            letterSpacing: '-0.02em',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '2px'
-                        }}>
-                            NISAR<span style={{ color: '#60a5fa' }}>Pro</span>
-                        </span>
-                    </motion.div>
-                </Link>
+                {/* Empty left column for balance since logo was removed */}
+                <div />
 
                 {/* Desktop Navigation */}
                 <div style={{
+                    justifySelf: 'center',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '2rem',
@@ -127,7 +95,7 @@ function Navbar() {
                 </div>
 
                 {/* Right Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', justifySelf: 'end' }}>
                     <a
                         href="https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro"
                         target="_blank"

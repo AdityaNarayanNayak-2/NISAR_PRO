@@ -12,6 +12,7 @@ pub struct SearchQuery {
 pub struct ProcessRequest {
     pub input_file: Option<String>,
     pub synthetic: Option<bool>,
+    pub pipeline: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

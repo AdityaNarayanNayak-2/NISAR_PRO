@@ -22,6 +22,10 @@ struct Cli {
     #[arg(short, long, value_name = "FILE")]
     input: Option<PathBuf>,
 
+    /// Secondary input file for InSAR (Slave image)
+    #[arg(long, value_name = "SLAVE_FILE")]
+    insar_slave: Option<PathBuf>,
+
     /// Output PNG image path
     #[arg(short, long, default_value = "focused_sar.png")]
     output: String,
@@ -49,6 +53,10 @@ struct Cli {
     /// Target directory to output Deep Zoom XYZ Web Tiles
     #[arg(long)]
     tiles_dir: Option<String>,
+
+    /// Run the CA-CFAR Ship Detection module and emit GeoJSON outputs
+    #[arg(long)]
+    ship_detect: bool,
 }
 
 #[tokio::main]
@@ -67,7 +75,10 @@ async fn main() -> Result<()> {
         info!("Mode: Synthetic test data (1024 × 1024 zeros + point target)");
         let proc = build_synthetic_processor(cli.no_rcmc);
         let data = generate_synthetic_point_target(1024, 1024, 512, 512);
-        (proc, data, false, None)
+        let fake_bbox = sar_processor::nisar_parser::GeoBoundingBox {
+            south: 35.6895, north: 35.7000, west: 139.6917, east: 139.7000, // Tokyo
+        };
+        (proc, data, false, Some(fake_bbox))
     } else {
         let input = cli
             .input
@@ -153,14 +164,14 @@ async fn main() -> Result<()> {
     // ── Run RDA Pipeline (or skip for pre-processed products) ──────────────
     let focused = if skip_rda {
         info!("Rendering pre-processed data directly ({}×{})", raw_data.nrows(), raw_data.ncols());
-        raw_data
+        raw_data.clone()
     } else {
         info!("Starting RDA pipeline on {}×{} image...", raw_data.nrows(), raw_data.ncols());
         processor.process_rda(&raw_data)
     };
 
     // ── Save Output ────────────────────────────────────────────────────────
-    if let Some(tile_dir) = cli.tiles_dir {
+    let output_png = if let Some(tile_dir) = cli.tiles_dir {
         info!("Generating deep-zoom XYZ tiles → {}", tile_dir);
         generate_xyz_tiles(focused.view(), &tile_dir, 0)?;
         info!("✓ Done. Web tiles written to: {}", tile_dir);
@@ -175,6 +186,7 @@ async fn main() -> Result<()> {
             println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}", 
                 bb.south, bb.north, bb.west, bb.east);
         }
+        format!("{}/0/0/0.png", tile_dir) // mock
     } else {
         info!("Saving SAR image → {}", cli.output);
         save_sar_image(focused.view(), &cli.output)?;
@@ -190,6 +202,111 @@ async fn main() -> Result<()> {
             println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}", 
                 bb.south, bb.north, bb.west, bb.east);
         }
+        cli.output.clone()
+    };
+
+    // ── Run InSAR & Infrastructure Health Pipeline ──────────────────────────
+    if let Some(slave_path) = cli.insar_slave {
+        info!("Starting InSAR pipeline with slave image: {:?}", slave_path);
+        let ext = slave_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        
+        let slave_data = match ext.as_str() {
+            "h5" | "hdf5" | "he5" => {
+                let product = nisar_parser::parse_nisar_auto(&slave_path, &cli.polarization)?;
+                
+                if cli.limit_lines > 0 {
+                    let limit = cli.limit_lines.min(product.slc.nrows());
+                    product.slc.slice(ndarray::s![..limit, ..]).to_owned()
+                } else {
+                    product.slc
+                }
+            }
+            _ => anyhow::bail!("Unsupported slave format. Use .h5 for NISAR."),
+        };
+        
+        info!("Computing interferogram and coherence matrix...");
+        let ifgram = sar_processor::insar::compute_interferogram(&raw_data, &slave_data);
+        let coherence = sar_processor::insar::estimate_coherence(&raw_data, &slave_data, 5);
+        
+        info!("Analyzing persistent scatterers (PS) for infrastructure health...");
+        // Assuming L-band NISAR (0.24m wavelength)
+        let report = sar_processor::infra_health::analyze_infrastructure_health(
+            &raw_data,
+            &ifgram, 
+            &coherence, 
+            bbox.clone().map(|b| [b.south, b.west, b.north, b.east]),
+            0.24
+        );
+        
+        let report_path = output_png.clone().replace(".png", "_insar.json");
+        std::fs::write(&report_path, serde_json::to_string_pretty(&report)?)?;
+        info!("✓ Infrastructure health report written: {}", report_path);
+        
+        println!("{{\"event\":\"insar_report\",\"path\":\"{}\"}}", report_path);
+    }
+
+    // ── Run Ship Detection (CFAR) ──────────────────────────────────────────
+    if cli.ship_detect {
+        info!("Running CA-CFAR Ship Detection module...");
+        let native_rows = focused.nrows();
+        let native_cols = focused.ncols();
+
+        // Step 1: Compute native intensity (|z|² = re² + im²)
+        info!("Computing native intensity array ({}×{})...", native_rows, native_cols);
+        let mut native_intensity = ndarray::Array2::<f32>::zeros((native_rows, native_cols));
+
+        use rayon::prelude::*;
+        native_intensity.axis_iter_mut(ndarray::Axis(0))
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(r, mut row_view)| {
+                for c in 0..native_cols {
+                    let p = focused[[r, c]];
+                    if p.re.is_finite() && p.im.is_finite() {
+                        row_view[c] = p.re.powi(2) + p.im.powi(2);
+                    }
+                }
+            });
+
+        // Step 2: Downsample 8x to prevent CPU/RAM blowup
+        //   16020×16560 → ~2002×2070  (manageable for CFAR)
+        let ds_factor = 8;
+        let ds_image = sar_processor::ship_detection::downsample_intensity(
+            native_intensity.view(),
+            ds_factor,
+        );
+        let ds_rows = ds_image.nrows();
+        let ds_cols = ds_image.ncols();
+
+        // Step 3: Run integral-image accelerated CA-CFAR
+        //   guard=4, bg=10 (per cfar.txt research: small windows for GCOV)
+        //   pfa=1e-6, max 50 detections to prevent browser crash
+        let targets = sar_processor::ship_detection::detect_ships_cfar(
+            ds_image.view(),
+            4,      // guard radius
+            10,     // background radius
+            1e-6,   // probability of false alarm
+            50,     // max detections (hard cap)
+        );
+
+        // Step 4: Convert downsampled pixel coords → geographic lat/lon
+        #[derive(serde::Serialize)]
+        struct OutputShip { lat: f64, lon: f64, intensity: f32 }
+
+        let mut final_ships = Vec::new();
+        for t in targets {
+            if let Some(ref bb) = bbox {
+                // Map pixel position in the downsampled grid to [0, 1] then to geo
+                let lat = bb.north - ((t.y as f64 / ds_rows as f64) * (bb.north - bb.south));
+                let lon = bb.west + ((t.x as f64 / ds_cols as f64) * (bb.east - bb.west));
+                final_ships.push(OutputShip { lat, lon, intensity: t.intensity });
+            }
+        }
+
+        let ships_path = output_png.replace(".png", "_ships.json");
+        std::fs::write(&ships_path, serde_json::to_string_pretty(&final_ships)?)?;
+        info!("✓ CFAR: {} ship targets written to {}", final_ships.len(), ships_path);
+        println!("{{\"event\":\"ships_detected\",\"path\":\"{}\"}}", ships_path);
     }
 
     Ok(())

@@ -41,7 +41,12 @@ pub async fn start_job_handler(
     Json(payload): Json<ProcessRequest>,
 ) -> Json<serde_json::Value> {
     let is_synthetic = payload.synthetic.unwrap_or(false);
-    let job_id = crate::jobs::spawn_processing_job(state.clone(), payload.input_file, is_synthetic).await;
+    let job_id = crate::jobs::spawn_processing_job(
+        state.clone(), 
+        payload.input_file, 
+        is_synthetic,
+        payload.pipeline
+    ).await;
     
     Json(json!({
         "job_id": job_id,

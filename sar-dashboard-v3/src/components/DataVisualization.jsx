@@ -1,206 +1,308 @@
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { Leaf, Building2, Trees, ShieldAlert, Pickaxe, Shield, ChevronRight } from 'lucide-react'
+import { ChevronRight, ArrowRight } from 'lucide-react'
 
-const industries = [
+// ─── DOMAIN INTELLIGENCE CONFIG ────────────────────────────────AAAAAAAA────
+
+const DOMAINS = [
     {
-        icon: <Leaf size={28} className="text-green-500" />,
-        title: 'Agriculture',
-        description: 'Precision farming with crop health monitoring, soil moisture analysis, and yield prediction using multi-temporal SAR.',
-        applications: ['Crop Health', 'Soil Moisture', 'Yield Prediction'],
-        color: '#22c55e',
-        link: '/use-cases#agriculture'
+        id: 'maritime',
+        title: 'MARITIME',
+        accent: '#00f0ff',
+        logs: [
+            "[SYS] CFAR pipeline initialized.",
+            "[PROC] Threshold = 10^-6, scanning Sector 8A...",
+            "[TGT] Anomaly detected: -42dBc | 41.2°N 71.9°W",
+            "[CLASS] Signature match: Large Commercial Vessel.",
+            "[TRK] Kinematics locking... heading 045° at 14.2kts.",
+            "[SYS] Real-time surveillance package updated."
+        ],
+        description: "Dark vessel tracking and deep ocean surveillance using uncompromised L-band penetration."
     },
     {
-        icon: <Building2 size={28} className="text-purple-500" />,
-        title: 'Urban Planning',
-        description: 'Monitor infrastructure stability, track urban expansion, and detect mm-level ground subsidence with InSAR.',
-        applications: ['Subsidence', 'Infrastructure', 'Construction'],
-        color: '#a855f7',
-        link: '/use-cases#urban'
+        id: 'infrastructure',
+        title: 'STRUCTURAL',
+        accent: '#f59e0b',
+        logs: [
+            "[DATA] Loading SLC stacks for urban grid #044.",
+            "[PROC] Coregistering temporal baselines...",
+            "[CALC] Executing Persistent Scatterer filtering...",
+            "[WARN] Subsidence detected > 4mm/yr at Zone 3.",
+            "[WARN] Thermal expansion flags triggered on deck.",
+            "[SYS] Vector displacement mapping exported."
+        ],
+        description: "Millimeter-level deformation intelligence for dams, bridges, and critical urban nodes."
     },
     {
-        icon: <Trees size={28} className="text-cyan-500" />,
-        title: 'Environmental',
-        description: 'Track deforestation, monitor glaciers, detect oil spills, and quantify carbon for climate action.',
-        applications: ['Deforestation', 'Glaciers', 'Oil Spills'],
-        color: '#06b6d4',
-        link: '/use-cases#environment'
-    },
-    {
-        icon: <ShieldAlert size={28} className="text-red-500" />,
-        title: 'Disaster Response',
-        description: 'Rapid flood mapping, earthquake damage assessment, and landslide prediction when every minute counts.',
-        applications: ['Floods', 'Earthquakes', 'Landslides'],
-        color: '#ef4444',
-        link: '/use-cases#disaster'
-    },
-    {
-        icon: <Pickaxe size={28} className="text-amber-500" />,
-        title: 'Mining & Resources',
-        description: 'Detect mineral deposits, monitor land stability, track excavation, and ensure environmental compliance.',
-        applications: ['Deposits', 'Stability', 'Compliance'],
-        color: '#f59e0b',
-        link: '/use-cases#mining'
-    },
-    {
-        icon: <Shield size={28} className="text-pink-500" />,
-        title: 'Defense & Security',
-        description: 'ISR missions, change detection, maritime surveillance, and border security — all-weather, day-night.',
-        applications: ['ISR', 'Surveillance', 'Maritime'],
-        color: '#ec4899',
-        link: '/use-cases#defense'
+        id: 'sar',
+        title: 'CORE InSAR',
+        accent: '#3b82f6',
+        logs: [
+            "[ACQ] Fetching Sentinel-1/NISAR dual-pol feeds...",
+            "[PROC] Generating raw complex backscatter...",
+            "[INTR] Phase unwrapping via SNAPHU initialized.",
+            "[DEM] Topographic phase removal converging.",
+            "[COH] Coherence mask threshold > 0.4.",
+            "[SYS] Synthetic aperture array focused."
+        ],
+        description: "Raw phase intelligence and complex interferometry pushing the limits of physics."
     }
-]
+];
 
-function DataVisualization() {
+// ─── VISUALIZER COMPONENTS ──────────────────────────────────────────────────
+
+function MaritimeVisualizer() {
     return (
-        <section style={{
-            padding: '120px 0',
-            background: '#040404',
-            position: 'relative',
-            overflow: 'hidden'
-        }}>
-            <div className="container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem' }}>
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    style={{ textAlign: 'center', marginBottom: '80px' }}
-                >
-                    <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        padding: '6px 16px',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: '100px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em',
-                        color: '#94a3b8',
-                        marginBottom: '24px'
-                    }}>
-                        Use Cases
-                    </div>
-                    <h2 style={{ fontSize: 'clamp(2.5rem, 4vw, 3.5rem)', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.02em', marginBottom: '16px' }}>
-                        SAR for <span style={{ color: '#94a3b8' }}>Every Sector</span>
-                    </h2>
-                    <p style={{ color: '#94a3b8', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto' }}>
-                        Process any SAR data for actionable insights across industries, regardless of weather or daylight.
-                    </p>
-                </motion.div>
-
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-                    gap: '24px',
+        <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#020617' }}>
+            {/* Radar Sweep */}
+            <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                style={{ 
+                    position: 'absolute', top: '50%', left: '50%', width: '150%', height: '150%',
+                    background: 'conic-gradient(from 0deg, transparent 70%, rgba(0, 240, 255, 0.4) 100%)',
+                    transformOrigin: '0 0',
+                    borderRight: '2px solid #00f0ff',
+                    zIndex: 1
+                }} 
+            />
+            {/* Target Pings */}
+            {[0, 1, 2].map(i => (
+                <div key={i} style={{ 
+                    position: 'absolute', 
+                    top: `${30 + i * 20}%`, left: `${40 + i * 15}%`, 
+                    zIndex: 2, display: 'flex', alignItems: 'center', gap: '8px' 
                 }}>
-                    {industries.map((industry, index) => (
-                        <motion.div
-                            key={industry.title}
-                            initial={{ opacity: 0, y: 30 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: index * 0.1 }}
-                            whileHover={{ y: -4, borderColor: `rgba(${industry.color}, 0.5)` }}
-                            style={{
-                                background: 'rgba(255, 255, 255, 0.02)',
-                                border: '1px solid rgba(255, 255, 255, 0.05)',
-                                borderRadius: '20px',
-                                padding: '32px',
-                                position: 'relative',
-                                overflow: 'hidden',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                transition: 'all 0.3s ease',
-                                cursor: 'pointer'
-                            }}
-                            onMouseEnter={e => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
-                                e.currentTarget.style.boxShadow = `0 8px 32px ${industry.color}15`;
-                            }}
-                            onMouseLeave={e => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
-                        >
-                            {/* Top accent line */}
-                            <div style={{
-                                position: 'absolute',
-                                top: 0, left: 0, right: 0, height: '2px',
-                                background: `linear-gradient(90deg, transparent, ${industry.color}, transparent)`
-                            }} />
-
-                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                                {/* Icon */}
-                                <div style={{
-                                    width: '48px', height: '48px',
-                                    borderRadius: '12px',
-                                    background: `${industry.color}15`,
-                                    border: `1px solid ${industry.color}30`,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    marginBottom: '24px'
-                                }}>
-                                    {industry.icon}
-                                </div>
-
-                                {/* Title & Desc */}
-                                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#ffffff', marginBottom: '12px' }}>
-                                    {industry.title}
-                                </h3>
-                                <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '24px', flexGrow: 1 }}>
-                                    {industry.description}
-                                </p>
-
-                                {/* Tags */}
-                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '32px' }}>
-                                    {industry.applications.map(app => (
-                                        <span key={app} style={{
-                                            padding: '4px 10px',
-                                            background: `${industry.color}10`,
-                                            border: `1px solid ${industry.color}20`,
-                                            borderRadius: '6px',
-                                            fontSize: '0.75rem',
-                                            fontFamily: '"JetBrains Mono", monospace',
-                                            color: industry.color
-                                        }}>
-                                            {app}
-                                        </span>
-                                    ))}
-                                </div>
-
-                                {/* Link */}
-                                < Link to={industry.link} style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                    color: industry.color, textDecoration: 'none',
-                                    fontSize: '0.9rem', fontWeight: 500
-                                }}>
-                                    Explore use cases <ChevronRight size={16} />
-                                </Link>
-                            </div>
-                        </motion.div>
-                    ))
-                    }
-                </div >
-
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '64px' }}>
-                    <Link to="/use-cases" style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '8px',
-                        padding: '12px 28px', background: '#ffffff', color: '#000000',
-                        borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, textDecoration: 'none',
-                        transition: 'transform 0.2s ease', boxShadow: '0 0 24px rgba(255,255,255,0.1)'
-                    }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-                    >
-                        View All Use Cases <ChevronRight size={18} />
-                    </Link>
+                    <motion.div 
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: [0, 1.5, 1], opacity: [0, 1, 0.4] }}
+                        transition={{ duration: 2, repeat: Infinity, delay: i * 1.5, ease: "easeOut" }}
+                        style={{ width: '10px', height: '10px', background: '#00f0ff', borderRadius: '50%', boxShadow: '0 0 20px #00f0ff' }}
+                    />
+                    <div style={{ color: '#00f0ff', fontSize: '10px', fontFamily: '"JetBrains Mono", monospace' }}>TGT-{100+i}</div>
                 </div>
-            </div >
-        </section >
+            ))}
+        </div>
     )
 }
 
-export default DataVisualization
+function InfrastructureVisualizer() {
+    return (
+        <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#050505', display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gridTemplateRows: 'repeat(10, 1fr)', gap: '4px', padding: '20px' }}>
+            {Array.from({ length: 100 }).map((_, i) => {
+                const isUnstable = i % 13 === 0 || i % 29 === 0;
+                return (
+                    <motion.div 
+                        key={i}
+                        animate={isUnstable ? { opacity: [0.3, 1, 0.3], scale: [1, 1.2, 1] } : { opacity: 0.2 }}
+                        transition={{ duration: 1 + Math.random(), repeat: Infinity, ease: "easeInOut" }}
+                        style={{ 
+                            background: isUnstable ? '#f59e0b' : '#10b981',
+                            borderRadius: '2px',
+                            boxShadow: isUnstable ? '0 0 10px #f59e0b' : 'none'
+                        }}
+                    />
+                )
+            })}
+            <div style={{ position: 'absolute', bottom: '20px', left: '20px', color: '#10b981', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>STABLE</div>
+            <div style={{ position: 'absolute', bottom: '20px', right: '20px', color: '#f59e0b', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace' }}>WARPING</div>
+        </div>
+    )
+}
+
+function InSARVisualizer() {
+    return (
+        <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#000' }}>
+            <svg width="100%" height="100%">
+                <defs>
+                    <radialGradient id="phaseGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.8" />
+                        <stop offset="33%" stopColor="#ef4444" stopOpacity="0.8" />
+                        <stop offset="66%" stopColor="#10b981" stopOpacity="0.8" />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.8" />
+                    </radialGradient>
+                    <filter id="displacement">
+                        <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" result="noise" />
+                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="50" xChannelSelector="R" yChannelSelector="G" />
+                    </filter>
+                </defs>
+                <motion.rect 
+                    width="100%" height="100%" fill="url(#phaseGrad)" filter="url(#displacement)"
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                />
+            </svg>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.5) 2px, rgba(0,0,0,0.5) 4px)' }} />
+            <div style={{ position: 'absolute', top: '20px', left: '20px', color: '#fff', fontSize: '12px', fontFamily: '"JetBrains Mono", monospace', textShadow: '0 0 10px #000' }}>PHASE UNWRAPPING // 2π CYCLE</div>
+        </div>
+    )
+}
+
+// ─── MAIN COMPONENT ─────────────────────────────────────────────────────────
+
+export default function DataVisualization() {
+    const [activeIndex, setActiveIndex] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setActiveIndex((current) => (current + 1) % DOMAINS.length);
+        }, 6000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const activeDomain = DOMAINS[activeIndex];
+
+    return (
+        <section style={{ 
+            background: '#050a14', 
+            padding: '120px 0', 
+            borderTop: '1px solid rgba(255,255,255,0.05)',
+            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            minHeight: '80vh',
+            display: 'flex',
+            alignItems: 'center'
+        }}>
+            <div className="container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 2rem' }}>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4vw', alignItems: 'stretch' }}>
+                    
+                    {/* LEFT PANE: Typography & Intelligence Feed */}
+                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ 
+                            fontFamily: '"JetBrains Mono", monospace', 
+                            color: activeDomain.accent, 
+                            fontSize: '0.85rem', 
+                            letterSpacing: '2px',
+                            marginBottom: '20px'
+                        }}>
+                            0{activeIndex + 1} // DOMAIN INTELLIGENCE
+                        </div>
+                        
+                        <AnimatePresence mode="wait">
+                            <motion.h2 
+                                key={activeDomain.id}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                                style={{ 
+                                    fontFamily: '"Space Grotesk", sans-serif',
+                                    fontSize: 'clamp(3rem, 5vw, 6rem)', 
+                                    fontWeight: 800, 
+                                    color: '#fff',
+                                    lineHeight: 0.9,
+                                    margin: '0 0 24px 0',
+                                    textShadow: `0 10px 40px ${activeDomain.accent}30`
+                                }}
+                            >
+                                {activeDomain.title}
+                            </motion.h2>
+                        </AnimatePresence>
+
+                        <p style={{ 
+                            fontFamily: '"Outfit", sans-serif',
+                            color: 'rgba(255,255,255,0.6)', 
+                            fontSize: '1.1rem', 
+                            lineHeight: 1.6, 
+                            marginBottom: '40px',
+                            maxWidth: '90%'
+                        }}>
+                            {activeDomain.description}
+                        </p>
+
+                        {/* Terminal Log Output */}
+                        <div style={{ 
+                            background: 'rgba(0,0,0,0.4)', 
+                            border: '1px solid rgba(255,255,255,0.1)', 
+                            borderLeft: `3px solid ${activeDomain.accent}`,
+                            padding: '24px', 
+                            borderRadius: '4px',
+                            minHeight: '200px'
+                        }}>
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={activeDomain.id}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0 }}
+                                    style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+                                >
+                                    {activeDomain.logs.map((log, i) => (
+                                        <motion.div 
+                                            key={i}
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: i * 0.4, duration: 0.3 }}
+                                            style={{ 
+                                                fontFamily: '"JetBrains Mono", monospace',
+                                                fontSize: '0.8rem',
+                                                color: log.includes('[WARN]') ? '#ef4444' : log.includes('[TGT]') ? '#00f0ff' : 'rgba(255,255,255,0.7)',
+                                            }}
+                                        >
+                                            {log}
+                                        </motion.div>
+                                    ))}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
+
+                        <div style={{ marginTop: '48px' }}>
+                            <Link to="/use-cases" style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '12px',
+                                padding: '16px 32px', border: '1px solid #fff', borderRadius: '0px',
+                                color: '#fff', fontSize: '0.95rem', fontWeight: 600, textDecoration: 'none',
+                                fontFamily: '"Outfit", sans-serif', textTransform: 'uppercase', letterSpacing: '1px',
+                                transition: 'all 0.3s ease'
+                            }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.background = '#fff';
+                                    e.currentTarget.style.color = '#000';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = 'transparent';
+                                    e.currentTarget.style.color = '#fff';
+                                }}
+                            >
+                                Enter Mission Control <ArrowRight size={18} />
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* RIGHT PANE: Live Visualization Window */}
+                    <div style={{ 
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        background: '#000',
+                        borderRadius: '0px',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        minHeight: '600px',
+                        boxShadow: `0 20px 80px ${activeDomain.accent}20`
+                    }}>
+                        <div style={{ 
+                            position: 'absolute', top: 0, left: 0, right: 0, 
+                            borderBottom: '1px solid rgba(255,255,255,0.1)', 
+                            background: 'rgba(255,255,255,0.03)',
+                            padding: '12px 20px',
+                            display: 'flex', gap: '8px', zIndex: 10
+                        }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }}/>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }}/>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981' }}/>
+                        </div>
+
+                        <div style={{ position: 'absolute', inset: '45px 0 0 0' }}>
+                            <AnimatePresence mode="wait">
+                                {activeIndex === 0 && <motion.div key="mar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }} style={{ width: '100%', height: '100%' }}><MaritimeVisualizer /></motion.div>}
+                                {activeIndex === 1 && <motion.div key="inf" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }} style={{ width: '100%', height: '100%' }}><InfrastructureVisualizer /></motion.div>}
+                                {activeIndex === 2 && <motion.div key="sar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }} style={{ width: '100%', height: '100%' }}><InSARVisualizer /></motion.div>}
+                            </AnimatePresence>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    );
+}

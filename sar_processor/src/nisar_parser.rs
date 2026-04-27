@@ -386,6 +386,56 @@ fn extract_bbox_from_identification(file: &File) -> Option<GeoBoundingBox> {
         return Some(GeoBoundingBox { south: s, north: n, west: w, east: e });
     }
 
+    // Try WKT boundingPolygon parsing using raw bytes
+    let poly_path = format!("{}/boundingPolygon", base);
+    
+    // We do a manual dataset parsing to grab raw byte strings
+    if let Ok(dataset) = file.dataset(&poly_path) {
+        let file_data = file.as_bytes();
+        let sb = file.superblock();
+        if let Ok(addr) = rustyhdf5_format::group_v2::resolve_path_any(file_data, sb, &poly_path) {
+            if let Ok(header) = rustyhdf5_format::object_header::ObjectHeader::parse(file_data, addr as usize, sb.offset_size, sb.length_size) {
+                 use rustyhdf5_format::message_type::MessageType;
+                 let dl_msg = header.messages.iter().find(|m| m.msg_type == MessageType::DataLayout);
+                 let ds_msg = header.messages.iter().find(|m| m.msg_type == MessageType::Dataspace);
+                 let dt_msg = header.messages.iter().find(|m| m.msg_type == MessageType::Datatype);
+
+                 if let (Some(dl_m), Some(ds_m), Some(dt_m)) = (dl_msg, ds_msg, dt_msg) {
+                     if let (Ok(dl), Ok(ds), Ok((dt, _))) = (
+                         rustyhdf5_format::data_layout::DataLayout::parse(&dl_m.data, sb.offset_size, sb.length_size),
+                         rustyhdf5_format::dataspace::Dataspace::parse(&ds_m.data, sb.length_size),
+                         rustyhdf5_format::datatype::Datatype::parse(&dt_m.data)
+                     ) {
+                         if let Ok(raw_bytes) = rustyhdf5_format::data_read::read_raw_data_full(file_data, &dl, &ds, &dt, None, sb.offset_size, sb.length_size) {
+                             if let Ok(wkt_str) = std::str::from_utf8(&raw_bytes) {
+                                 let wkt_str = wkt_str.trim_end_matches(char::from(0)); // strip nulls
+                                 info!("  Found boundingPolygon WKT ({} bytes)", wkt_str.len());
+                                 
+                                 let mut lats = Vec::new();
+                                 let mut lons = Vec::new();
+                                 let coords: Vec<&str> = wkt_str.split(|c| c == '(' || c == ')' || c == ',').collect();
+                                 
+                                 for chunk in coords {
+                                     let parts: Vec<&str> = chunk.trim().split_whitespace().collect();
+                                     if parts.len() >= 2 {
+                                         if let (Ok(lon), Ok(lat)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                                             lons.push(lon);
+                                             lats.push(lat);
+                                         }
+                                     }
+                                 }
+                                 if let Some(bbox) = GeoBoundingBox::from_bounds(&lats, &lons) {
+                                     info!("  Extracted WKT bbox: [{:.4}, {:.4}] → [{:.4}, {:.4}]", bbox.south, bbox.west, bbox.north, bbox.east);
+                                     return Some(bbox);
+                                 }
+                             }
+                         }
+                     }
+                 }
+            }
+        }
+    }
+
     None
 }
 

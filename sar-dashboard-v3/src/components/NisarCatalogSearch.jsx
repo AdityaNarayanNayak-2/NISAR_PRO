@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Map as MapIcon, Calendar, Satellite, LayoutList, Layers } from 'lucide-react';
+import { api } from '../config/api';
 
 function NisarCatalogSearch({ bounds, onSceneSelect }) {
     const [startDate, setStartDate] = useState('2026-01-01');
@@ -23,7 +24,7 @@ function NisarCatalogSearch({ bounds, onSceneSelect }) {
 
             const bbox = `${minLon},${minLat},${maxLon},${maxLat}`;
             
-            const res = await fetch(`http://localhost:3000/search/nisar?bbox=${bbox}&start_date=${startDate}T00:00:00Z&end_date=${endDate}T23:59:59Z`);
+            const res = await fetch(api(`/search/nisar?bbox=${bbox}&start_date=${startDate}T00:00:00Z&end_date=${endDate}T23:59:59Z`));
             const data = await res.json();
             setResults(data);
         } catch (error) {

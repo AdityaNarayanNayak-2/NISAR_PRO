@@ -254,3 +254,7 @@ Once all checks pass:
 1. Connect "Process" button to spawn processor pods
 2. Implement real L0 data ingestion (not synthetic)
 3. Add InSAR for 3D height maps
+
+
+
+

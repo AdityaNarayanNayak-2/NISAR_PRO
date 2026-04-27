@@ -20,3 +20,6 @@ pub mod rcmc;
 pub mod rda;
 pub mod safe_parser;
 pub mod smart_downloader;
+pub mod insar;
+pub mod infra_health;
+pub mod ship_detection;

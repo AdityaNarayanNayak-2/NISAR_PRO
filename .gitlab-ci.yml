@@ -3,12 +3,11 @@ stages:
   - test
   - package
   - security
+  - deploy
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
-  # Use the overlay driver for better performance
   DOCKER_DRIVER: overlay2
-  # Disable TLS verification for simple setups (optional, but good for some envs)
   DOCKER_TLS_CERTDIR: ""
 
 # Cache configuration for Rust
@@ -27,9 +26,11 @@ variables:
   cache:
     key: ${CI_COMMIT_REF_SLUG}-node
     paths:
-      - sar-dashboard-v2/node_modules/
+      - sar-dashboard-v3/node_modules/
 
-# --- Rust Jobs ---
+# ═══════════════════════════════════════
+# Rust Jobs
+# ═══════════════════════════════════════
 
 build_rust:
   stage: build
@@ -92,9 +93,11 @@ audit_rust:
     - cd ../sar_operator_v2 && cargo audit
     - cd ../sar-gateway && cargo audit
 
-# --- Node.js Jobs ---
+# ═══════════════════════════════════════
+# Node.js / Dashboard Jobs
+# ═══════════════════════════════════════
 
-build_dashboard_code:
+build_dashboard:
   stage: build
   image: node:20
   <<: *node_cache
@@ -104,13 +107,40 @@ build_dashboard_code:
         - sar-dashboard-v3/**/*
   script:
     - cd sar-dashboard-v3
-    - npm install
+    - npm ci --prefer-offline
     - npm run build
   artifacts:
     paths:
       - sar-dashboard-v3/dist/
 
-# --- Docker Build & Push (GitLab Registry) ---
+# ═══════════════════════════════════════
+# GitLab Pages — Frontend Deployment
+# ═══════════════════════════════════════
+# The dashboard is deployed as a static site on GitLab Pages.
+# Users run the Rust backend on their own machines.
+# The dashboard connects to localhost:3000 by default.
+
+pages:
+  stage: deploy
+  image: node:20
+  <<: *node_cache
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - cd sar-dashboard-v3
+    - npm ci --prefer-offline
+    - GITLAB_PAGES=true npm run build
+    # GitLab Pages requires the output in a top-level "public" directory
+    - mv dist ../public
+    # SPA fallback: GitLab Pages serves 404.html for unknown routes
+    - cp ../public/index.html ../public/404.html
+  artifacts:
+    paths:
+      - public
+
+# ═══════════════════════════════════════
+# Docker Build & Push (GitLab Registry)
+# ═══════════════════════════════════════
 
 docker_build_gateway:
   stage: package
@@ -134,7 +164,7 @@ docker_build_dashboard:
   services:
     - docker:dind
   dependencies:
-    - build_dashboard_code
+    - build_dashboard
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
       changes:

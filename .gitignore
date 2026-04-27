@@ -1,5 +1,10 @@
-# Documentation
-# Docs/
+# Documentation — excluded files
+Docs/nisar_pro_interview_cheat_sheet.md
+Docs/verification-guide.md
+Docs/abcd.md
+
+# Pseudocode / scratch
+psuedocode/
 
 # Rust Build Artifacts
 target/
@@ -7,8 +12,12 @@ target/
 
 # Node/React Build Artifacts
 node_modules/
+dist/
 sar-dashboard-v2/node_modules/
 sar-dashboard-v2/build/
+
+# Processing results (generated at runtime)
+sar-gateway/results/
 
 # Docker Archives
 *.tar
@@ -17,7 +26,6 @@ sar-dashboard-v2/build/
 .DS_Store
 .vscode/
 .idea/
-.tar
 
 # Secrets & Env Vars
 k8s_manifests/esa_secret.yaml
@@ -25,5 +33,5 @@ k8s_manifests/esa_secret.yaml
 .env
 *.secret.yaml
 
-# Research /
+# Research
 Research/

@@ -68,3 +68,16 @@ RUST_LOG=info
 - Read the [Architecture](./architecture.md) to understand the system
 - Check [API Reference](./api-reference.md) for endpoint details
 - See [Contributing](./contributing.md) to submit your first PR
+
+
+
+
+
+## Run SAR Processor
+cd sar-gateway
+LOCAL_MODE=true RUST_LOG=info cargo run --release
+
+
+## Run Dashboard
+cd sar-dashboard-v3
+npm run dev

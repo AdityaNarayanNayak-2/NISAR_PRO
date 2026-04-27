@@ -91,6 +91,7 @@ pub async fn spawn_processing_job(
     state: crate::AppState,
     input_file: Option<String>,
     _is_synthetic: bool,
+    pipeline: Option<String>,
 ) -> String {
     let job_id = format!("sar-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
     let (tx, _rx) = broadcast::channel(256);
@@ -116,14 +117,14 @@ pub async fn spawn_processing_job(
         // LOCAL SUBPROCESS MODE: spawn sar_processor as a child process
         // ═══════════════════════════════════════════════════════════════
         tokio::spawn(async move {
-            spawn_local_job(job_id_clone, input_file, metadata).await;
+            spawn_local_job(job_id_clone, input_file, metadata, pipeline).await;
         });
     } else {
         // ═══════════════════════════════════════════════════════════════
         // K8S MODE: create SarJob CRD (existing behavior)
         // ═══════════════════════════════════════════════════════════════
         tokio::spawn(async move {
-            spawn_k8s_job(job_id_clone, input_file, metadata).await;
+            spawn_k8s_job(job_id_clone, input_file, metadata, pipeline).await;
         });
     }
 
@@ -135,6 +136,7 @@ async fn spawn_local_job(
     job_id: String,
     input_file: Option<String>,
     metadata: Arc<RwLock<JobMetadata>>,
+    pipeline: Option<String>,
 ) {
     let results_dir = std::path::Path::new("results");
     if !results_dir.exists() {
@@ -158,7 +160,15 @@ async fn spawn_local_job(
         cmd.args(["--synthetic", "--output", &output_path]);
     } else {
         let input = input_file.unwrap_or_default();
-        cmd.args(["--input", &input, "--output", &output_path, "-p", "HH"]);
+        cmd.args(["--input", &input, "--output", &output_path]);
+        
+        if pipeline.as_deref() == Some("insar") {
+            // For testing: we simulate a slave image by just passing the same input file 
+            // OR a distinct file if it exists. Reusing input file serves as zero baseline.
+            cmd.args(["--insar-slave", &input]);
+        } else if pipeline.as_deref() == Some("cfar") {
+            cmd.args(["--ship-detect"]);
+        }
     }
 
     {
@@ -268,6 +278,7 @@ async fn spawn_k8s_job(
     job_id: String,
     input_file: Option<String>,
     metadata: Arc<RwLock<JobMetadata>>,
+    _pipeline: Option<String>,
 ) {
     let results_dir = std::path::Path::new("results");
     if !results_dir.exists() {

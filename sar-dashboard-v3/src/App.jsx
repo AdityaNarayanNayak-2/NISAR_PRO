@@ -1,39 +1,46 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
+import { useState } from 'react'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
+import ConnectionSetup from './components/ConnectionSetup'
 import HomePage from './pages/HomePage'
-import TechnologyPage from './pages/TechnologyPage'
+import DocsPage from './pages/DocsPage'
 import UseCasesPage from './pages/UseCasesPage'
+import AcademyPage from './pages/Academy/AcademyPage'
 
 // App
 import AppLayout from './pages/app/AppLayout'
 import AppDashboard from './pages/app/AppDashboard'
+import { isGatewayConfigured } from './config/api'
 
 import './App.css'
 
 function App() {
   const location = useLocation();
   const isAppDashboard = location.pathname.startsWith('/app');
+  const isImmersive = location.pathname === '/use-cases' || location.pathname.startsWith('/docs');
+  const hideChrome = isAppDashboard || isImmersive;
 
   return (
     <>
       {/* Background Effects */}
-      {!isAppDashboard && (
+      {!hideChrome && (
         <>
           <div className="bg-gradient-mesh" />
           <div className="bg-grid" />
         </>
       )}
 
-      {!isAppDashboard && <Navbar />}
+      {!hideChrome && <Navbar />}
 
       <AnimatePresence mode="wait">
         <Routes>
           {/* Marketing Pages */}
           <Route path="/" element={<HomePage />} />
-          <Route path="/technology" element={<TechnologyPage />} />
+          <Route path="/docs" element={<DocsPage />} />
           <Route path="/use-cases" element={<UseCasesPage />} />
+          <Route path="/academy" element={<AcademyPage />} />
 
           {/* App */}
           <Route path="/app" element={<AppLayout />}>
@@ -42,7 +49,7 @@ function App() {
         </Routes>
       </AnimatePresence>
 
-      {!isAppDashboard && <Footer />}
+      {!hideChrome && <Footer />}
     </>
   )
 }
