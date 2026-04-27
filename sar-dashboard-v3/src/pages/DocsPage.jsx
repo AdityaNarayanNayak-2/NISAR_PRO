@@ -173,23 +173,25 @@ const PageQuickstart = () => (
     <div>
         <Header
             title="Quick Start"
-            desc="Go from zero to a processed SAR image in under 10 minutes. This guide uses Local Mode — no Kubernetes required."
+            desc="Connect the public NISARPro web dashboard to your local processing engine."
         />
 
-        <Alert type="note" title="Two Modes Available">
-            NISARPro runs in <strong>Local Mode</strong> (default — spawns <code>sar_processor</code> as a subprocess) or <strong>Kubernetes Mode</strong> (creates a <code>SarJob</code> CRD reconciled by the operator). This guide covers Local Mode. See the <em>Deployment Guide</em> for K8s.
+        <Alert type="success" title="Data Sovereignty & Security First">
+            NISARPro is designed around a **Zero-Upload Architecture**. We believe highly sensitive SAR imagery shouldn't be stored on third-party servers.
+            <ul style={{ margin: '0.75rem 0 0 1.5rem', padding: 0, lineHeight: 1.6 }}>
+                <li><strong>Absolute Privacy:</strong> Storing strategic infrastructure or proprietary monitoring data on a public cloud is a major security risk. With NISARPro, your raw data and processed images never leave your local hard drive.</li>
+                <li><strong>No Server Breaches:</strong> Because the web dashboard only sends API commands and never receives your actual files, there is zero risk of your imagery being leaked or compromised by a server hack.</li>
+                <li><strong>Massive Data Handling:</strong> NASA SAR files are 1GB to 8GB each. Uploading them to a remote server would take hours; processing locally is instant.</li>
+            </ul>
         </Alert>
 
         <H2 id="prerequisites">Prerequisites</H2>
-        <P>Install these tools before you begin. Click each card to visit the official install page.</P>
+        <P>Install these tools on your local machine to run the processing engine. Click each card to visit the official install page.</P>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px', margin: '1.5rem 0 2.5rem' }}>
             <PrereqCard name="Rust + Cargo" version="≥ 1.70 (stable)" url="https://rustup.rs" required={true} />
-            <PrereqCard name="Node.js" version="≥ 20 LTS" url="https://nodejs.org" required={true} />
             <PrereqCard name="Git" version="any" url="https://git-scm.com" required={true} />
             <PrereqCard name="HDF5 system library" version="libhdf5-dev" url="https://www.hdfgroup.org" required={true} />
-            <PrereqCard name="Docker / Podman" version="latest" url="https://www.docker.com" required={false} />
-            <PrereqCard name="kubectl + Kind" version="latest" url="https://kind.sigs.k8s.io" required={false} />
         </div>
 
         <Alert type="warning" title="Linux (Ubuntu/Debian) — HDF5 dependency">
@@ -200,35 +202,32 @@ const PageQuickstart = () => (
 
         <H2 id="clone">Step-by-Step Setup</H2>
 
-        <Step n="1" title="Clone the repository">
-            <CodeTab tabs={[{ name: 'HTTPS', code: 'git clone https://github.com/example/sar_analyzer.git\ncd sar_analyzer' }, { name: 'SSH', code: 'git clone git@github.com:example/sar_analyzer.git\ncd sar_analyzer' }]} />
+        <Step n="1" title="Clone the backend repository">
+            <CodeTab tabs={[{ name: 'Terminal', code: 'git clone https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro.git\ncd nisar_pro' }]} />
         </Step>
 
-        <Step n="2" title="Build the SAR Processor binary">
-            <P>This is the core Rust engine. The release build enables all CPU-level optimizations (<code>opt-level = 3</code>, LLVM vectorization).</P>
-            <CodeTab tabs={[{ name: 'Build', code: 'cd sar_processor\ncargo build --release\n\n# Verify the binary was produced\nls -lh target/release/sar_processor' }, { name: 'Run smoke test', code: '# Generate a 1024×1024 synthetic chirp target\ncargo run --release -- --synthetic --output /tmp/test.png\n\n# Expected output:\n# [INFO] Generating 1024x1024 synthetic point target\n# [INFO] Range compression complete (1024 pulses)\n# [INFO] Azimuth compression complete\n# {"event":"georef","bbox":{"south":0,"north":0,"west":0,"east":0}}\n# [INFO] Saved to /tmp/test.png' }]} />
-            <Alert type="success" title="First build takes ~2–4 minutes">
-                Cargo downloads and compiles all dependencies (<code>ndarray</code>, <code>rustfft</code>, <code>rayon</code>, <code>hdf5</code>, <code>image</code>). Subsequent incremental builds take under 5 seconds.
-            </Alert>
+        <Step n="2" title="Build the Processing Engine">
+            <P>Compile the core Rust mathematical engine. The release build enables all CPU optimizations. First build takes ~2-4 minutes.</P>
+            <CodeTab tabs={[{ name: 'Terminal', code: 'cd sar_processor\ncargo build --release' }]} />
         </Step>
 
-        <Step n="3" title="Start the API Gateway">
-            <P>The gateway is an Axum HTTP server that exposes REST endpoints and SSE log streaming. It auto-detects the processor binary at <code>../sar_processor/target/release/sar_processor</code>.</P>
-            <CodeTab tabs={[{ name: 'Run', code: 'cd ../sar-gateway\nRUST_LOG=info cargo run --release\n\n# Listening on:\n# 🚀 SAR Gateway listening on 0.0.0.0:3000' }, { name: '.env (optional)', code: '# sar-gateway/.env\nLOCAL_MODE=true          # true = subprocess, false = K8s CRD\nRUST_LOG=info            # log verbosity\nPORT=3000                # default port' }]} />
+        <Step n="3" title="Start the Local Gateway">
+            <P>Start the API gateway that securely connects your local machine to the web dashboard. It listens on port 3000.</P>
+            <CodeTab tabs={[{ name: 'Terminal', code: 'cd ../sar-gateway\nLOCAL_MODE=true RUST_LOG=info cargo run --release\n\n# 🚀 SAR Gateway listening on 0.0.0.0:3000' }]} />
         </Step>
 
-        <Step n="4" title="Start the Dashboard">
-            <P>The React dashboard connects to the gateway at <code>http://localhost:3000</code> by default.</P>
-            <CodeTab tabs={[{ name: 'Run', code: 'cd ../sar-dashboard-v3\nnpm install\nnpm run dev\n\n# Vite dev server:\n# ➜ Local:   http://localhost:5173/' }, { name: '.env.local', code: 'VITE_API_BASE=http://localhost:3000' }]} />
+        <Step n="4" title="Connect from the Dashboard">
+            <P>Go to the deployed NISARPro dashboard in your web browser. Modern browsers explicitly allow HTTPS sites to communicate with <code>http://localhost</code>, so no complex proxy setup is needed.</P>
+            <ul style={{ color: theme.textDef, lineHeight: 1.8, paddingLeft: '1.5rem', marginBottom: '1.5rem' }}>
+                <li>Navigate to the <strong>Processor</strong> tab on the website.</li>
+                <li>You will see a <strong>Connection Setup</strong> screen.</li>
+                <li>Ensure the Gateway URL is set to <code>http://localhost:3000</code> and click <strong style={{ color: theme.accent }}>Connect</strong>.</li>
+            </ul>
         </Step>
 
         <Step n="5" title="Process your first scene">
-            <P>Open <strong>localhost:5173</strong>, navigate to the <strong>Processor</strong> tab, click <strong>Run Synthetic Test</strong>. The gateway spawns the processor, streams <code>stdout</code> live via SSE, and the result PNG appears on the map.</P>
+            <P>Once connected, click <strong>Run Synthetic Test</strong>. The web dashboard will command your local gateway to generate a test image, stream the processing logs back to your browser live, and display the result directly on the interactive map!</P>
         </Step>
-
-        <H2 id="verify">Verify Everything Is Working</H2>
-        <P>Use these curl commands to confirm the gateway is healthy before opening the dashboard:</P>
-        <CodeTab tabs={[{ name: 'Health check', code: '# Should return HTTP 200 with a JSON job list\ncurl http://localhost:3000/jobs' }, { name: 'Trigger synthetic job', code: 'curl -X POST http://localhost:3000/jobs \\\n  -H "Content-Type: application/json" \\\n  -d \'{"is_synthetic": true, "pipeline": "rda"}\'\n\n# Returns:\n# {"id":"sar-a1b2c3d4","status":"queued"}' }, { name: 'Stream logs (SSE)', code: '# Replace JOB_ID with the id from above\ncurl -N http://localhost:3000/jobs/JOB_ID/logs\n\n# You will see live lines from sar_processor stdout:\n# [INFO] Range compression complete\n# [INFO] Azimuth compression complete\n# [SYSTEM] PROCESS_COMPLETED' }]} />
     </div>
 );
 
