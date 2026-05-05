@@ -139,3 +139,15 @@ pages:
       - public
 
 # (Docker build jobs removed as they are no longer needed for the static page deployment)
+
+# ═══════════════════════════════════════
+# GitHub Synchronization
+# ═══════════════════════════════════════
+sync_to_github:
+  stage: deploy
+  image: alpine/git:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - git remote add github https://AdityaNarayanNayak-2:${GITHUB_PAT}@github.com/AdityaNarayanNayak-2/NISAR_PRO.git || true
+    - git push github HEAD:main --force
