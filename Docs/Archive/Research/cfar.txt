@@ -1,0 +1,328 @@
+Lightweight Non-ML Ship Detection Alternatives to CA-CFAR for SAR Imagery
+Overview
+Synthetic aperture radar (SAR) ship detection at scale typically uses some flavor of CFAR (constant false alarm rate), but standard CA-CFAR on pixel intensities is not always robust in heavy sea clutter, near coasts, or in dense traffic, and can be memory/CPU heavy if naively implemented. There are, however, several non-ML and very light-weight variants and alternatives—non-parametric CFAR, robust CFAR variants, and multi-scale anomaly detectors—that can be implemented in Rust on a single pass over the image using only local windows.
+
+Current CA-CFAR in NISAR Pro
+The existing NISAR Pro SAR processor implements a 2D CA-CFAR on the downsampled intensity image with guard and background windows and simple clustering. It computes a local mean of background cells in an annulus around the cell-under-test, multiplies by an analytically derived alpha factor based on desired Pfa, and declares a detection when intensity exceeds the threshold. This implementation is already parallelized over rows with Rayon and runs on a downsampled image (for example, 1780 × 1840), which keeps CPU and RAM usage reasonable while still providing usable detections.
+
+However, standard CA-CFAR assumes exponential (or Rayleigh) clutter and can break in:
+
+Heavy-tailed sea clutter where a few bright clutter samples dominate the mean.
+
+Coasts and harbor areas with mixed land–sea clutter.
+
+Crowded shipping lanes where neighboring ships fall into the reference window and raise the threshold.
+
+Better CFAR Variants (Still Lightweight)
+1. Nonparametric Wilcoxon CFAR
+A recent line of work proposes a Wilcoxon nonparametric CFAR detector for SAR ship detection that does not assume any particular clutter distribution. Instead of modeling clutter as Gaussian, Rayleigh, Weibull, or alpha-stable, it uses order statistics (rank information) in the reference window and derives a closed-form expression for the false alarm rate of the Wilcoxon detector. Experiments on Radarsat-2, ICEYE-X6 and Gaofen-3 images show that Wilcoxon CFAR better maintains constant false alarm rate and improves detection of weak ships in rough seas compared to typical parametric CFAR schemes.
+
+Implementation-wise, Wilcoxon CFAR only needs to:
+
+Gather reference window samples around the cell-under-test.
+
+Sort or partially sort them to compute a test statistic based on ranks.
+
+Compare against a precomputed threshold for the desired Pfa.
+
+This is still local-window based and parallelizable, and with small windows (e.g., 5×5 to 9×9) the per-pixel cost is dominated by small-array sorting, which is tractable in Rust in release mode on a downsampled image. No global statistics or large matrices are required.
+
+2. Robust CFAR via Clutter Modeling (Alpha-stable, VIE-CFAR)
+Several works propose improved CFAR based on better clutter modeling. One uses an alpha-stable distribution to model heavy-tailed sea clutter; it replaces the Gaussian assumption in traditional CFAR with an alpha-stable model that better fits impulsive, spiky clutter, producing fewer false alarms in ship detection. Another method, VIE-CFAR (Variable Index and Excision CFAR), incorporates a variability index and an excision step to censor multiple bright interferers from the reference cells before estimating clutter statistics.
+
+VIE-CFAR has been shown to outperform classical CFAR detectors on ENVISAT and TerraSAR-X SAR data, particularly in dense traffic and sea states with multiple interferers. The algorithmic overhead is still local: compute variability indices in the reference window, discard cells above a variability threshold, and compute the threshold from the remaining cells.
+
+Both alpha-stable CFAR and VIE-CFAR remain non-ML and can be implemented as drop-in replacements for CA-CFAR, with similar memory footprints and modest extra CPU cost due to more complex local statistics.
+
+3. Superpixel-Level CFAR
+Superpixel-level CFAR detectors segment the image into superpixels (small regions of homogeneous texture) and run CFAR at the region level instead of individual pixels. This approach tends to stabilize clutter statistics and reduces false alarms in heterogeneous sea states, at some cost in implementation complexity. Because decisions are made per superpixel instead of per pixel, the number of CFAR operations is reduced, which can offset the cost of superpixel segmentation.
+
+A superpixel-CFAR design could fit NISAR Pro by:
+
+Running a fast superpixel segmentation (e.g., SLIC) on the intensity image.
+
+Computing a mean intensity per superpixel as the basic feature.
+
+Running a 1D CFAR over superpixels along azimuth or range strips.
+
+This is more RAM light than full 2D texture features and remains non-ML.
+
+Anomaly-Based Non-ML Detection (AMTAD-Style)
+Anomaly detection treats ships as local anomalies in sea clutter rather than as explicit targets with parametric models. The NISAR Pro code base already includes an "AMTAD" (adaptive multi-scale texture anomaly detection) algorithm which computes local variances at multiple scales (e.g., window sizes 3, 7, 15) and fuses them into an anomaly map via weighted variance and adaptive weights.
+
+This AMTAD algorithm is fully non-ML and per-pixel computes only a few windowed sums, with weights tuned by a tanh function, making it computationally light and embarrassingly parallel. Thresholding the anomaly map and clustering detections can yield ship candidates, particularly for small or weak ships that stand out in texture rather than in pure intensity.
+
+A hybrid detector can:
+
+Run AMTAD on the intensity image to obtain an anomaly score map.
+
+Use CFAR (CA-CFAR, Wilcoxon CFAR, or VIE-CFAR) on intensity, but only inside high-anomaly regions.
+
+This significantly prunes the search space and reduces CFAR computations, saving CPU.
+
+Integral-Image CFAR to Save CPU
+Classic CA-CFAR in NISAR Pro currently loops over each cell and over all background cells explicitly, which is conceptually simple but computationally quadratic in window size. A known optimization is to use integral images (summed-area tables) to compute the sum and count in any rectangular window in constant time, dropping complexity from per-pixel O(W²) to O(1) after a single O(N) pre-pass over the image.
+
+For a guard window and outer background window that are both rectangular, the background sum can be obtained as the difference of two rectangles in the integral image, and the mean is sum divided by number of cells. This significantly decreases CPU while using negligible extra RAM (one extra float array the size of the image).
+
+Combining integral-image CFAR with downsampling and multi-threading provides a very fast implementation that can be more CPU-light than many ML models while retaining the probabilistic guarantees of CFAR.
+
+Lightweight Local ML Options (If Needed)
+The requirement is that any ML/DL must be 100% free, run locally, and be very light on CPU/RAM. Public SAR ship datasets like SSDD, HRSID, and DSSDD exist, and current state-of-the-art methods (e.g., AMANet, memory-augmented autoencoders) are relatively heavy. However, there are lighter options:
+
+Use a tiny convolutional classifier (e.g., 3–5 conv layers, depthwise separable) that runs on small candidate patches extracted from a non-ML pre-detector (CFAR or AMTAD), acting only as a false-positive filter.
+
+Run the classifier with 8-bit quantized weights and activations, using a small engine like ONNX Runtime or a custom Rust inference engine compiled with no GPU.
+
+The DSSDD paper explicitly shows that a memory-augmented autoencoder can be used to remove false alarms from a two-parameter CFAR pre-detector. A much smaller network than theirs could be trained for a similar role based on open datasets and then embedded into NISAR Pro as an optional local module.
+
+Even without training new models, one could experiment with off-the-shelf lightweight object detectors or segmentation models that have small backbones, but they tend to be less tailored to SAR and may not meet strict RAM/CPU constraints.
+
+Recommended Design for NISAR Pro
+Given the constraints (Rust, local execution, minimal CPU/RAM, non-ML preferred), a practical evolution path from current CA-CFAR is:
+
+Replace or augment CA-CFAR with a robust variant such as Wilcoxon nonparametric CFAR or VIE-CFAR to improve robustness against heavy clutter and multiple interferers while remaining local and non-ML.
+
+Implement integral-image based CFAR to reduce per-pixel compute from O(W²) to O(1), using one additional float image as the summed-area table.
+
+Fuse AMTAD anomaly detection with CFAR: run AMTAD to get an anomaly map, then restrict CFAR to high-anomaly regions to cut down computation and focus on likely ships.
+
+Optionally add a tiny local ML classifier that runs only on CFAR+AMTAD candidates to filter false positives, trained on open SAR ship datasets and executed in quantized form on CPU.
+
+These changes keep the core of NISAR Pro's ship detection non-ML and efficient, while providing several avenues for higher accuracy without needing heavy GPUs or large neural networks.
+
+
+
+
+Next chat :- 
+Your current ship detection pipeline is already in a very good state: you’ve done the most important optimization (integral-image CA‑CFAR on a downsampled intensity grid) and the integration in main.rs is clean and scalable.
+
+Below are focused comments + concrete next steps to (a) tighten what you have and (b) evolve toward “better than vanilla CFAR” while staying light.
+
+1. Sanity check on your current CA‑CFAR
+Algorithmically your detect_ships_cfar is a textbook CA‑CFAR with a summed‑area table:
+
+You downsample intensity via block averaging, which is exactly what’s recommended to keep CFAR grid small.
+
+The integral image sat is built as (rows+1, cols+1), and rect_sum uses the standard inclusion–exclusion formula, so your outer_sum is O(1) per CUT.
+
+Alpha is computed from 
+P
+f
+a
+P 
+fa
+​
+  and number of background cells 
+N
+b
+g
+N 
+bg
+​
+  using the standard exponential‑clutter formula, matching classical CA‑CFAR derivations.
+
+You run over r / c in [bg_size, rows-bg_size) so the outer window never crosses boundaries; your rect_sum indices are safe, and the guard window is completely inside the outer window.
+
+So: the core CA‑CFAR math is correct and already CPU‑optimal for CA‑CFAR.
+
+Small details you may want to polish:
+
+Avoid recomputing owned inside CFAR: you already have ds_image as an owned Array2<f32>. If you pass ArrayView2 just for API neatness but always clone, you’re doing one extra full copy. Either:
+
+Call detect_ships_cfar(&ds_image, ...) taking &Array2<f32> and borrowing directly, or
+
+Accept Array2<f32> by value.
+
+Threshold floor: you already reject cut_val <= 1e-8. You might similarly skip pixels whose local bg_mean is basically zero (e.g. masked or all‑NaN regions) to avoid unnecessary work in “empty sea” tiles.
+
+2. Quick, low‑cost robustness upgrade: trimmed CA‑CFAR (VIE‑style light)
+Full VIE‑CFAR iteratively builds an “excision window” and a variability index to remove interferers from the background set. That’s a bit heavy to do with integral images, but there is a cheap approximation that gets you most of the benefit:
+
+Idea: “remove the brightest K reference cells” to avoid a few bright clutter spikes or nearby ships from inflating the background mean.
+
+Because your current integral image only gives you sums, not sorted samples, you can:
+
+Keep the integral‑image background sum as a first pass.
+
+In the CFAR loop, when cut_val is near the threshold (e.g. within a factor 2–3), pay the extra cost of scanning the ring explicitly to find the top 1–2 brightest v_max, and subtract them:
+
+rust
+// After computing bg_sum, bg_mean with integral image
+if cut_val as f64 > threshold * 0.5 {
+    // Slow path: refine background by excising top interferer(s)
+    let mut max1 = 0.0_f32;
+    let mut max2 = 0.0_f32;
+    for rr in (r - bg_size)..=(r + bg_size) {
+        for cc in (c - bg_size)..=(c + bg_size) {
+            // skip guard region
+            if (rr as isize - r as isize).abs() as usize <= guard_size &&
+               (cc as isize - c as isize).abs() as usize <= guard_size {
+                continue;
+            }
+            let v = owned[[rr, cc]];
+            if !v.is_finite() || v <= 0.0 { continue; }
+            if v > max1 { max2 = max1; max1 = v; }
+            else if v > max2 { max2 = v; }
+        }
+    }
+
+    let bg_sum_refined = bg_sum as f32 - max1 - max2;
+    let n_bg_refined = n_bg - 2.0;
+    if n_bg_refined > 0.0 {
+        let bg_mean_refined = (bg_sum_refined as f64) / (n_bg_refined as f64);
+        let threshold_refined = alpha as f64 * bg_mean_refined;
+        if (cut_val as f64) <= threshold_refined || threshold_refined <= 0.0 {
+            continue; // reject detection
+        }
+    }
+}
+This is:
+
+Still local and non‑ML.
+
+Only O(W²) in rare “suspicious” locations, so still fast overall.
+
+Conceptually close to “excision CFAR” (remove interfering cells before estimating clutter).
+
+You keep all your integral‑image speed for 90–95% of pixels, but gain robustness against multiple bright interferers.
+
+3. How to plug in Wilcoxon CFAR in your Rust code
+If you want to go beyond parametric CFAR, the Wilcoxon nonparametric CFAR scheme is a good next step. It uses rank statistics and has a closed-form false alarm expression, so it keeps CFAR’s constant‑Pfa property without assuming a clutter distribution.
+
+Pattern in your codebase:
+
+Keep downsampling and the intensity computation exactly as you have it.
+
+Add a separate function:
+
+rust
+pub fn detect_ships_wilcoxon(
+    image: ArrayView2<f32>,
+    guard_size: usize,
+    bg_size: usize,
+    m_test: usize,  // number of CUTs (e.g. 1 or small patch)
+    pfa: f32,
+    max_detections: usize,
+) -> Vec<ShipTarget> { /* ... */ }
+Inside:
+
+For each center (r, c) (within [bg_size..rows-bg_size) as now), build two small arrays:
+
+test: m CUT samples (you can start with m=1, just cut_val).
+
+ref_cells: all background ring samples (size n).
+
+Concatenate test + ref_cells into a small vector, sort by intensity.
+
+Compute the Wilcoxon statistic as sum of ranks of the m test samples.
+
+Compare to precomputed threshold 
+T
+W
+(
+m
+,
+n
+,
+P
+f
+a
+)
+T 
+W
+​
+ (m,n,P 
+fa
+​
+ ).
+
+Pseudo‑Rust sketch:
+
+rust
+let m = 1;
+let mut samples = Vec::with_capacity(1 + n_bg as usize);
+// fill samples with (value, is_test) flags
+// sort by value
+samples.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
+
+// assign ranks 1..N
+let mut rank = 1_u32;
+let mut s_stat = 0_u32;
+for (val, is_test) in samples {
+    if is_test {
+        s_stat += rank;
+    }
+    rank += 1;
+}
+
+// compare S to threshold TW(m, n, pfa)
+if s_stat as f32 > precomputed_tw {
+    // target detected → push ShipTarget
+}
+You would precompute or hard‑code T_W tables for a few (m, n, Pfa) combos based on the recurrence formulas / tables from the paper.
+
+This path keeps everything local and “few hundred FLOPs per pixel”, still compatible with your single‑machine and K8s scaling.
+
+4. Easy fusion with your existing AMTAD
+Since you already have an AMTAD anomaly detector in the library, you can use it as a gate to reduce CFAR work and catch small ships.
+
+A practical pattern:
+
+After computing native_intensity, call your AMTAD:
+
+rust
+let anomaly_map = sar_processor::algorithm::amtad_algorithm_sar_image(native_intensity.view());
+(Adjust to your actual function name/signature.)
+
+Downsample both intensity and anomaly map with the same factor ds_factor.
+
+Before running CFAR, compute a global or local percentile on the downsampled anomaly map (e.g., 90th percentile).
+
+In the CFAR scan loop, skip any (r, c) where the anomaly score is below that percentile.
+
+This gives you:
+
+Fewer CFAR evaluations (more CPU headroom).
+
+Sensitivity to weak or small ships that show up primarily as texture anomalies.
+
+And it costs only extra local arithmetic that you already have implemented.
+
+5. NMS clustering looks fine for now
+Your cluster_targets (greedy, keep brightest, suppress within radius) is a good first‑order NMS:
+
+You sort by intensity descending.
+
+For each candidate you drop it if any kept target is within radius both in x and y.
+
+For later, if you see too many points hugging one ship, you can:
+
+Use Euclidean distance ((dx*dx + dy*dy).sqrt() <= radius) instead of separate abs_diff, but that’s minor.
+
+Add a second pass that merges detections that are in the same small connected component (4‑/8‑neighborhood) before geo‑projection.
+
+But nothing here is blocking you.
+
+6. Summary of concrete “next commits”
+In terms of “todo” you can actually implement in this repo:
+
+Micro‑cleanups
+
+Stop cloning ds_image inside detect_ships_cfar.
+
+Add a tiny bg_mean < eps guard if needed.
+
+Robust CA‑CFAR variant
+
+Add the “trim top 1–2 brightest ring samples” refinement for candidates near threshold (VIE‑style approximation).
+
+AMTAD gating
+
+Call existing AMTAD on intensity and restrict CFAR only to high‑anomaly pixels.
+
+Later: optional Wilcoxon CFAR
+
+Provide an alternate --ship_detect_wilcoxon flag wired to a detect_ships_wilcoxon implementation using rank statistics and pre‑tabulated thresholds.
+
+Those steps keep everything non‑ML, local, and free, but move you from “basic CA‑CFAR” to “research‑grade robust CFAR pipeline” with only modest extra CPU, completely aligned with the ship‑detection literature.

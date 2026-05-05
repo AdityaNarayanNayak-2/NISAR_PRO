@@ -1,0 +1,8 @@
+apiVersion: sar.example.com/v1
+kind: SarJob
+metadata:
+  name: sample-sar-analysis
+  namespace: default
+spec:
+  scene_id: "S1A_IW_GRDH_1SDV_20231015T123456"
+  output_storage_path: "s3://sar-data/output/analysis-001"

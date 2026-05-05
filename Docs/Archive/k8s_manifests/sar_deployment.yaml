@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sar-operator-v2
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sar-operator
+  template:
+    metadata:
+      labels:
+        app: sar-operator
+    spec:
+      serviceAccountName: sar-operator
+      containers:
+      - name: sar-operator
+        image: localhost/sar-operator:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: RUST_LOG
+          value: "info"
+        resources:
+          limits:
+            cpu: "1"
+            memory: "512Mi"
+          requests:
+            cpu: "500m"
+            memory: "256Mi"

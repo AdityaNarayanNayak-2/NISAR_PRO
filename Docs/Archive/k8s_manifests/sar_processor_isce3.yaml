@@ -1,0 +1,50 @@
+# SAR Processor Kubernetes Deployment (ISCE3 variant)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sar-processor-isce3
+  labels:
+    app: sar-processor
+    variant: isce3
+spec:
+  replicas: 0  # Scaled to 0 by default, pods spawned by operator
+  selector:
+    matchLabels:
+      app: sar-processor
+      variant: isce3
+  template:
+    metadata:
+      labels:
+        app: sar-processor
+        variant: isce3
+    spec:
+      containers:
+      - name: sar-processor
+        image: registry.gitlab.com/aditya-narayan-nayak/nisar_pro/sar-processor:isce3
+        imagePullPolicy: Always
+        env:
+        - name: SAR_SCENE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['scene-id']
+        - name: SAR_OUTPUT_PATH
+          value: "/data/output"
+        - name: RUST_LOG
+          value: "info"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "2"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+      volumes:
+      - name: data-volume
+        emptyDir:
+          sizeLimit: 50Gi
+      imagePullSecrets:
+      - name: regcred
+      restartPolicy: Never  # Job-style pod

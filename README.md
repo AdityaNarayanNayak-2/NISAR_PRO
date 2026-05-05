@@ -1,116 +1,190 @@
-# NISAR Pro - Distributed SAR Web Intelligence Platform
+# NISAR Pro — Geospatial Intelligence Platform
 
-NISAR Pro is an enterprise-grade, distributed Synthetic Aperture Radar (SAR) processing platform designed explicitly for the upcoming NASA-ISRO (NISAR) mission. It provides a complete geospatial intelligence workflow: discovering raw NASA Earthdata, triggering on-demand Kubernetes cluster processing ("Hot Processing"), and generating deep-zoom XYZ optical slippy maps for the browser.
+> **Zero-Upload · Deterministic · Local-First Processing · Azure Arc Ready**
+
+A full-stack Synthetic Aperture Radar (SAR) processing platform built in **pure Rust**, designed for NASA-ISRO NISAR mission data. From raw HDF5 radar frequencies to georeferenced map overlays — no Python, no MATLAB, no data leaving your machine.
+
+![End-to-End Architecture](Docs/assets/architecture_overview.png)
 
 ---
 
-## 🚀 Getting Started
+## ✨ Key Capabilities
 
-NISAR Pro supports two execution modes: **Local Subprocess Mode** (easiest for testing, no Kubernetes required) and **Kubernetes Orchestration Mode** (for scalable distributed processing).
+| Module | What It Does |
+|--------|-------------|
+| **Range-Doppler Algorithm** | Full RDA pipeline: Range Compression → RCMC (Sinc interpolation) → Azimuth Compression |
+| **NISAR HDF5 Parser** | Reads all four NASA product types (RSLC, GSLC, GCOV, GUNW) with compound complex datatypes |
+| **CA-CFAR Ship Detection** | O(1) integral-image accelerated maritime target detection with GeoJSON export |
+| **InSAR & PS-InSAR** | Interferogram generation, coherence estimation, millimeter-level displacement mapping |
+| **PolSAR Decomposition** | Pauli basis RGB mapping (surface / volume / double-bounce scattering) |
+| **Infrastructure Health** | Persistent Scatterer analysis with STABLE / CAUTION / ALERT / CRITICAL classification |
+| **Real-Time Dashboard** | React + Leaflet map with live SSE terminal streaming processor logs |
+
+---
+
+## 🏗️ Architecture
+
+NISAR Pro uses a **Cloud Frontend + Local Backend** design:
+
+- **Frontend** → Static React SPA hosted on GitLab Pages (accessible globally).
+- **Backend** → Rust gateway + processor running on `localhost:3000` (your machine).
+- **Result** → Raw SAR data never leaves the user's machine. Zero upload. Full data sovereignty.
+
+![User Workflow](Docs/assets/user_workflow.png)
+
+---
+
+## 🚀 Quick Start (Local Mode)
 
 ### Prerequisites
-Ensure you have the following installed:
-- **Rust (Cargo):** `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-- **Node.js (v20+):** Required for the React frontend.
-- **Docker / Podman & Kind:** (Only required for Kubernetes mode).
+```bash
+# Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
----
+# HDF5 development library (required for NISAR data parsing)
+sudo apt install libhdf5-dev    # Ubuntu/Debian
+brew install hdf5               # macOS
 
-## 🛠️ Option A: Local Mode (No Kubernetes Required)
+# Node.js v20+ (for the dashboard)
+```
 
-This mode runs the SAR processor as a direct system process, bypassing Kubernetes entirely. Perfect for testing and rapid development.
-
-**1. Compile the Processor**
+### 1. Build the Processor
 ```bash
 cd sar_processor
 cargo build --release
 ```
 
-**2. Run the API Gateway in Local Mode**
-Provide the `LOCAL_MODE=true` environment variable to instruct the gateway to spawn the binary directly.
+### 2. Start the Gateway
 ```bash
 cd sar-gateway
-LOCAL_MODE=true RUST_LOG=info cargo run
+RUST_LOG=info cargo run
 ```
 
-**3. Start the Mission Control Dashboard**
+### 3. Launch the Dashboard
 ```bash
 cd sar-dashboard-v3
-npm install
-npm run dev
+npm install && npm run dev
+# → Open http://localhost:5173
+```
+
+### 4. Process Your First Image
+1. Open the dashboard → click **"Launch App"**.
+2. The connection setup will verify your gateway is running.
+3. Select **"Local File"** → paste the path to a NISAR `.h5` file.
+4. Click **"Initiate Orbital Scan"** → watch the real-time terminal.
+5. The focused SAR image will overlay on the map automatically.
+
+> **No NISAR data yet?** Use `--synthetic` mode:  
+> `cd sar_processor && cargo run --release -- --synthetic --output test.png`
+
+---
+
+## 📂 Repository Structure
+
+```
+sar_analyzer/
+├── sar_processor/          → Pure Rust SAR compute engine (16 source files)
+│   └── src/
+│       ├── main.rs         → CLI entry point (clap)
+│       ├── nisar_parser.rs → NASA HDF5 reader (RSLC/GSLC/GCOV/GUNW)
+│       ├── rda.rs          → Range-Doppler Algorithm
+│       ├── rcmc.rs         → Range Cell Migration Correction
+│       ├── insar.rs        → Interferometry + Coherence
+│       ├── ship_detection.rs → CA-CFAR with integral images
+│       ├── infra_health.rs → PS-InSAR displacement analysis
+│       ├── polsar.rs       → Polarimetric decomposition
+│       └── io.rs           → PNG/XYZ tiles + Lee filter + CLAHE
+│
+├── sar-gateway/            → Axum HTTP server (REST + SSE)
+│   └── src/
+│       ├── handlers.rs     → Endpoints: /jobs, /search, /jobs/:id/logs
+│       └── jobs.rs         → Local subprocess OR Kubernetes CRD execution
+│
+├── sar-dashboard-v3/       → React + Vite + Leaflet frontend
+│   └── src/
+│       ├── pages/app/AppDashboard.jsx → Main operational dashboard
+│       ├── components/DataVisualization.jsx → Leaflet map overlay
+│       └── config/api.js   → Gateway URL configuration
+│
+├── sar_operator_v2/        → Kubernetes CRD controller (kube-rs)
+│
+├── Docs/                   → Full technical documentation
+│   ├── Architecture/       → Component internals + project journey
+│   ├── Algorithms/         → CFAR, InSAR math deep dives
+│   ├── UseCases/           → Dam monitoring, maritime surveillance
+│   └── Guides/             → Getting started, API reference, deployment
+│
+└── .gitlab-ci.yml          → CI/CD: build, test, audit, deploy to Pages
 ```
 
 ---
 
-## ☸️ Option B: Kubernetes Cluster Deployment
+## 🔬 Supported Use Cases
 
-For authentic distributed orchestration of massive 7GB image matrices using the custom `kube-rs` operator.
+- 🚢 **Maritime Surveillance** — Dark vessel detection via CA-CFAR
+- 🏗️ **Infrastructure Monitoring** — Dam & bridge displacement via PS-InSAR
+- 🌊 **Disaster Response** — Flood mapping & oil spill detection
+- 🌲 **Environmental Monitoring** — Biomass estimation via PolSAR
+- 🛡️ **Defense & Surveillance** — Change detection and anomaly mapping
 
-### 1. Initialize the Cluster
+---
+
+## 🔧 CLI Reference
+
 ```bash
-kind create cluster --name sar-cluster
-kubectl apply -k k8s_manifests/
-```
+# Standard processing
+cargo run --release -- --input ~/data/NISAR_L2_PR_GCOV_*.h5 --output result.png
 
-### 2. Boot the Backend Microservices
-Open three separate terminals:
+# Ship detection
+cargo run --release -- --input ~/data/scene.h5 --ship-detect
 
-**Terminal 1: The Kubernetes Operator**
-```bash
-cd sar_operator_v2
-RUST_LOG=info cargo run --release
-```
+# InSAR (two images)
+cargo run --release -- --input master.h5 --insar-slave slave.h5 --output interferogram.png
 
-**Terminal 2: The API Gateway**
-```bash
-cd sar-gateway
-export NASA_USERNAME="your_username"
-export NASA_PASSWORD="your_password"
-RUST_LOG=info cargo run --release
-```
+# Synthetic test (no data needed)
+cargo run --release -- --synthetic --output test.png
 
-**Terminal 3: The React Frontend**
-```bash
-cd sar-dashboard-v3
-npm run dev
+# XYZ web tiles
+cargo run --release -- --input scene.h5 --tiles-dir ./tiles/
 ```
 
 ---
 
-### Step 4: How to Use the Application
+## 📚 Documentation
 
-Once all three terminals are running, open your browser to **`http://localhost:5173`**.
-
-1. **Global Search (Left Panel):**
-   - Use the Leaflet map to pan over your target country (e.g., Japan, Algeria).
-   - Enter a date range and click **"QUERY NASA ASF"**.
-   - The Gateway will fetch genuine NISAR acquisitions from the NASA Alaska Satellite Facility DAAC.
-
-2. **Scene Selection:**
-   - Scroll through the resulting dataset cards. 
-   - Hovering over a card will draw a glowing footprint on the map.
-   - Click a card to **Lock** it into your Mission Control panel.
-
-3. **Hot Processing (Right Panel):**
-   - With a scene locked, the **Active Scene ID** will illuminate.
-   - Select your ML Mapping Models (e.g., Ship Detection).
-   - Click **"Initiate Orbital Scan"**.
-
-4. **Live Telemetry & Render:**
-   - The bottom **Terminal** will slide up and stream raw compilation logs (Range-Doppler Algorithm focusing, Rayon XYZ Web Tiling, Frost Speckle Filtering).
-   - Once the K8s pod finishes, the dashboard will seamlessly overlay the newly generated Deep-Zoom XYZ tiles onto the geographic map!
+| Document | Description |
+|----------|-------------|
+| [Project Journey](Docs/Architecture/project_journey.md) | How we built this from scratch — Phase 1 to Phase 7 |
+| [Processor Internals](Docs/Architecture/sar_processor_internals.md) | Every Rust source file explained |
+| [Gateway Internals](Docs/Architecture/sar_gateway_internals.md) | REST API, SSE streaming, dual-mode execution |
+| [Dashboard Internals](Docs/Architecture/sar_dashboard_internals.md) | React components, Leaflet map, state management |
+| [CFAR Algorithm](Docs/Algorithms/cfar_ship_detection.md) | Integral image math + detection pipeline |
+| [InSAR Processing](Docs/Algorithms/insar_processing.md) | Interferogram + coherence + PS selection |
+| [Architecture Diagrams](Docs/Architecture/architecture-diagrams.md) | Mermaid.js diagrams (Azure Docs style) |
 
 ---
 
-## 📂 Core Repository Architecture
+## 🛡️ Security Model
 
-- **`sar_processor/`**: The core mathematical Rust engine. Handles HDF5 ingest, RCMC, Azimuth Compression, and Frost Speckle XYZ Web Tiling (`io.rs`).
-- **`sar_operator_v2/`**: The custom `kube-rs` controller managing the distributed processing fleet.
-- **`sar-gateway/`**: The Axum HTTP bridge handling REST interfaces and live SSE multiplexing.
-- **`sar-dashboard-v3/`**: The EOS Landviewer-inspired React/Leaflet mission control UI.
-- **`k8s_manifests/`**: The CRDs defining the `SarJob` specification.
+NISAR Pro follows a **Zero-Upload Architecture**:
 
-## 📚 Documentation Reference
-- `Docs/concept.md` - Start Here: High-level overview of why this system exists and how it works.
-- `Docs/architecture.md` - Technical specifics on the Kubernetes SSE telemetry and Gateway proxy.
-- `Docs/deployment.md` - Remote cluster node specifications.
+```
+┌─────────────────────────┐         ┌──────────────────────┐
+│  GitLab Pages (Cloud)   │  HTTP   │  User's Local Machine│
+│  ─────────────────────  │ ──────► │  ──────────────────── │
+│  Static React SPA       │  :3000  │  sar-gateway (Axum)  │
+│  (No data, no secrets)  │         │  sar_processor       │
+│                         │         │  Raw HDF5 files      │
+└─────────────────────────┘         └──────────────────────┘
+                                     ↑ Data never leaves
+```
+
+- Raw SAR imagery stays on the user's disk.
+- The cloud-hosted dashboard acts only as a control plane.
+- No server-side storage. No authentication tokens for data access.
+
+---
+
+## 📄 License
+
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file.

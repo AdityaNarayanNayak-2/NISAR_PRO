@@ -1,20 +1,19 @@
-# Documentation — excluded files
-Docs/nisar_pro_interview_cheat_sheet.md
-Docs/verification-guide.md
-Docs/abcd.md
+# ══════════════════════════════════════════════
+# PRIVATE / PERSONAL — Never push to public repo
+# ══════════════════════════════════════════════
+Docs/Aditya_Nayak_Resume.md
+Docs/Strategy/nisar_pro_interview_cheat_sheet.md
+Docs/Strategy/skyserve_prep.md
+Docs/Strategy/session_walkthrough.md
+Docs/Strategy/pending_file_browser_plan.md
 
-# Pseudocode / scratch
-psuedocode/
-
-# Rust Build Artifacts
+# ══════════════════════════════════════════════
+# BUILD ARTIFACTS
+# ══════════════════════════════════════════════
 target/
 **/*.rs.bk
-
-# Node/React Build Artifacts
 node_modules/
 dist/
-sar-dashboard-v2/node_modules/
-sar-dashboard-v2/build/
 
 # Processing results (generated at runtime)
 sar-gateway/results/
@@ -22,16 +21,16 @@ sar-gateway/results/
 # Docker Archives
 *.tar
 
-# System & IDE
+# ══════════════════════════════════════════════
+# SYSTEM & IDE
+# ══════════════════════════════════════════════
 .DS_Store
 .vscode/
 .idea/
 
-# Secrets & Env Vars
-k8s_manifests/esa_secret.yaml
+# ══════════════════════════════════════════════
+# SECRETS
+# ══════════════════════════════════════════════
 **/*.env
 .env
 *.secret.yaml
-
-# Research
-Research/

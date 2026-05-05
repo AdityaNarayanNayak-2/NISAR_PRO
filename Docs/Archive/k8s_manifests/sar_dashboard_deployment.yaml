@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sar-dashboard
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sar-dashboard
+  template:
+    metadata:
+      labels:
+        app: sar-dashboard
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: sar-dashboard
+          image: registry.gitlab.com/aditya-narayan-nayak/nisar_pro/sar-dashboard:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sar-dashboard-svc
+  namespace: default
+spec:
+  selector:
+    app: sar-dashboard
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: NodePort

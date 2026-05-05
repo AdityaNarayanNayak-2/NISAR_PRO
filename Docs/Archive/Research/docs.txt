@@ -1,0 +1,255 @@
+NISARPro — Full Platform Docs
+End-to-end distributed SAR processing platform. From raw NASA HDF5 file to georeferenced image on a live map — all open, all Rust-first.
+NISAR Beta Data
+Kubernetes Native
+Live SSE Streaming
+Rust + React
+Open Platform
+Introduction
+What is NISARPro?
+NISARPro is a full-stack distributed SAR processing platform built to handle real NASA NISAR satellite radar data. It takes an HDF5 file as input and produces a georeferenced output image you can see overlaid on a real map — with live processing logs streaming to your browser in real time.
+The platform is split into four components that each do one job well:
+
+⚙️
+sar_processor
+Rust
+The physics engine. Implements RDA, RCMC, InSAR, ship detection, and infrastructure health algorithms directly on NISAR HDF5 data.
+☸️
+sar_operator_v2
+Rust + kube-rs
+A Kubernetes Custom Resource Operator. Watches SarJob CRDs and auto-scales processing pods based on job queue demand.
+🔀
+sar-gateway
+Rust + Axum
+High-concurrency API server. Brokers NASA ASF and ESA data connections, manages job state, and streams logs via Server-Sent Events.
+🖥️
+sar-dashboard-v3
+React 19 + Vite 7
+The intelligence frontend. Real-time terminal, WebGL map overlays, live SSE log viewer, and cinematic scrollytelling for use cases.
+Getting Started
+Quickstart Setup
+Spin up the full platform locally. You need Rust (stable), Node 20+, Docker, and a running Kubernetes cluster (or kind/minikube for local dev).
+1
+Clone and build the processor
+The SAR processor is a Rust binary. Build it in release mode for performance.
+bash
+terminal
+# Clone the repo and build the Rust processor
+git clone https://github.com/your-org/sar_processor
+cd sar_processor && cargo build --release
+
+# Run a test against a local HDF5 file
+./target/release/sar_processor --input ./data/nisar_gcov.h5 \
+  --mode rslc --output ./out/result.tiff
+2
+Apply the Kubernetes CRDs
+The operator needs its custom resource definitions deployed first. This teaches Kubernetes what a SarJob is.
+bash
+terminal
+# Apply CRD manifests to your cluster
+kubectl apply -f sar_operator_v2/manifests/crd.yaml
+
+# Deploy the operator itself
+kubectl apply -f sar_operator_v2/manifests/operator.yaml
+
+# Confirm the operator is running
+kubectl get pods -n sar-system
+3
+Start the Axum gateway
+The gateway connects frontend to backend. It runs on port 8080 by default and picks up cluster config from your local kubeconfig.
+bash
+terminal
+cd sar-gateway
+cargo run --release
+# Gateway available at http://localhost:8080
+# SSE stream at http://localhost:8080/jobs/{id}/stream
+4
+Launch the React dashboard
+The frontend is a Vite 7 + React 19 app. Point it at the gateway and you're live.
+bash
+terminal
+cd sar-dashboard-v3
+npm install
+echo "VITE_GATEWAY_URL=http://localhost:8080" > .env
+npm run dev
+# Dashboard at http://localhost:5173
+Architecture
+How Data Flows
+From the moment you drop an HDF5 filename into the dashboard to the moment the georeferenced image appears on the map — here is every hop in the pipeline.
+INPUT
+HDF5 File
+→
+FRONTEND
+Dashboard
+→
+GATEWAY
+Axum API
+→
+OPERATOR
+SarJob CRD
+→
+POD
+Processor
+→
+OUTPUT
+GeoTIFF
+SSE log stream travels backwards: Processor pod → Gateway → Dashboard terminal in real time throughout the entire job lifecycle.
+Latency
+<200ms
+Gateway to pod scheduling
+Log Delay
+~50ms
+SSE stream to terminal
+Formats
+HDF5
+NISAR GCOV + RSLC input
+Component 1
+SAR Processor (Rust)
+The physics engine of the platform. A high-performance Rust binary that reads real NISAR HDF5 files and produces focused, georeferenced SAR imagery using the Range Doppler Algorithm.
+NISAR Parser
+nisar_parser.rs / sentinel_parser.rs
+Reads HDF5 groups and datasets from NISAR GCOV/RSLC files. Extracts raw IQ samples, orbit state vectors, and WGS84 bounding box metadata for downstream processing and map placement.
+Range Doppler Algorithm (RDA)
+rda.rs
+Performs range compression (matched filtering of the chirp), then Range Cell Migration Correction, then azimuth compression in the Doppler domain. The core SAR focusing algorithm that turns raw IQ into a recognizable scene image.
+RCMC — Range Cell Migration Correction
+rcmc.rs
+As the satellite moves, targets migrate across range cells. RCMC corrects this using sinc interpolation — sub-pixel accurate — before azimuth compression. Without RCMC the output image is smeared in azimuth.
+InSAR Engine
+insar.rs
+Computes interferometric phase difference between two SLC acquisitions of the same scene. Unwraps the phase map to derive surface deformation in millimeters. Foundation for the Infrastructure Health module.
+Ship Detection
+ship_detection.rs
+Implements CA-CFAR (Cell Averaging Constant False Alarm Rate) with integral images for O(1) sliding window backscatter sums. Adaptive thresholding means it works across varying ocean clutter without manual tuning.
+Infrastructure Health
+infra_health.rs
+Identifies Persistent Scatterers (PS points) across multi-temporal SAR stacks — stable man-made reflectors like bridge decks, dam faces, and towers. Fits deformation time-series to detect subsidence or structural movement at mm-level precision.
+Component 2
+Kubernetes Operator (kube-rs)
+A Kubernetes Custom Resource Operator written in Rust using kube-rs. It extends Kubernetes to understand SarJob — a native resource that represents a SAR processing request.
+yaml
+SarJob CRD example
+apiVersion: nisar.io/v1alpha1
+kind: SarJob
+metadata:
+  name: process-mumbai-gcov
+spec:
+  inputFile: "s3://nisar-beta/NISAR_L2_GCOV_Mumbai_001.h5"
+  mode: "rda"
+  outputBucket: "sar-results"
+  polarization: "HH"
+1
+CRD is submitted to the cluster
+The gateway creates a SarJob custom resource via the Kubernetes API when a processing request comes in from the dashboard.
+2
+Controller reconciles the resource
+The controller.rs reconcile loop detects the new SarJob, spins up a processing pod with the correct environment variables and input references, and updates job status.
+3
+Pod runs and reports back
+The processor pod runs the Rust binary, writes stdout logs to the pod stream, and on completion writes the output GeoTIFF to the configured bucket. The operator patches the SarJob status to Completed.
+Component 3
+API Gateway (Axum)
+A high-concurrency async web server built on Tokio + Axum. It is the single connection point between the React frontend and everything behind it — Kubernetes, NASA ASF, ESA Copernicus, and job state.
+rust
+jobs.rs — SSE streaming endpoint
+// GET /jobs/:id/stream — live log SSE endpoint
+pub async fn stream_job_logs(
+    Path(job_id): Path<String>,
+    State(state): State<AppState>,
+) -> Sse<impl Stream> {
+    let rx = state.job_log_bus.subscribe(&job_id);
+    Sse::new(
+        tokio_stream::wrappers::BroadcastStream::new(rx)
+            .map(|line| Event::default().data(line))
+    )
+}
+NASA ASF Client
+nasa_client.rs
+Brokers authenticated search and download requests to the NASA Alaska Satellite Facility. Handles granule search by bounding box, date range, and product type (RSLC, GCOV).
+ESA Copernicus Client
+esa_client.rs
+OAuth2-authenticated client for ESA's Copernicus Data Space. Fetches Sentinel-1 SAFE products and triggers the Sentinel parser path through the processor.
+Component 4
+Intelligence Dashboard (React 19)
+The user-facing application. Built with Vite 7, React 19, Framer Motion, and Leaflet. Features a live SSE terminal, WebGL map rendering, and scroll-driven cinematic use-case pages. Deployed on Netlify with Cloudflare Tunnel to homelab backend.
+Framework
+React 19
++ Vite 7 bundler
+Map
+Leaflet
+ImageOverlay → COG tiles
+Deploy
+Netlify
++ Cloudflare Tunnel
+→
+Live SSE Terminal
+Opens an EventSource to the gateway's /jobs/:id/stream endpoint. Each log line from the Kubernetes pod appears in the terminal drawer within ~50ms.
+→
+Map with image overlay
+On job completion, the gateway returns a bounding box extracted from the HDF5 metadata. The dashboard flies the Leaflet map to those coordinates and overlays the processed PNG. M2 target upgrades this to COG tile streaming via TiTiler.
+→
+Scroll-driven use cases
+The UseCasesPage uses Framer Motion scroll progress to animate Maritime, Infrastructure, and Deformation use case reveals. Cinematic, not decorative — each section ties to a real processor capability.
+Deep Dive
+Range Doppler Algorithm
+The RDA is the core SAR focusing algorithm. It works in two passes — range and azimuth — separated by the RCMC correction step. Here is what happens inside rda.rs step by step.
+1
+Range Compression
+The raw received signal is correlated with the transmitted chirp (frequency-modulated pulse) using FFT-based matched filtering. This collapses the chirp in range, giving fine cross-track resolution.
+2
+Azimuth FFT
+Transform each range-compressed column into the Doppler frequency domain. This is the domain where range cell migration is a computable, correctable function of range and Doppler frequency.
+3
+RCMC — sinc interpolation
+Each target's range history is a hyperbola across the aperture. RCMC straightens these curves so all returns from a target align to the same range bin. Your implementation uses sinc interpolation for sub-pixel accuracy — avoids the staircase artifact of nearest-neighbour.
+4
+Azimuth Compression
+Apply the azimuth matched filter (the conjugate of the Doppler history) and inverse FFT back to the image domain. The result is a focused SAR image with both range and azimuth resolution achieved.
+5
+Geocoding and output
+Map pixel coordinates to WGS84 lat/lon using orbit state vectors from the HDF5 metadata. Write the bounding box to JobMetadata so the gateway can return it to the dashboard. Save amplitude as a stretched PNG or GeoTIFF.
+Deep Dive
+Maritime Module
+Ship detection using CA-CFAR on SAR backscatter. Ships appear as bright point-like targets against the dark, low-backscatter ocean. The challenge is separating real ships from sea clutter spikes without manual threshold tuning.
+CA-CFAR (Cell Averaging CFAR)
+ship_detection.rs
+For each pixel, compute the mean backscatter of a surrounding guard+reference window. A pixel is declared a detection if it exceeds this local mean by a factor T — where T is set by desired false alarm rate. This way the threshold adapts to local ocean roughness automatically.
+Integral Image Acceleration
+ship_detection.rs
+Naively sliding a window over a large SAR scene is O(N²×W²). Using an integral image (summed area table) the window sum at any position is computed in O(1) — 4 array lookups regardless of window size. This is the difference between minutes and seconds on a full NISAR swath.
+Kinematics Projection (UI)
+MaritimePage.jsx
+Detected ship positions (lat/lon) are passed to the frontend where Framer Motion animates heading vectors and trail lines on the Leaflet map using the ship's derived velocity from multi-pass detections.
+Deep Dive
+Infrastructure Module
+Millimeter-precision deformation monitoring for bridges, dams, and embankments using Persistent Scatterer InSAR. This is the highest-value application for industrial clients — detecting subsidence before it becomes failure.
+Persistent Scatterer Identification
+infra_health.rs
+Across a stack of co-registered SAR images, pixels with consistently high amplitude-dispersion index (ADI < 0.25) are selected as PS candidates. Man-made infrastructure — bridge decks, concrete walls, metal pylons — dominates this set because their radar cross-section is stable regardless of season.
+Phase Unwrapping and Deformation
+insar.rs
+Interferometric phase difference between each acquisition pair is unwrapped from the [-π, π] ambiguity domain to absolute phase. Converted to line-of-sight displacement in mm using: displacement = (λ × Δφ) / (4π). For C-band SAR (λ ≈ 5.6cm), one full phase cycle = 2.8cm displacement.
+Elastic hover visuals (Frontend)
+InfrastructurePage.jsx
+PS point detections are rendered as SVG circles on the map layer with spring-physics hover animations. Hover reveals a deformation time-series sparkline per point. Color encodes deformation velocity: teal = stable, amber = >2mm/yr, red = >5mm/yr.
+Future Scope
+Platform Roadmap
+What's done, what's in progress, and what comes next. The milestone gate is always a clean, georeferenced, demo-worthy output before expanding scope.
+DONE
+RDA processor + RCMC + K8s Operator + SSE terminal
+Core pipeline from HDF5 input to PNG output running in Kubernetes with live log streaming to the dashboard.
+M1 — IN PROGRESS
+Georeferenced output — bounding box from HDF5 metadata
+Extract WGS84 bbox from NISAR HDF5, attach to JobMetadata, fly the Leaflet map to it on job completion. This is the single gate to a real demo.
+M2 — NEXT
+Cloud Optimized GeoTIFF + TiTiler tile serving
+Output COG instead of PNG. Add TiTiler sidecar to K8s. Replace Leaflet ImageOverlay with a proper tiled TileLayer for smooth zoom at full SAR resolution.
+M3 — DEMO GATE
+60-second end-to-end demo video
+Raw HDF5 filename → live log stream → georeferenced image on the map over a recognizable real-world scene (Mumbai coastline or Himalayan glacier).
+FUTURE
+ML-based filters, TerraSAR-X, automated tasking
+Deep learning ship classifier on top of CFAR detections. TerraSAR-X COSAR parser (deferred — requires paid data + new format work). Automated scene tasking based on AIS vessel positions.
+FUTURE
+Industrial InSAR SaaS — embankment and dam monitoring
+MT-InSAR deformation reports for mining pond embankments and dam safety. Concrete infrastructure behaves as ideal Permanent Scatterers. Target: industrial clients in mining and infrastructure sectors.
