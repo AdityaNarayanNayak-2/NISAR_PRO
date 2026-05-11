@@ -547,15 +547,22 @@ const PageInSAR = () => (
             Interferometric Synthetic Aperture Radar (InSAR) uses two or more SAR images acquired over the same area to measure ground deformation with millimeter accuracy. It is the core algorithm powering our Dam and Bridge monitoring modules.
         </Alert>
 
+        <H2 id="coregistration">Sub-Pixel Coregistration</H2>
+        <P>Before generating an interferogram, the master and slave images must be perfectly aligned. Our pipeline uses global FFT cross-correlation with parabolic peak refinement, followed by sinc-interpolation resampling to achieve sub-pixel accuracy.</P>
+        <CodeTab tabs={[{ name: 'coregister.rs', code: 'let m_fft = fft2d(master, fft_rows, fft_cols);\nlet s_fft = fft2d(slave, fft_rows, fft_cols);\n// Cross-correlation and parabolic refinement\nlet resampled = resample_2d(slave, -rg_offset, -az_offset);' }]} />
+
         <H2 id="ifgram">Interferogram Generation</H2>
         <P>The phase difference between two registered SAR images (Master and Slave) reveals sub-wavelength changes in surface elevation. This is calculated via complex conjugate multiplication.</P>
         <KaTeXBlock math="\phi = \text{arg}(M \cdot S^*)" />
         <CodeTab tabs={[{ name: 'insar.rs', code: 'Zip::from(&mut ifgram).and(master).and(slave).for_each(|out, &m, &s| {\n    *out = m * s.conj();\n});' }]} />
         
-        <H2 id="coherence">Coherence Estimation</H2>
-        <P>Coherence measures the quality of the interferogram. Areas with high coherence (like buildings and dams) yield reliable displacement data, while low coherence (like forests or water) indicates temporal decorrelation.</P>
+        <H2 id="coherence">O(n²) Coherence Estimation</H2>
+        <P>Coherence measures the quality of the interferogram. Instead of a slow $O(n^2 \cdot w^2)$ sliding window, our engine uses Summed-Area Tables (integral images) to compute coherence in $O(n^2)$ time, scaling instantly to any window size.</P>
         <KaTeXBlock math="\gamma = \frac{|\langle M \cdot S^* \rangle|}{\sqrt{\langle |M|^2 \rangle \langle |S|^2 \rangle}}" />
         
+        <H2 id="filtering">Goldstein Phase Filtering</H2>
+        <P>To reduce phase noise in low-coherence regions, we apply a Goldstein adaptive spectral filter. It uses overlap-add block processing, scaling the frequency spectrum by $|S|^\alpha$ where $\alpha = 1 - \gamma^2$.</P>
+
         <H2 id="ps-insar">Persistent Scatterer (PS-InSAR)</H2>
         <P>In the NISARPro pipeline, we filter the interferogram for pixels with a coherence index {">"} 0.85. These "Persistent Scatterers" form the basis for our time-series deformation analysis, allowing us to track the structural health of critical infrastructure over months or years.</P>
     </div>

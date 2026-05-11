@@ -128,6 +128,21 @@ function Hero() {
                 pointerEvents: 'none',
                 fontFamily: 'system-ui, -apple-system, sans-serif'
             }}>
+                <div style={{
+                    display: 'inline-block',
+                    padding: '4px 12px',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '20px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    letterSpacing: '1px',
+                    color: '#a78bfa',
+                    marginBottom: '16px',
+                    pointerEvents: 'auto'
+                }}>
+                    NEW: PURE-RUST INSAR PIPELINE
+                </div>
                 <h1 style={{
                     fontSize: 'clamp(2.5rem, 5vw, 4rem)',
                     fontWeight: 700,

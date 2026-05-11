@@ -180,6 +180,21 @@ We implemented a **Cloud Optimized GeoTIFF (COG) workflow** to enable deep-zoom 
 
 ---
 
+## Phase 9: Milestone 3 — InSAR Pipeline Overhaul (In Progress)
+
+### The Problem
+The original InSAR processing implementation lacked the robustness needed for true production workloads. Coherence estimation was $O(n^2 \cdot w^2)$, coregistration was rudimentary, and there was no noise filtering or phase unwrapping implemented.
+
+### What We Are Building
+We are doing a massive 12-task overhaul of the InSAR pipeline in pure Rust:
+1. **O(n²) Coherence Estimation**: Rewrote coherence using Summed-Area Tables (integral images) for lightning-fast performance independent of window size.
+2. **Rayon Multi-looking**: Implemented parallelized block-averaging to reduce dimensions and speckle.
+3. **Sub-pixel Coregistration**: Implemented global FFT cross-correlation with parabolic peak refinement and sinc-interpolation resampling.
+4. **Goldstein Phase Filter**: Added an adaptive spectral filter using overlap-add block processing to reduce phase noise in low-coherence regions.
+*(Tasks 5-12 including Phase Unwrapping, DEM removal, and GeoTIFF outputs are currently underway).*
+
+---
+
 ## Current Repository Structure
 ```
 sar_analyzer/
