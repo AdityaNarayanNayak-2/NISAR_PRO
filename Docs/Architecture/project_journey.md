@@ -159,6 +159,24 @@ The pipeline runs automatically on every `git push`:
 2. **`test_rust`** — Runs `cargo test`.
 3. **`audit_rust`** — Runs `cargo audit` for dependency security vulnerabilities.
 4. **`pages`** — Builds the React dashboard with `GITLAB_PAGES=true` and deploys to GitLab Pages.
+5. **`build_docs`** — Generates and deploys this technical documentation.
+
+---
+
+## Phase 8: Milestone 2 — Tiled GeoTIFFs & Tile Streaming
+
+### The Problem
+Static PNGs worked for small scenes, but they break down at full resolution. A 30,000 × 20,000 pixel image cannot be displayed as a single `ImageOverlay` in Leaflet without crashing the browser or losing all detail.
+
+### What We Built
+We implemented a **Cloud Optimized GeoTIFF (COG) workflow** to enable deep-zoom tile streaming:
+
+1. **`save_sar_geotiff` (Pure Rust)** — Instead of relying on heavy C++ libraries like GDAL, we built a custom GeoTIFF writer inside `io.rs`. It handles:
+   - **Internal Tiling:** Chops the image into 256×256 tiles inside the TIFF file for fast random access.
+   - **Geotag Injection:** Manually injects `ModelTransformationTag` (34264) and `GeoKeyDirectoryTag` (34735) into the TIFF IFD to define the EPSG:4326 geographic projection.
+   - **Y-Axis Correction:** Uses a negative scale in the transformation matrix to ensure "north-up" orientation.
+2. **TiTiler Integration (Planned/In Progress)** — Pointing the frontend to a TiTiler sidecar that reads these GeoTIFFs and serves Web Mercator tiles dynamically.
+3. **Frontend Upgrade:** Transitioning from Leaflet's `ImageOverlay` to a high-performance `TileLayer` for smooth, cinematic zooming into SAR details.
 
 ---
 
@@ -193,6 +211,7 @@ sar_analyzer/
 ---
 
 ## What's Next
-- **Native File Browser:** Add `rfd` crate to gateway for OS-level file dialog (plan in `Docs/Strategy/pending_file_browser_plan.md`).
-- **Cross-Platform Executables:** Static-link HDF5 and ship a single `.exe` / `.app` / Linux binary.
+- **TiTiler Sidecar:** Deploy a local TiTiler instance to serve the new tiled GeoTIFFs to the React Dashboard.
+- **Native File Browser:** Add `rfd` crate to gateway for OS-level file dialog.
 - **Time-Series Analysis:** Multi-temporal InSAR for long-term displacement tracking.
+- **Cross-Platform Executables:** Static-link HDF5 and ship a single `.exe` / `.app` / Linux binary.

@@ -93,7 +93,7 @@ sar_analyzer/
 │       ├── ship_detection.rs → CA-CFAR with integral images
 │       ├── infra_health.rs → PS-InSAR displacement analysis
 │       ├── polsar.rs       → Polarimetric decomposition
-│       └── io.rs           → PNG/XYZ tiles + Lee filter + CLAHE
+│       └── io.rs           → GeoTIFF/PNG/XYZ tiles + Lee filter + CLAHE
 │
 ├── sar-gateway/            → Axum HTTP server (REST + SSE)
 │   └── src/
@@ -146,6 +146,9 @@ cargo run --release -- --synthetic --output test.png
 
 # XYZ web tiles
 cargo run --release -- --input scene.h5 --tiles-dir ./tiles/
+
+# GeoTIFF output (High Resolution)
+cargo run --release -- --input scene.h5 --output scene.tif
 ```
 
 ---

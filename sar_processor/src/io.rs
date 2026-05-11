@@ -538,3 +538,267 @@ pub fn save_anomaly_map_as_png(anomaly_map: ArrayView2<f32>, output_filename: &s
     info!("Anomaly map saved: {}", output_filename);
     Ok(())
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GeoTIFF Writer — Cloud Optimized GeoTIFF with EPSG:4326
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Save an f32 intensity array as a tiled GeoTIFF with geographic metadata.
+///
+/// Writes a 256×256 internally-tiled TIFF with three GeoTIFF tags injected
+/// directly into the IFD (no GDAL, no Python, no new crate dependencies):
+///
+///   - **ModelTiepointTag (33922):** Maps pixel (0,0) → (west, north)
+///   - **ModelPixelScaleTag (33550):** Pixel dimensions in degrees
+///   - **GeoKeyDirectoryTag (34735):** Declares Geographic CRS = EPSG:4326
+///
+/// The f32 input is normalized to u8 using 2nd–98th percentile log-stretch
+/// with gamma correction (γ = 0.6), matching the existing SAR display pipeline.
+///
+/// # Arguments
+/// * `intensity` - 2D f32 array (rows × cols) of SAR intensity values
+/// * `output_filename` - Path for the output `.tif` file
+/// * `bbox` - Geographic bounding box as `[west, south, east, north]` in degrees
+pub fn save_sar_geotiff(
+    intensity: ArrayView2<f32>,
+    output_filename: &str,
+    bbox: [f64; 4], // [west, south, east, north]
+) -> Result<()> {
+    use std::io::Write;
+
+    let rows = intensity.nrows() as u32;
+    let cols = intensity.ncols() as u32;
+    let [west, south, east, north] = bbox;
+
+    info!(
+        "Writing GeoTIFF: {}×{} → {} [EPSG:4326 bbox: {:.4},{:.4},{:.4},{:.4}]",
+        cols, rows, output_filename, west, south, east, north
+    );
+
+    // ── 1. Normalize f32 → u8 (log + percentile stretch + gamma) ─────────
+    let mut finite_vals: Vec<f32> = intensity
+        .iter()
+        .filter(|&&v| v.is_finite() && v > 0.0)
+        .map(|&v| (v + 1e-10).log10())
+        .collect();
+
+    if finite_vals.is_empty() {
+        info!("Warning: no finite values found, writing black GeoTIFF");
+        finite_vals.push(0.0);
+        finite_vals.push(1.0);
+    }
+
+    finite_vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let n = finite_vals.len();
+    let p2 = finite_vals[((n as f64 * 0.02) as usize).min(n.saturating_sub(1))];
+    let p98 = finite_vals[((n as f64 * 0.98) as usize).min(n.saturating_sub(1))];
+    let stretch = (p98 - p2).max(1e-6);
+    let gamma = 0.6_f32;
+
+    let pixels: Vec<u8> = intensity
+        .iter()
+        .map(|&v| {
+            if !v.is_finite() || v <= 0.0 {
+                return 0u8;
+            }
+            let log_v = (v + 1e-10).log10();
+            let norm = ((log_v - p2) / stretch).clamp(0.0, 1.0);
+            (norm.powf(gamma) * 255.0) as u8
+        })
+        .collect();
+
+    // ── 2. Tile geometry ─────────────────────────────────────────────────
+    let tile_size: u32 = 256;
+    let tiles_x = (cols + tile_size - 1) / tile_size;
+    let tiles_y = (rows + tile_size - 1) / tile_size;
+    let n_tiles = (tiles_x * tiles_y) as usize;
+    let tile_bytes = (tile_size * tile_size) as usize; // 65536 bytes per tile
+
+    info!(
+        "Tile grid: {}×{} ({} tiles, {} bytes each, uncompressed)",
+        tiles_x, tiles_y, n_tiles, tile_bytes
+    );
+
+    // ── 3. Build tile data (zero-padded at edges) ────────────────────────
+    let mut tile_data: Vec<u8> = vec![0u8; n_tiles * tile_bytes];
+
+    for ty in 0..tiles_y {
+        for tx in 0..tiles_x {
+            let tile_idx = (ty * tiles_x + tx) as usize;
+            let tile_start = tile_idx * tile_bytes;
+
+            for py in 0..tile_size {
+                let img_y = ty * tile_size + py;
+                if img_y >= rows {
+                    break;
+                }
+                for px in 0..tile_size {
+                    let img_x = tx * tile_size + px;
+                    if img_x >= cols {
+                        continue;
+                    }
+                    let src = (img_y * cols + img_x) as usize;
+                    let dst = (py * tile_size + px) as usize;
+                    tile_data[tile_start + dst] = pixels[src];
+                }
+            }
+        }
+    }
+
+    // ── 4. Compute TIFF layout offsets ───────────────────────────────────
+    //
+    // Layout: [Header 8B] [Tile data] [IFD] [Overflow values]
+    //
+    let header_size: u32 = 8;
+    let tile_data_total = (n_tiles * tile_bytes) as u32;
+    let ifd_offset = header_size + tile_data_total;
+
+    let num_ifd_entries: u16 = 13;
+    // IFD = 2 (count) + entries*12 + 4 (next IFD pointer)
+    let ifd_size = 2 + (num_ifd_entries as u32 * 12) + 4;
+    let overflow_base = ifd_offset + ifd_size;
+
+    // Overflow area layout (sequential):
+    let off_tile_offsets = overflow_base;
+    let off_tile_bytecounts = off_tile_offsets + (n_tiles as u32 * 4);
+    let off_transform = off_tile_bytecounts + (n_tiles as u32 * 4);
+    let off_geokeys = off_transform + 128; // 16 × f64 = 128 bytes
+    // geokeys: 16 × u16 = 32 bytes
+
+    // Pre-compute per-tile offsets within the file
+    let tile_offsets: Vec<u32> = (0..n_tiles)
+        .map(|i| header_size + (i as u32 * tile_bytes as u32))
+        .collect();
+
+    // ── 5. Assemble the raw TIFF bytes ───────────────────────────────────
+    let total_file_size = (off_geokeys + 32) as usize;
+    let mut buf: Vec<u8> = Vec::with_capacity(total_file_size);
+
+    // ─── TIFF Header ─────────────────────────────────────────────────────
+    buf.extend_from_slice(b"II");                       // Byte order: little-endian
+    buf.extend_from_slice(&42u16.to_le_bytes());        // TIFF magic number
+    buf.extend_from_slice(&ifd_offset.to_le_bytes());   // Offset to first IFD
+
+    // ─── Tile Data ───────────────────────────────────────────────────────
+    buf.extend_from_slice(&tile_data);
+
+    // ─── IFD (Image File Directory) ──────────────────────────────────────
+    // TIFF spec requires entries sorted by tag number.
+    buf.extend_from_slice(&num_ifd_entries.to_le_bytes());
+
+    //  Tag   | Type   | Count | Value/Offset
+    // -------|--------|-------|------------------
+    geotiff_ifd_short(&mut buf, 256, 1, cols as u16);       // ImageWidth (as SHORT if ≤65535)
+    geotiff_ifd_short(&mut buf, 257, 1, rows as u16);       // ImageLength
+    geotiff_ifd_short(&mut buf, 258, 1, 8);                 // BitsPerSample = 8
+    geotiff_ifd_short(&mut buf, 259, 1, 1);                 // Compression = None
+    geotiff_ifd_short(&mut buf, 262, 1, 1);                 // PhotometricInterpretation = MinIsBlack
+    geotiff_ifd_short(&mut buf, 277, 1, 1);                 // SamplesPerPixel = 1
+    geotiff_ifd_short(&mut buf, 322, 1, tile_size as u16);  // TileWidth = 256
+    geotiff_ifd_short(&mut buf, 323, 1, tile_size as u16);  // TileLength = 256
+    geotiff_ifd_long_arr(&mut buf, 324, n_tiles as u32, off_tile_offsets);   // TileOffsets → overflow
+    geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts);// TileByteCounts → overflow
+    geotiff_ifd_short(&mut buf, 339, 1, 1);                 // SampleFormat = UnsignedInteger
+
+    // GeoTIFF tags (ascending tag order: 34264 < 34735)
+    geotiff_ifd_double_arr(&mut buf, 34264, 16, off_transform); // ModelTransformationTag
+    geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys);   // GeoKeyDirectoryTag
+
+    buf.extend_from_slice(&0u32.to_le_bytes()); // Next IFD offset = 0 (single image)
+
+    // ─── Overflow Data ───────────────────────────────────────────────────
+
+    // TileOffsets array
+    for &off in &tile_offsets {
+        buf.extend_from_slice(&off.to_le_bytes());
+    }
+
+    // TileByteCounts array (all identical, uncompressed)
+    for _ in 0..n_tiles {
+        buf.extend_from_slice(&(tile_bytes as u32).to_le_bytes());
+    }
+
+    // ModelTransformationTag (34264): 4×4 affine matrix (row-major, 16 doubles)
+    //
+    // This replaces ModelPixelScaleTag + ModelTiepointTag with a single
+    // explicit transform. The NEGATIVE scale_y is critical: TIFF row 0 is
+    // the top of the image (= north), and each subsequent row moves south.
+    //
+    //   | scale_x    0       0    west  |
+    //   | 0         -scale_y 0    north |
+    //   | 0          0       0    0     |
+    //   | 0          0       0    1     |
+    //
+    let scale_x = (east - west) / cols as f64;
+    let scale_y = (north - south) / rows as f64;
+    let transform: [f64; 16] = [
+        scale_x,  0.0,      0.0,  west,   // row 0: X = west + col * scale_x
+        0.0,     -scale_y,  0.0,  north,  // row 1: Y = north - row * scale_y  ← north-up
+        0.0,      0.0,      0.0,  0.0,    // row 2: Z (unused)
+        0.0,      0.0,      0.0,  1.0,    // row 3: homogeneous
+    ];
+    for &v in &transform {
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+
+    // GeoKeyDirectoryTag (34735): EPSG:4326 declaration
+    // Format: [version, revision, minor, numKeys, ...key entries...]
+    let geokeys: [u16; 16] = [
+        1, 1, 0, 3,       // Header: v1.1.0, 3 keys follow
+        1024, 0, 1, 2,    // GTModelTypeGeoKey       = 2 (ModelTypeGeographic)
+        1025, 0, 1, 1,    // GTRasterTypeGeoKey      = 1 (RasterPixelIsArea)
+        2048, 0, 1, 4326, // GeographicTypeGeoKey    = 4326 (EPSG:4326 / WGS84)
+    ];
+    for &k in &geokeys {
+        buf.extend_from_slice(&k.to_le_bytes());
+    }
+
+    // ── 6. Write to disk ─────────────────────────────────────────────────
+    let mut file = std::io::BufWriter::new(fs::File::create(output_filename)?);
+    file.write_all(&buf)?;
+    file.flush()?;
+
+    info!(
+        "✓ GeoTIFF written: {} ({} bytes, {} tiles)",
+        output_filename,
+        buf.len(),
+        n_tiles
+    );
+    Ok(())
+}
+
+// ── GeoTIFF IFD entry helpers ────────────────────────────────────────────
+// Each IFD entry is exactly 12 bytes: tag(u16) + type(u16) + count(u32) + value/offset(u32)
+
+/// Write an IFD entry for a single SHORT (type=3) value stored inline.
+fn geotiff_ifd_short(buf: &mut Vec<u8>, tag: u16, count: u32, value: u16) {
+    buf.extend_from_slice(&tag.to_le_bytes());
+    buf.extend_from_slice(&3u16.to_le_bytes());     // type = SHORT
+    buf.extend_from_slice(&count.to_le_bytes());
+    buf.extend_from_slice(&value.to_le_bytes());
+    buf.extend_from_slice(&0u16.to_le_bytes());     // pad to 4 bytes
+}
+
+/// Write an IFD entry for a SHORT array (type=3) stored at an overflow offset.
+fn geotiff_ifd_short_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) {
+    buf.extend_from_slice(&tag.to_le_bytes());
+    buf.extend_from_slice(&3u16.to_le_bytes());     // type = SHORT
+    buf.extend_from_slice(&count.to_le_bytes());
+    buf.extend_from_slice(&offset.to_le_bytes());
+}
+
+/// Write an IFD entry for a LONG array (type=4) stored at an overflow offset.
+fn geotiff_ifd_long_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) {
+    buf.extend_from_slice(&tag.to_le_bytes());
+    buf.extend_from_slice(&4u16.to_le_bytes());     // type = LONG
+    buf.extend_from_slice(&count.to_le_bytes());
+    buf.extend_from_slice(&offset.to_le_bytes());
+}
+
+/// Write an IFD entry for a DOUBLE array (type=12) stored at an overflow offset.
+fn geotiff_ifd_double_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) {
+    buf.extend_from_slice(&tag.to_le_bytes());
+    buf.extend_from_slice(&12u16.to_le_bytes());    // type = DOUBLE
+    buf.extend_from_slice(&count.to_le_bytes());
+    buf.extend_from_slice(&offset.to_le_bytes());
+}

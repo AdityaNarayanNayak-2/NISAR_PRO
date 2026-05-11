@@ -3,7 +3,7 @@ use clap::Parser;
 use log::info;
 use ndarray::Array2;
 use num_complex::Complex32;
-use sar_processor::io::{save_sar_image, generate_xyz_tiles};
+use sar_processor::io::{save_sar_geotiff, save_sar_image, generate_xyz_tiles};
 use sar_processor::nisar_parser;
 use sar_processor::nisar_parser::NisarProductType;
 use sar_processor::rcmc::RcmcParams;
@@ -26,8 +26,8 @@ struct Cli {
     #[arg(long, value_name = "SLAVE_FILE")]
     insar_slave: Option<PathBuf>,
 
-    /// Output PNG image path
-    #[arg(short, long, default_value = "focused_sar.png")]
+    /// Output GeoTIFF/PNG image path
+    #[arg(short, long, default_value = "focused_sar.tif")]
     output: String,
 
     /// Polarisation channel to process (HH, VV, HV, VH)
@@ -188,13 +188,43 @@ async fn main() -> Result<()> {
         }
         format!("{}/0/0/0.png", tile_dir) // mock
     } else {
-        info!("Saving SAR image → {}", cli.output);
-        save_sar_image(focused.view(), &cli.output)?;
-        info!("✓ Done. Output written to: {}", cli.output);
+        let output_tif = cli.output.replace(".png", ".tif");
+        info!("Saving SAR GeoTIFF → {}", output_tif);
+        
+        let bbox_arr = if let Some(ref bb) = bbox {
+            [bb.west, bb.south, bb.east, bb.north]
+        } else {
+            [0.0, 0.0, 0.0, 0.0]
+        };
+        
+        info!("Computing intensity for GeoTIFF...");
+        let mut intensity = ndarray::Array2::<f32>::zeros((focused.nrows(), focused.ncols()));
+        use rayon::prelude::*;
+        intensity.axis_iter_mut(ndarray::Axis(0))
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(r, mut row_view)| {
+                for c in 0..focused.ncols() {
+                    let p = focused[[r, c]];
+                    if p.re.is_finite() && p.im.is_finite() {
+                        row_view[c] = p.re.powi(2) + p.im.powi(2);
+                    }
+                }
+            });
 
-        // Write georeference sidecar alongside PNG
+        save_sar_geotiff(intensity.view(), &output_tif, bbox_arr)?;
+        info!("✓ Done. GeoTIFF written to: {}", output_tif);
+
+        // Keep generating the PNG to ensure the legacy Dashboard is not broken
+        // until the TiTiler TileLayer integration is fully complete.
+        if cli.output.ends_with(".png") {
+            info!("Saving SAR PNG (Dashboard fallback) → {}", cli.output);
+            save_sar_image(focused.view(), &cli.output)?;
+        }
+
+        // Write georeference sidecar alongside TIF
         if let Some(ref bb) = bbox {
-            let geo_path = cli.output.replace(".png", ".geo.json");
+            let geo_path = output_tif.replace(".tif", ".geo.json");
             let geo_json = serde_json::to_string_pretty(bb)?;
             std::fs::write(&geo_path, &geo_json)?;
             info!("✓ Georeference written: {}", geo_path);
@@ -202,7 +232,7 @@ async fn main() -> Result<()> {
             println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}", 
                 bb.south, bb.north, bb.west, bb.east);
         }
-        cli.output.clone()
+        output_tif
     };
 
     // ── Run InSAR & Infrastructure Health Pipeline ──────────────────────────

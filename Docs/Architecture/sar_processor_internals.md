@@ -8,7 +8,7 @@ The `sar_processor` is a stateless CLI binary. It ingests a raw SAR file (NISAR 
 ## Module Map (`lib.rs`)
 ```
 lib.rs                  → Public module re-exports
-├── io.rs               → Image encoding, XYZ tile generation, CLAHE + Lee filters
+├── io.rs               → Image encoding, GeoTIFF writer, XYZ tile generation, CLAHE + Lee filters
 ├── nisar_parser.rs     → NASA NISAR HDF5 reader (RSLC/GSLC/GCOV/GUNW)
 ├── safe_parser.rs      → ESA Sentinel-1 SAFE/GeoTIFF reader
 ├── rda.rs              → Range-Doppler Algorithm (Range + Azimuth compression)
@@ -50,6 +50,7 @@ CLI Args (clap)
 
     Output Stage:
     ├─ --tiles-dir → generate_xyz_tiles() + geo.json sidecar
+    ├─ --output *.tif → save_sar_geotiff() (Pure Rust, EPSG:4326)
     └─ default → save_sar_image() as PNG + .geo.json sidecar
          └─ Emits {"event":"georef","bbox":{...}} to stdout (Gateway captures via SSE)
 
@@ -74,6 +75,7 @@ Implements the full Range-Doppler Algorithm using `rustfft`:
 3. **Azimuth Compression:** Column-wise FFT, multiply by azimuth matched filter, IFFT.
 
 ### `io.rs` — Output Pipeline
+- **GeoTIFF Writer:** A pure-Rust implementation (`save_sar_geotiff`) that writes 256×256 tiled GeoTIFFs. It manually injects the `ModelTransformationTag` (34264) for explicit EPSG:4326 georeferencing, ensuring correct orientation (north-up) in GIS tools without external dependencies like GDAL.
 - **Lee Sigma Filter:** Speckle noise reduction (adaptive, edge-preserving).
 - **CLAHE:** Contrast Limited Adaptive Histogram Equalization for visual enhancement.
 - **Spatial Multilook:** Averages N×N blocks to reduce speckle and control output resolution.

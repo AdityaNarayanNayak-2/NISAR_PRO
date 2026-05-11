@@ -177,7 +177,7 @@ React 19
 + Vite 7 bundler
 Map
 Leaflet
-ImageOverlay → COG tiles
+TileLayer (TiTiler) ← GeoTIFF tiles
 Deploy
 Netlify
 + Cloudflare Tunnel
@@ -186,7 +186,7 @@ Live SSE Terminal
 Opens an EventSource to the gateway's /jobs/:id/stream endpoint. Each log line from the Kubernetes pod appears in the terminal drawer within ~50ms.
 →
 Map with image overlay
-On job completion, the gateway returns a bounding box extracted from the HDF5 metadata. The dashboard flies the Leaflet map to those coordinates and overlays the processed PNG. M2 target upgrades this to COG tile streaming via TiTiler.
+On job completion, the gateway returns a GeoTIFF path. The dashboard uses a Leaflet TileLayer via TiTiler to stream resolution-independent tiles. This replaces the legacy ImageOverlay system for M2.
 →
 Scroll-driven use cases
 The UseCasesPage uses Framer Motion scroll progress to animate Maritime, Infrastructure, and Deformation use case reveals. Cinematic, not decorative — each section ties to a real processor capability.
@@ -241,9 +241,9 @@ Core pipeline from HDF5 input to PNG output running in Kubernetes with live log 
 M1 — IN PROGRESS
 Georeferenced output — bounding box from HDF5 metadata
 Extract WGS84 bbox from NISAR HDF5, attach to JobMetadata, fly the Leaflet map to it on job completion. This is the single gate to a real demo.
-M2 — NEXT
+M2 — DONE
 Cloud Optimized GeoTIFF + TiTiler tile serving
-Output COG instead of PNG. Add TiTiler sidecar to K8s. Replace Leaflet ImageOverlay with a proper tiled TileLayer for smooth zoom at full SAR resolution.
+Implemented a pure-Rust GeoTIFF writer (`save_sar_geotiff`) with internal 256x256 tiling and EPSG:4326 georeferencing (ModelTransformationTag). Replaced Leaflet ImageOverlay with a proper tiled TileLayer for smooth zoom at full SAR resolution.
 M3 — DEMO GATE
 60-second end-to-end demo video
 Raw HDF5 filename → live log stream → georeferenced image on the map over a recognizable real-world scene (Mumbai coastline or Himalayan glacier).
