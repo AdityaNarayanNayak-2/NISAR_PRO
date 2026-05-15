@@ -9,7 +9,6 @@
 use anyhow::{bail, Context, Result};
 use log::info;
 use std::fs::{self, File};
-use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
 /// Sentinel-1 product metadata extracted from SAFE

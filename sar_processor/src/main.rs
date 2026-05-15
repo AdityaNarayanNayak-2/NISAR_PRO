@@ -3,19 +3,19 @@ use clap::Parser;
 use log::info;
 use ndarray::Array2;
 use num_complex::Complex32;
-use sar_processor::io::{save_sar_geotiff, save_sar_image, generate_xyz_tiles};
+use sar_processor::io::{save_sar_geotiff, save_sar_image, generate_xyz_tiles, save_geotiff_f32};
 use sar_processor::nisar_parser;
 use sar_processor::nisar_parser::NisarProductType;
 use sar_processor::rcmc::RcmcParams;
 use sar_processor::rda::SARProcessor;
 use std::path::PathBuf;
 
-/// NISAR SAR Processor — Range-Doppler Algorithm pipeline
+/// NISAR SAR Processor — Range-Doppler Algorithm + InSAR pipeline
 #[derive(Parser, Debug)]
 #[command(
     name = "sar_processor",
-    version = "0.2.0",
-    about = "Process NISAR (or Sentinel-1) SAR data using the Range-Doppler Algorithm"
+    version = "0.3.0",
+    about = "Process NISAR (or Sentinel-1) SAR data: RDA focusing, InSAR, displacement mapping"
 )]
 struct Cli {
     /// Input file: NISAR RSLC `.h5` or Sentinel-1 SAFE `.tiff`
@@ -57,6 +57,32 @@ struct Cli {
     /// Run the CA-CFAR Ship Detection module and emit GeoJSON outputs
     #[arg(long)]
     ship_detect: bool,
+
+    /// Maximum number of detections for CFAR
+    #[arg(long, default_value = "50")]
+    cfar_max_detections: usize,
+
+    // ── InSAR pipeline flags ──────────────────────────────────────────────
+
+    /// Coherence threshold for PS selection (default: 0.85)
+    #[arg(long, default_value = "0.85")]
+    insar_coherence_threshold: f32,
+
+    /// Skip coregistration (assume images are already aligned)
+    #[arg(long)]
+    skip_coregistration: bool,
+
+    /// Skip topographic phase removal
+    #[arg(long)]
+    skip_topo_removal: bool,
+
+    /// Directory containing SRTM .hgt DEM tiles
+    #[arg(long, default_value = "./dem")]
+    dem_dir: String,
+
+    /// Perpendicular baseline in meters (required for topo removal)
+    #[arg(long)]
+    baseline_perp: Option<f64>,
 }
 
 #[tokio::main]
@@ -66,8 +92,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     info!("╔══════════════════════════════════════════════╗");
-    info!("║       NISAR SAR Processor  v0.2.0            ║");
-    info!("║   Range-Doppler Algorithm (RDA) Pipeline     ║");
+    info!("║       NISAR SAR Processor  v0.3.0            ║");
+    info!("║   RDA + InSAR Displacement Pipeline          ║");
     info!("╚══════════════════════════════════════════════╝");
 
     // ── Build processor + raw data ─────────────────────────────────────────
@@ -99,7 +125,6 @@ async fn main() -> Result<()> {
                 info!("Product type: {:?}", product.product_type);
 
                 // All NISAR Level-1+ products are already focused — skip RDA
-                // RSLC = focused SLC, GSLC = geocoded SLC, GCOV = covariance, GUNW = interferogram
                 let should_skip_rda = !cli.process && matches!(
                     product.product_type,
                     NisarProductType::RSLC | NisarProductType::GSLC
@@ -116,7 +141,6 @@ async fn main() -> Result<()> {
                         });
                 }
 
-                // Extract bbox for georeferencing (will be written as sidecar)
                 let bbox = product.bbox.clone();
 
                 let p = &product.params;
@@ -133,7 +157,7 @@ async fn main() -> Result<()> {
                 } else {
                     let rcmc = RcmcParams::from_frequency(
                         p.center_frequency as f32,
-                        7_200.0,
+                        7_500.0, // NISAR LEO orbital velocity
                         800_000.0,
                     );
                     proc = proc.with_rcmc_params(rcmc);
@@ -171,7 +195,7 @@ async fn main() -> Result<()> {
     };
 
     // ── Save Output ────────────────────────────────────────────────────────
-    let output_png = if let Some(tile_dir) = cli.tiles_dir {
+    let output_path = if let Some(tile_dir) = cli.tiles_dir {
         info!("Generating deep-zoom XYZ tiles → {}", tile_dir);
         generate_xyz_tiles(focused.view(), &tile_dir, 0)?;
         info!("✓ Done. Web tiles written to: {}", tile_dir);
@@ -182,7 +206,6 @@ async fn main() -> Result<()> {
             let geo_json = serde_json::to_string_pretty(bb)?;
             std::fs::write(&geo_path, &geo_json)?;
             info!("✓ Georeference written: {}", geo_path);
-            // Emit structured bbox to stdout for Gateway SSE capture
             println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}", 
                 bb.south, bb.north, bb.west, bb.east);
         }
@@ -216,7 +239,6 @@ async fn main() -> Result<()> {
         info!("✓ Done. GeoTIFF written to: {}", output_tif);
 
         // Keep generating the PNG to ensure the legacy Dashboard is not broken
-        // until the TiTiler TileLayer integration is fully complete.
         if cli.output.ends_with(".png") {
             info!("Saving SAR PNG (Dashboard fallback) → {}", cli.output);
             save_sar_image(focused.view(), &cli.output)?;
@@ -228,51 +250,205 @@ async fn main() -> Result<()> {
             let geo_json = serde_json::to_string_pretty(bb)?;
             std::fs::write(&geo_path, &geo_json)?;
             info!("✓ Georeference written: {}", geo_path);
-            // Emit structured bbox to stdout for Gateway SSE capture
             println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}", 
                 bb.south, bb.north, bb.west, bb.east);
         }
         output_tif
     };
 
-    // ── Run InSAR & Infrastructure Health Pipeline ──────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    //  Full InSAR Pipeline (12 steps)
+    // ══════════════════════════════════════════════════════════════════════
     if let Some(slave_path) = cli.insar_slave {
-        info!("Starting InSAR pipeline with slave image: {:?}", slave_path);
-        let ext = slave_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-        
-        let slave_data = match ext.as_str() {
-            "h5" | "hdf5" | "he5" => {
-                let product = nisar_parser::parse_nisar_auto(&slave_path, &cli.polarization)?;
-                
-                if cli.limit_lines > 0 {
-                    let limit = cli.limit_lines.min(product.slc.nrows());
-                    product.slc.slice(ndarray::s![..limit, ..]).to_owned()
-                } else {
-                    product.slc
+        info!("╔══════════════════════════════════════════════╗");
+        info!("║          InSAR Pipeline — 12 Steps           ║");
+        info!("╚══════════════════════════════════════════════╝");
+
+        // ── Step 1: Load slave SLC ────────────────────────────────────────
+        info!("[1/12] Loading slave SLC: {:?}", slave_path);
+
+        let slave_data = if cli.synthetic {
+            // Synthetic mode: inject a Gaussian subsidence bowl into slave
+            info!("[1/12] Synthetic mode: creating slave with Gaussian subsidence bowl");
+            let (rows, cols) = focused.dim();
+            let center_r = rows / 2;
+            let center_c = cols / 2;
+            // 10mm subsidence ≈ phase shift of 10e-3 * 4π / λ
+            let wavelength = 0.2384_f32;
+            let max_disp_m = 0.010; // 10mm
+            let max_phase = max_disp_m * 4.0 * std::f32::consts::PI / wavelength;
+
+            Array2::from_shape_fn((rows, cols), |(r, c)| {
+                let dr = (r as f32 - center_r as f32) / (rows as f32 * 0.2);
+                let dc = (c as f32 - center_c as f32) / (cols as f32 * 0.2);
+                let gauss = (-0.5 * (dr * dr + dc * dc)).exp();
+                let defo_phase = max_phase * gauss;
+                focused[[r, c]] * Complex32::from_polar(1.0, defo_phase)
+            })
+        } else {
+            let ext = slave_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            match ext.as_str() {
+                "h5" | "hdf5" | "he5" => {
+                    let product = nisar_parser::parse_nisar_auto(&slave_path, &cli.polarization)?;
+                    if cli.limit_lines > 0 {
+                        let limit = cli.limit_lines.min(product.slc.nrows());
+                        product.slc.slice(ndarray::s![..limit, ..]).to_owned()
+                    } else {
+                        product.slc
+                    }
                 }
+                _ => anyhow::bail!("Unsupported slave format. Use .h5 for NISAR."),
             }
-            _ => anyhow::bail!("Unsupported slave format. Use .h5 for NISAR."),
         };
-        
-        info!("Computing interferogram and coherence matrix...");
-        let ifgram = sar_processor::insar::compute_interferogram(&raw_data, &slave_data);
-        let coherence = sar_processor::insar::estimate_coherence(&raw_data, &slave_data, 5);
-        
-        info!("Analyzing persistent scatterers (PS) for infrastructure health...");
-        // Assuming L-band NISAR (0.24m wavelength)
-        let report = sar_processor::infra_health::analyze_infrastructure_health(
-            &raw_data,
-            &ifgram, 
-            &coherence, 
-            bbox.clone().map(|b| [b.south, b.west, b.north, b.east]),
-            0.24
+        info!("[1/12] Slave loaded: {}×{}", slave_data.nrows(), slave_data.ncols());
+
+        // ── Step 2: Coregistration ────────────────────────────────────────
+        let aligned_slave = if cli.skip_coregistration {
+            info!("[2/12] Coregistration SKIPPED (--skip-coregistration)");
+            slave_data
+        } else {
+            info!("[2/12] Coregistering slave to master (FFT cross-correlation)...");
+            sar_processor::coregister::coregister(
+                &focused,
+                &slave_data,
+                64,   // patch_size (reserved)
+                32,   // overlap (reserved)
+                2,    // oversample_factor (reserved)
+            )?
+        };
+
+        // ── Step 3: Multilook ─────────────────────────────────────────────
+        info!("[3/12] Computing multilook factors...");
+        let (rg_looks, az_looks) = sar_processor::multilook::suggest_multilook_factors(
+            focused.nrows(),
+            focused.ncols(),
+            2048,
+            2048,
         );
-        
-        let report_path = output_png.clone().replace(".png", "_insar.json");
+        let rg_looks = rg_looks.max(1);
+        let az_looks = az_looks.max(1);
+
+        let ml_master = sar_processor::multilook::multilook(&focused, rg_looks, az_looks);
+        let ml_slave = sar_processor::multilook::multilook(&aligned_slave, rg_looks, az_looks);
+        info!("[3/12] Multilooked: {}×{} → {}×{} ({}rg × {}az)",
+            focused.nrows(), focused.ncols(), ml_master.nrows(), ml_master.ncols(),
+            rg_looks, az_looks);
+
+        // ── Step 4: Interferogram ─────────────────────────────────────────
+        info!("[4/12] Computing interferogram...");
+        let ifgram = sar_processor::insar::compute_interferogram(&ml_master, &ml_slave);
+
+        // ── Step 5: Coherence estimation ──────────────────────────────────
+        info!("[5/12] Estimating coherence (SAT-based)...");
+        let coherence = sar_processor::insar::estimate_coherence(&ml_master, &ml_slave, 5);
+
+        // ── Step 6: Goldstein phase filter ────────────────────────────────
+        info!("[6/12] Applying Goldstein adaptive phase filter...");
+        let filtered_ifgram = sar_processor::phase_filter::goldstein_filter(
+            &ifgram,
+            &coherence,
+            32,  // block_size
+            16,  // overlap
+        );
+
+        // ── Step 7: Extract wrapped phase ─────────────────────────────────
+        info!("[7/12] Extracting wrapped phase...");
+        let wrapped_phase = sar_processor::insar::extract_phase(&filtered_ifgram);
+
+        // ── Step 8: Phase unwrapping ──────────────────────────────────────
+        info!("[8/12] Unwrapping phase (quality-guided flood fill)...");
+        let unwrapped_phase = sar_processor::unwrap::unwrap_phase(&wrapped_phase, &coherence);
+
+        // ── Step 9: Topographic phase removal ─────────────────────────────
+        let defo_phase = if cli.skip_topo_removal {
+            info!("[9/12] Topographic phase removal SKIPPED (--skip-topo-removal)");
+            unwrapped_phase
+        } else if let Some(baseline_perp) = cli.baseline_perp {
+            info!("[9/12] Simulating and removing topographic phase (B_perp={:.1}m)...", baseline_perp);
+
+            // Create a flat DEM if no real DEM is available
+            let dem = Array2::from_elem(
+                (unwrapped_phase.nrows(), unwrapped_phase.ncols()),
+                0.0_f32,
+            );
+
+            // NISAR L-band defaults
+            let wavelength = 0.2384;
+            let slant_range = 900_000.0;
+            let incidence_angle = 0.6109; // ~35 degrees
+
+            let topo = sar_processor::topo_phase::simulate_topo_phase(
+                &dem,
+                baseline_perp,
+                wavelength,
+                slant_range,
+                incidence_angle,
+            );
+
+            sar_processor::topo_phase::remove_topo_phase(&unwrapped_phase, &topo)
+        } else {
+            info!("[9/12] Topographic phase removal SKIPPED (no --baseline-perp provided)");
+            unwrapped_phase
+        };
+
+        // ── Step 10: Infrastructure health / PS analysis ──────────────────
+        info!("[10/12] Analyzing persistent scatterers (PS-InSAR)...");
+        let bbox_arr = bbox.as_ref().map(|b| [b.south, b.west, b.north, b.east]);
+        let options = sar_processor::infra_health::InfraHealthOptions {
+            bbox: bbox_arr,
+            wavelength_m: 0.2384,
+            coherence_threshold: cli.insar_coherence_threshold,
+            max_points: 2000,
+        };
+        let report = sar_processor::infra_health::analyze_infrastructure_unwrapped(
+            &defo_phase,
+            &coherence,
+            &options,
+        );
+
+        info!(
+            "[10/12] PS-InSAR summary: {} PS points, {}S/{}C/{}A/{}CR, max_disp={:.2}mm, median={:.2}mm",
+            report.summary.total_ps_points,
+            report.summary.stable_count,
+            report.summary.caution_count,
+            report.summary.alert_count,
+            report.summary.critical_count,
+            report.summary.max_displacement_mm,
+            report.summary.median_displacement_mm,
+        );
+
+        // ── Step 11: Save InSAR outputs ───────────────────────────────────
+        info!("[11/12] Saving InSAR output products...");
+
+        let base = output_path.replace(".tif", "").replace(".png", "");
+        let bbox_opt = bbox.as_ref().map(|b| [b.west, b.south, b.east, b.north]);
+
+        // Deformation phase GeoTIFF
+        let defo_path = format!("{}_defo_phase.tif", base);
+        save_geotiff_f32(defo_phase.view(), &defo_path, bbox_opt)?;
+        info!("  ✓ Deformation phase: {}", defo_path);
+
+        // Coherence GeoTIFF
+        let coh_path = format!("{}_coherence.tif", base);
+        save_geotiff_f32(coherence.view(), &coh_path, bbox_opt)?;
+        info!("  ✓ Coherence map: {}", coh_path);
+
+        // InSAR report JSON
+        let report_path = format!("{}_insar.json", base);
         std::fs::write(&report_path, serde_json::to_string_pretty(&report)?)?;
-        info!("✓ Infrastructure health report written: {}", report_path);
-        
-        println!("{{\"event\":\"insar_report\",\"path\":\"{}\"}}", report_path);
+        info!("  ✓ InSAR report: {}", report_path);
+
+        // ── Step 12: Emit JSON events for gateway ─────────────────────────
+        info!("[12/12] Emitting structured events for gateway...");
+
+        println!("{{\"event\":\"insar_report\",\"path\":\"{}\",\"summary\":{}}}", 
+            report_path, serde_json::to_string(&report.summary)?);
+        println!("{{\"event\":\"insar_outputs\",\"defo_phase\":\"{}\",\"coherence\":\"{}\",\"report\":\"{}\"}}",
+            defo_path, coh_path, report_path);
+
+        info!("╔══════════════════════════════════════════════╗");
+        info!("║          InSAR Pipeline Complete ✓           ║");
+        info!("╚══════════════════════════════════════════════╝");
     }
 
     // ── Run Ship Detection (CFAR) ──────────────────────────────────────────
@@ -299,7 +475,6 @@ async fn main() -> Result<()> {
             });
 
         // Step 2: Downsample 8x to prevent CPU/RAM blowup
-        //   16020×16560 → ~2002×2070  (manageable for CFAR)
         let ds_factor = 8;
         let ds_image = sar_processor::ship_detection::downsample_intensity(
             native_intensity.view(),
@@ -309,14 +484,12 @@ async fn main() -> Result<()> {
         let ds_cols = ds_image.ncols();
 
         // Step 3: Run integral-image accelerated CA-CFAR
-        //   guard=4, bg=10 (per cfar.txt research: small windows for GCOV)
-        //   pfa=1e-6, max 50 detections to prevent browser crash
         let targets = sar_processor::ship_detection::detect_ships_cfar(
             ds_image.view(),
             4,      // guard radius
             10,     // background radius
             1e-6,   // probability of false alarm
-            50,     // max detections (hard cap)
+            cli.cfar_max_detections, // max detections (hard cap)
         );
 
         // Step 4: Convert downsampled pixel coords → geographic lat/lon
@@ -326,14 +499,13 @@ async fn main() -> Result<()> {
         let mut final_ships = Vec::new();
         for t in targets {
             if let Some(ref bb) = bbox {
-                // Map pixel position in the downsampled grid to [0, 1] then to geo
                 let lat = bb.north - ((t.y as f64 / ds_rows as f64) * (bb.north - bb.south));
                 let lon = bb.west + ((t.x as f64 / ds_cols as f64) * (bb.east - bb.west));
                 final_ships.push(OutputShip { lat, lon, intensity: t.intensity });
             }
         }
 
-        let ships_path = output_png.replace(".png", "_ships.json");
+        let ships_path = output_path.replace(".tif", "_ships.json").replace(".png", "_ships.json");
         std::fs::write(&ships_path, serde_json::to_string_pretty(&final_ships)?)?;
         info!("✓ CFAR: {} ship targets written to {}", final_ships.len(), ships_path);
         println!("{{\"event\":\"ships_detected\",\"path\":\"{}\"}}", ships_path);

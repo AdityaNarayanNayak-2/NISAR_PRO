@@ -8,6 +8,12 @@ pub struct EsaClient {
     base_url: String,
 }
 
+impl Default for EsaClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EsaClient {
     pub fn new() -> Self {
         Self {
@@ -35,7 +41,7 @@ impl EsaClient {
         if !resp.status().is_success() {
             let error_text = resp.text().await?;
             error!("ESA Auth Error: {}", error_text);
-            return Err(format!("Failed to authenticate with ESA").into());
+            return Err("Failed to authenticate with ESA".to_string().into());
         }
 
         let json: serde_json::Value = resp.json().await?;
@@ -88,7 +94,7 @@ impl EsaClient {
         if !resp.status().is_success() {
             let error_text = resp.text().await?;
             error!("ESA API Error: {}", error_text);
-            return Err(format!("ESA API returned error").into());
+            return Err("ESA API returned error".to_string().into());
         }
 
         let odata_response: EsaODataResponse = resp.json().await?;

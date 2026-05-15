@@ -110,6 +110,7 @@ pub struct RawMetadata {
 /// This provides a unified interface that can use either:
 /// - The actual ISCE3 C++ library (when feature "isce3" is enabled)
 /// - A pure Rust fallback implementation
+#[allow(dead_code)]
 pub struct Isce3RangeComp {
     chirp: Vec<ComplexF32>,
     input_size: usize,

@@ -217,7 +217,10 @@ impl RcmcParams {
         }
     }
 
-    /// Create from carrier frequency
+    /// Create from carrier frequency and platform velocity.
+    ///
+    /// NISAR L-band orbital velocity is ~7500 m/s. Sentinel-1 is similar.
+    /// Using an incorrect velocity (e.g. 7200) will defocus the imagery.
     pub fn from_frequency(carrier_freq: f32, velocity: f32, near_range: f32) -> Self {
         let c = 299792458.0_f32;
         Self {

@@ -60,6 +60,8 @@ pub struct JobMetadata {
     pub tx: broadcast::Sender<String>,
     pub output_path: Option<String>,
     pub bbox: Option<GeoBbox>,
+    pub created_at: std::time::Instant,
+    pub cancel_tx: Option<tokio::sync::mpsc::Sender<()>>,
 }
 
 #[derive(Serialize)]
@@ -103,6 +105,8 @@ pub async fn spawn_processing_job(
         tx: tx.clone(),
         output_path: None,
         bbox: None,
+        created_at: std::time::Instant::now(),
+        cancel_tx: None, // Will be set if local mode
     }));
 
     {
@@ -113,11 +117,14 @@ pub async fn spawn_processing_job(
     let job_id_clone = job_id.clone();
 
     if is_local_mode() {
+        let (cancel_tx, cancel_rx) = tokio::sync::mpsc::channel(1);
+        metadata.write().await.cancel_tx = Some(cancel_tx);
+
         // ═══════════════════════════════════════════════════════════════
         // LOCAL SUBPROCESS MODE: spawn sar_processor as a child process
         // ═══════════════════════════════════════════════════════════════
         tokio::spawn(async move {
-            spawn_local_job(job_id_clone, input_file, metadata, pipeline).await;
+            spawn_local_job(job_id_clone, input_file, metadata, pipeline, cancel_rx).await;
         });
     } else {
         // ═══════════════════════════════════════════════════════════════
@@ -137,6 +144,7 @@ async fn spawn_local_job(
     input_file: Option<String>,
     metadata: Arc<RwLock<JobMetadata>>,
     pipeline: Option<String>,
+    mut cancel_rx: tokio::sync::mpsc::Receiver<()>,
 ) {
     let results_dir = std::path::Path::new("results");
     if !results_dir.exists() {
@@ -229,26 +237,50 @@ async fn spawn_local_job(
         }
     });
 
-    // Wait for process to finish
-    let exit = child.wait().await;
+    // Wait for process to finish or be cancelled or timeout
+    let timeout_duration = std::time::Duration::from_secs(1800); // 30 mins
+    
+    let exit_status = tokio::select! {
+        res = tokio::time::timeout(timeout_duration, child.wait()) => {
+            match res {
+                Ok(Ok(status)) => Some(status),
+                Ok(Err(e)) => {
+                    let mut m = metadata.write().await;
+                    let err = format!("Process wait error: {}", e);
+                    m.status = JobStatus::Failed(err.clone());
+                    let _ = m.tx.send(format!("[SYSTEM] PROCESS_FAILED: {}", err));
+                    None
+                },
+                Err(_) => { // Timeout
+                    let _ = child.kill().await;
+                    let mut m = metadata.write().await;
+                    m.status = JobStatus::Failed("Job timed out after 30 minutes".to_string());
+                    let _ = m.tx.send("[SYSTEM] PROCESS_TIMEOUT".to_string());
+                    None
+                }
+            }
+        },
+        _ = cancel_rx.recv() => {
+            let _ = child.kill().await;
+            let mut m = metadata.write().await;
+            m.status = JobStatus::Failed("Job cancelled by user".to_string());
+            let _ = m.tx.send("[SYSTEM] PROCESS_CANCELLED".to_string());
+            None
+        }
+    };
+
     stdout_handle.await.ok();
     stderr_handle.await.ok();
 
-    let mut m = metadata.write().await;
-    match exit {
-        Ok(status) if status.success() => {
+    if let Some(status) = exit_status {
+        let mut m = metadata.write().await;
+        if status.success() {
             m.status = JobStatus::Completed;
             m.output_path = Some(format!("/results/{}.png", job_id));
             let _ = m.tx.send("[SYSTEM] PROCESS_COMPLETED".to_string());
             info!("Job {} completed successfully", job_id);
-        }
-        Ok(status) => {
+        } else {
             let err = format!("Process exited with code: {:?}", status.code());
-            m.status = JobStatus::Failed(err.clone());
-            let _ = m.tx.send(format!("[SYSTEM] PROCESS_FAILED: {}", err));
-        }
-        Err(e) => {
-            let err = format!("Process error: {}", e);
             m.status = JobStatus::Failed(err.clone());
             let _ = m.tx.send(format!("[SYSTEM] PROCESS_FAILED: {}", err));
         }
@@ -372,8 +404,10 @@ async fn spawn_k8s_job(
                     let p_api = pods_api.clone();
 
                     tokio::spawn(async move {
-                        let mut logp = LogParams::default();
-                        logp.follow = true;
+                        let logp = LogParams {
+                            follow: true,
+                            ..Default::default()
+                        };
 
                         for _ in 0..10 {
                             match p_api.log_stream(&p_name, &logp).await {
@@ -397,3 +431,46 @@ async fn spawn_k8s_job(
         }
     }
 }
+
+pub async fn cancel_job(state: crate::AppState, job_id: String) -> Result<(), String> {
+    let jobs = state.jobs.read().await;
+    if let Some(metadata_lock) = jobs.get(&job_id) {
+        let mut metadata = metadata_lock.write().await;
+        if let Some(tx) = metadata.cancel_tx.take() {
+            let _ = tx.send(()).await;
+            Ok(())
+        } else {
+            Err("Job already completed, failed, or cannot be cancelled".to_string())
+        }
+    } else {
+        Err("Job not found".to_string())
+    }
+}
+
+pub fn start_cleanup_task(state: crate::AppState) {
+    tokio::spawn(async move {
+        let one_hour = std::time::Duration::from_secs(3600);
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
+            let mut to_remove = Vec::new();
+            {
+                let jobs = state.jobs.read().await;
+                for (id, meta_lock) in jobs.iter() {
+                    let meta = meta_lock.read().await;
+                    if matches!(meta.status, JobStatus::Completed | JobStatus::Failed(_)) 
+                        && meta.created_at.elapsed() > one_hour 
+                    {
+                        to_remove.push(id.clone());
+                    }
+                }
+            }
+            if !to_remove.is_empty() {
+                let mut jobs = state.jobs.write().await;
+                for id in to_remove {
+                    jobs.remove(&id);
+                }
+            }
+        }
+    });
+}
+

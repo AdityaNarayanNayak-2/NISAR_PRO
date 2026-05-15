@@ -7,6 +7,12 @@ pub struct NasaClient {
     client: Client,
 }
 
+impl Default for NasaClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NasaClient {
     pub fn new() -> Self {
         Self {

@@ -5,36 +5,7 @@ use ndarray::{Array2, ArrayView2};
 use rayon::prelude::*;
 use std::fs;
 
-pub async fn fetch_sentinel1_data(scene_id: &str) -> Result<Array2<f32>> {
-    info!("Fetching Sentinel-1 data for scene: {}", scene_id);
-
-    let rows = 512;
-    let cols = 512;
-    let mut simulated_sar_image = Array2::zeros((rows, cols));
-
-    for r in 0..rows {
-        for c in 0..cols {
-            let noise = (r as f32 * 0.01).sin() * (c as f32 * 0.01).cos() * 5.0;
-            simulated_sar_image[[r, c]] = 10.0 + noise;
-        }
-    }
-
-    let anomaly_r = rows / 3;
-    let anomaly_c = cols / 3;
-    for r_offset in -10..=10 {
-        for c_offset in -10..=10 {
-            let r = (anomaly_r as isize + r_offset) as usize;
-            let c = (anomaly_c as isize + c_offset) as usize;
-            if r < rows && c < cols {
-                let dist_sq = (r_offset * r_offset + c_offset * c_offset) as f32;
-                simulated_sar_image[[r, c]] += 50.0 * (-dist_sq / 10.0).exp();
-            }
-        }
-    }
-
-    info!("Sentinel-1 data ready: {}x{}", rows, cols);
-    Ok(simulated_sar_image)
-}
+const GAMMA: f32 = 0.5;
 
 /// Save a SAR focused image as PNG.
 ///
@@ -117,7 +88,6 @@ pub fn save_sar_image(
     info!("Contrast stretch: [{:.2}, {:.2}] dB (based on {} valid blocks)", p2, p98, num_finite);
 
     // ── 4. Gamma + quantize to u8 ─────────────────────────────────────────
-    let gamma = 0.6_f32;
     let pixels: Vec<u8> = log_intensity
         .iter()
         .map(|&v| {
@@ -125,7 +95,7 @@ pub fn save_sar_image(
                 return 0u8; // NaN/Inf → black
             }
             let normalized = ((v - p2) / stretch_range).clamp(0.0, 1.0);
-            let gamma_corrected = normalized.powf(gamma);
+            let gamma_corrected = normalized.powf(GAMMA);
             (gamma_corrected * 255.0) as u8
         })
         .collect();
@@ -416,11 +386,8 @@ pub fn generate_xyz_tiles(
             }
         });
 
-    // 2. Apply dual speckle filtering: Lee (statistical) → Frost (edge-preserving)
-    info!("Applying Lee Sigma Speckle Filter (7×7 window)...");
-    let lee_filtered = lee_filter(&native_intensity, 7);
-    info!("Applying Frost Edge-Preserving Speckle Filter (5×5 window)...");
-    let smoothed_intensity = frost_filter(&lee_filtered, 5, 2.0);
+    // 2. Apply dual speckle filtering
+    let smoothed_intensity = apply_speckle_filter_chain(&native_intensity);
 
     // 3. Log stretch & convert entire native array to 8-bit
     info!("Mapping dynamic range into 8-bit visual bands...");
@@ -443,7 +410,7 @@ pub fn generate_xyz_tiles(
                 if v > 0.0 && v.is_finite() {
                     let log_v = (v + 1e-10).log10();
                     let normalized = ((log_v - p2) / stretch_range).clamp(0.0, 1.0);
-                    let gamma_corrected = normalized.powf(0.5);
+                    let gamma_corrected = normalized.powf(GAMMA);
                     row_view[c] = (gamma_corrected * 255.0) as u8;
                 }
             }
@@ -513,30 +480,12 @@ pub fn generate_xyz_tiles(
     Ok(())
 }
 
-/// Legacy: save a pre-computed anomaly/amplitude map as PNG (simple min-max stretch)
-pub fn save_anomaly_map_as_png(anomaly_map: ArrayView2<f32>, output_filename: &str) -> Result<()> {
-    let rows = anomaly_map.nrows();
-    let cols = anomaly_map.ncols();
-
-    let max_val = anomaly_map.iter().fold(0.0f32, |max, &val| val.max(max));
-    let min_val = anomaly_map.iter().fold(f32::MAX, |min, &val| val.min(min));
-    let range = max_val - min_val;
-
-    let mut img = ImageBuffer::new(cols as u32, rows as u32);
-
-    for (x, y, pixel) in img.enumerate_pixels_mut() {
-        let val = anomaly_map[[y as usize, x as usize]];
-        let normalized = if range > 0.0 {
-            ((val - min_val) / range * 255.0).min(255.0).max(0.0) as u8
-        } else {
-            0
-        };
-        *pixel = Rgb([normalized, normalized, normalized]);
-    }
-
-    img.save(output_filename)?;
-    info!("Anomaly map saved: {}", output_filename);
-    Ok(())
+/// Applies the dual speckle filter chain: Lee Sigma (7x7) -> Frost (5x5, damp=2.0)
+pub fn apply_speckle_filter_chain(intensity: &Array2<f32>) -> Array2<f32> {
+    info!("Applying Lee Sigma Speckle Filter (7×7 window)...");
+    let lee_filtered = lee_filter(intensity, 7);
+    info!("Applying Frost Edge-Preserving Speckle Filter (5×5 window)...");
+    frost_filter(&lee_filtered, 5, 2.0)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -593,7 +542,6 @@ pub fn save_sar_geotiff(
     let p2 = finite_vals[((n as f64 * 0.02) as usize).min(n.saturating_sub(1))];
     let p98 = finite_vals[((n as f64 * 0.98) as usize).min(n.saturating_sub(1))];
     let stretch = (p98 - p2).max(1e-6);
-    let gamma = 0.6_f32;
 
     let pixels: Vec<u8> = intensity
         .iter()
@@ -603,14 +551,14 @@ pub fn save_sar_geotiff(
             }
             let log_v = (v + 1e-10).log10();
             let norm = ((log_v - p2) / stretch).clamp(0.0, 1.0);
-            (norm.powf(gamma) * 255.0) as u8
+            (norm.powf(GAMMA) * 255.0) as u8
         })
         .collect();
 
     // ── 2. Tile geometry ─────────────────────────────────────────────────
     let tile_size: u32 = 256;
-    let tiles_x = (cols + tile_size - 1) / tile_size;
-    let tiles_y = (rows + tile_size - 1) / tile_size;
+    let tiles_x = cols.div_ceil(tile_size);
+    let tiles_y = rows.div_ceil(tile_size);
     let n_tiles = (tiles_x * tiles_y) as usize;
     let tile_bytes = (tile_size * tile_size) as usize; // 65536 bytes per tile
 
@@ -802,3 +750,320 @@ fn geotiff_ifd_double_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) 
     buf.extend_from_slice(&count.to_le_bytes());
     buf.extend_from_slice(&offset.to_le_bytes());
 }
+
+/// Write an IFD entry for a SHORT array of length 2 (type=3) stored inline.
+fn geotiff_ifd_short2(buf: &mut Vec<u8>, tag: u16, val1: u16, val2: u16) {
+    buf.extend_from_slice(&tag.to_le_bytes());
+    buf.extend_from_slice(&3u16.to_le_bytes());     // type = SHORT
+    buf.extend_from_slice(&2u32.to_le_bytes());     // count = 2
+    buf.extend_from_slice(&val1.to_le_bytes());
+    buf.extend_from_slice(&val2.to_le_bytes());
+}
+
+/// Save an f32 array as a single-band GeoTIFF with optional georeference.
+pub fn save_geotiff_f32(
+    data: ArrayView2<f32>,
+    output_filename: &str,
+    bbox: Option<[f64; 4]>,
+) -> Result<()> {
+    use std::io::Write;
+
+    let rows = data.nrows() as u32;
+    let cols = data.ncols() as u32;
+
+    let tile_size: u32 = 256;
+    let tiles_x = cols.div_ceil(tile_size);
+    let tiles_y = rows.div_ceil(tile_size);
+    let n_tiles = (tiles_x * tiles_y) as usize;
+    let tile_bytes = (tile_size * tile_size * 4) as usize; // 4 bytes per f32
+
+    let mut tile_data: Vec<u8> = vec![0u8; n_tiles * tile_bytes];
+
+    for ty in 0..tiles_y {
+        for tx in 0..tiles_x {
+            let tile_idx = (ty * tiles_x + tx) as usize;
+            let tile_start = tile_idx * tile_bytes;
+
+            for py in 0..tile_size {
+                let img_y = ty * tile_size + py;
+                if img_y >= rows {
+                    break;
+                }
+                for px in 0..tile_size {
+                    let img_x = tx * tile_size + px;
+                    if img_x >= cols {
+                        continue;
+                    }
+                    let val = data[[(img_y) as usize, (img_x) as usize]];
+                    let dst = ((py * tile_size + px) * 4) as usize;
+                    let bytes = val.to_le_bytes();
+                    tile_data[tile_start + dst] = bytes[0];
+                    tile_data[tile_start + dst + 1] = bytes[1];
+                    tile_data[tile_start + dst + 2] = bytes[2];
+                    tile_data[tile_start + dst + 3] = bytes[3];
+                }
+            }
+        }
+    }
+
+    let header_size: u32 = 8;
+    let tile_data_total = (n_tiles * tile_bytes) as u32;
+    let ifd_offset = header_size + tile_data_total;
+
+    let num_ifd_entries: u16 = if bbox.is_some() { 13 } else { 11 };
+    let ifd_size = 2 + (num_ifd_entries as u32 * 12) + 4;
+    let overflow_base = ifd_offset + ifd_size;
+
+    let off_tile_offsets = overflow_base;
+    let off_tile_bytecounts = off_tile_offsets + (n_tiles as u32 * 4);
+    let mut off_transform = 0;
+    let mut off_geokeys = 0;
+    
+    let mut total_file_size = (off_tile_bytecounts + (n_tiles as u32 * 4)) as usize;
+    if bbox.is_some() {
+        off_transform = total_file_size as u32;
+        off_geokeys = off_transform + 128;
+        total_file_size = (off_geokeys + 32) as usize;
+    }
+
+    let tile_offsets: Vec<u32> = (0..n_tiles)
+        .map(|i| header_size + (i as u32 * tile_bytes as u32))
+        .collect();
+
+    let mut buf: Vec<u8> = Vec::with_capacity(total_file_size);
+    buf.extend_from_slice(b"II");
+    buf.extend_from_slice(&42u16.to_le_bytes());
+    buf.extend_from_slice(&ifd_offset.to_le_bytes());
+    buf.extend_from_slice(&tile_data);
+
+    buf.extend_from_slice(&num_ifd_entries.to_le_bytes());
+    geotiff_ifd_short(&mut buf, 256, 1, cols as u16);
+    geotiff_ifd_short(&mut buf, 257, 1, rows as u16);
+    geotiff_ifd_short(&mut buf, 258, 1, 32);                 // BitsPerSample = 32
+    geotiff_ifd_short(&mut buf, 259, 1, 1);                  // Compression = None
+    geotiff_ifd_short(&mut buf, 262, 1, 1);                  // PhotometricInterpretation = MinIsBlack
+    geotiff_ifd_short(&mut buf, 277, 1, 1);                  // SamplesPerPixel = 1
+    geotiff_ifd_short(&mut buf, 322, 1, tile_size as u16);
+    geotiff_ifd_short(&mut buf, 323, 1, tile_size as u16);
+    geotiff_ifd_long_arr(&mut buf, 324, n_tiles as u32, off_tile_offsets);
+    geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts);
+    geotiff_ifd_short(&mut buf, 339, 1, 3);                  // SampleFormat = 3 (FLOAT)
+
+    if bbox.is_some() {
+        geotiff_ifd_double_arr(&mut buf, 34264, 16, off_transform);
+        geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys);
+    }
+
+    buf.extend_from_slice(&0u32.to_le_bytes());
+
+    for &off in &tile_offsets {
+        buf.extend_from_slice(&off.to_le_bytes());
+    }
+    for _ in 0..n_tiles {
+        buf.extend_from_slice(&(tile_bytes as u32).to_le_bytes());
+    }
+
+    if let Some([west, south, east, north]) = bbox {
+        let scale_x = (east - west) / cols as f64;
+        let scale_y = (north - south) / rows as f64;
+        let transform: [f64; 16] = [
+            scale_x,  0.0,      0.0,  west,
+            0.0,     -scale_y,  0.0,  north,
+            0.0,      0.0,      0.0,  0.0,
+            0.0,      0.0,      0.0,  1.0,
+        ];
+        for &v in &transform {
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+
+        let geokeys: [u16; 16] = [
+            1, 1, 0, 3,
+            1024, 0, 1, 2,
+            1025, 0, 1, 1,
+            2048, 0, 1, 4326,
+        ];
+        for &k in &geokeys {
+            buf.extend_from_slice(&k.to_le_bytes());
+        }
+    }
+
+    let mut file = std::io::BufWriter::new(fs::File::create(output_filename)?);
+    file.write_all(&buf)?;
+    file.flush()?;
+
+    Ok(())
+}
+
+/// Save a Complex32 array as a two-band GeoTIFF with optional georeference.
+pub fn save_geotiff_complex(
+    data: ArrayView2<num_complex::Complex32>,
+    output_filename: &str,
+    bbox: Option<[f64; 4]>,
+) -> Result<()> {
+    use std::io::Write;
+
+    let rows = data.nrows() as u32;
+    let cols = data.ncols() as u32;
+
+    let tile_size: u32 = 256;
+    let tiles_x = cols.div_ceil(tile_size);
+    let tiles_y = rows.div_ceil(tile_size);
+    let n_tiles = (tiles_x * tiles_y) as usize;
+    let tile_bytes = (tile_size * tile_size * 8) as usize; // 8 bytes per Complex32
+
+    let mut tile_data: Vec<u8> = vec![0u8; n_tiles * tile_bytes];
+
+    for ty in 0..tiles_y {
+        for tx in 0..tiles_x {
+            let tile_idx = (ty * tiles_x + tx) as usize;
+            let tile_start = tile_idx * tile_bytes;
+
+            for py in 0..tile_size {
+                let img_y = ty * tile_size + py;
+                if img_y >= rows {
+                    break;
+                }
+                for px in 0..tile_size {
+                    let img_x = tx * tile_size + px;
+                    if img_x >= cols {
+                        continue;
+                    }
+                    let val = data[[(img_y) as usize, (img_x) as usize]];
+                    let dst = ((py * tile_size + px) * 8) as usize;
+                    let bytes_re = val.re.to_le_bytes();
+                    let bytes_im = val.im.to_le_bytes();
+                    tile_data[tile_start + dst] = bytes_re[0];
+                    tile_data[tile_start + dst + 1] = bytes_re[1];
+                    tile_data[tile_start + dst + 2] = bytes_re[2];
+                    tile_data[tile_start + dst + 3] = bytes_re[3];
+                    tile_data[tile_start + dst + 4] = bytes_im[0];
+                    tile_data[tile_start + dst + 5] = bytes_im[1];
+                    tile_data[tile_start + dst + 6] = bytes_im[2];
+                    tile_data[tile_start + dst + 7] = bytes_im[3];
+                }
+            }
+        }
+    }
+
+    let header_size: u32 = 8;
+    let tile_data_total = (n_tiles * tile_bytes) as u32;
+    let ifd_offset = header_size + tile_data_total;
+
+    let num_ifd_entries: u16 = if bbox.is_some() { 13 } else { 11 };
+    let ifd_size = 2 + (num_ifd_entries as u32 * 12) + 4;
+    let overflow_base = ifd_offset + ifd_size;
+
+    let off_tile_offsets = overflow_base;
+    let off_tile_bytecounts = off_tile_offsets + (n_tiles as u32 * 4);
+    let mut off_transform = 0;
+    let mut off_geokeys = 0;
+    
+    let mut total_file_size = (off_tile_bytecounts + (n_tiles as u32 * 4)) as usize;
+    if bbox.is_some() {
+        off_transform = total_file_size as u32;
+        off_geokeys = off_transform + 128;
+        total_file_size = (off_geokeys + 32) as usize;
+    }
+
+    let tile_offsets: Vec<u32> = (0..n_tiles)
+        .map(|i| header_size + (i as u32 * tile_bytes as u32))
+        .collect();
+
+    let mut buf: Vec<u8> = Vec::with_capacity(total_file_size);
+    buf.extend_from_slice(b"II");
+    buf.extend_from_slice(&42u16.to_le_bytes());
+    buf.extend_from_slice(&ifd_offset.to_le_bytes());
+    buf.extend_from_slice(&tile_data);
+
+    buf.extend_from_slice(&num_ifd_entries.to_le_bytes());
+    geotiff_ifd_short(&mut buf, 256, 1, cols as u16);
+    geotiff_ifd_short(&mut buf, 257, 1, rows as u16);
+    geotiff_ifd_short2(&mut buf, 258, 32, 32);               // BitsPerSample = [32, 32]
+    geotiff_ifd_short(&mut buf, 259, 1, 1);                  // Compression = None
+    geotiff_ifd_short(&mut buf, 262, 1, 1);                  // PhotometricInterpretation = MinIsBlack
+    geotiff_ifd_short(&mut buf, 277, 1, 2);                  // SamplesPerPixel = 2
+    geotiff_ifd_short(&mut buf, 322, 1, tile_size as u16);
+    geotiff_ifd_short(&mut buf, 323, 1, tile_size as u16);
+    geotiff_ifd_long_arr(&mut buf, 324, n_tiles as u32, off_tile_offsets);
+    geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts);
+    geotiff_ifd_short2(&mut buf, 339, 3, 3);                 // SampleFormat = [3, 3] (FLOAT, FLOAT)
+
+    if bbox.is_some() {
+        geotiff_ifd_double_arr(&mut buf, 34264, 16, off_transform);
+        geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys);
+    }
+
+    buf.extend_from_slice(&0u32.to_le_bytes());
+
+    for &off in &tile_offsets {
+        buf.extend_from_slice(&off.to_le_bytes());
+    }
+    for _ in 0..n_tiles {
+        buf.extend_from_slice(&(tile_bytes as u32).to_le_bytes());
+    }
+
+    if let Some([west, south, east, north]) = bbox {
+        let scale_x = (east - west) / cols as f64;
+        let scale_y = (north - south) / rows as f64;
+        let transform: [f64; 16] = [
+            scale_x,  0.0,      0.0,  west,
+            0.0,     -scale_y,  0.0,  north,
+            0.0,      0.0,      0.0,  0.0,
+            0.0,      0.0,      0.0,  1.0,
+        ];
+        for &v in &transform {
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+
+        let geokeys: [u16; 16] = [
+            1, 1, 0, 3,
+            1024, 0, 1, 2,
+            1025, 0, 1, 1,
+            2048, 0, 1, 4326,
+        ];
+        for &k in &geokeys {
+            buf.extend_from_slice(&k.to_le_bytes());
+        }
+    }
+
+    let mut file = std::io::BufWriter::new(fs::File::create(output_filename)?);
+    file.write_all(&buf)?;
+    file.flush()?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::Array2;
+    use num_complex::Complex32;
+
+    #[test]
+    fn test_save_geotiff_f32() {
+        let rows = 16;
+        let cols = 16;
+        let data = Array2::from_elem((rows, cols), std::f32::consts::PI);
+        let path = "/tmp/test_f32.tif";
+        let res = save_geotiff_f32(data.view(), path, None);
+        assert!(res.is_ok());
+        
+        // Verify TIFF magic bytes
+        let bytes = fs::read(path).unwrap();
+        assert_eq!(&bytes[0..4], b"II\x2A\x00");
+    }
+
+    #[test]
+    fn test_save_geotiff_complex() {
+        let rows = 16;
+        let cols = 16;
+        let data = Array2::from_elem((rows, cols), Complex32::new(1.0, 2.0));
+        let path = "/tmp/test_complex.tif";
+        let res = save_geotiff_complex(data.view(), path, Some([0.0, 0.0, 1.0, 1.0]));
+        assert!(res.is_ok());
+        
+        let bytes = fs::read(path).unwrap();
+        assert_eq!(&bytes[0..4], b"II\x2A\x00");
+    }
+}
+

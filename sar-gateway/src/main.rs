@@ -31,11 +31,14 @@ async fn main() {
         jobs: Arc::new(RwLock::new(HashMap::new())),
     };
 
+    crate::jobs::start_cleanup_task(state.clone());
+
     let app = Router::new()
         .route("/search", get(handlers::search_handler))
         .route("/search/nisar", get(handlers::search_nisar_handler))
         .route("/jobs", post(handlers::start_job_handler))
         .route("/jobs/:id", get(handlers::get_job_handler))
+        .route("/jobs/:id/cancel", post(handlers::cancel_job_handler))
         .route("/jobs/:id/logs", get(handlers::stream_logs_handler))
         .nest_service("/results", ServeDir::new("results"))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))

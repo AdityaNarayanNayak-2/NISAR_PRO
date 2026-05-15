@@ -72,22 +72,33 @@ pub async fn get_job_handler(
     }
 }
 
+pub async fn cancel_job_handler(
+    State(state): State<crate::AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    match crate::jobs::cancel_job(state, id).await {
+        Ok(_) => Ok(Json(json!({"status": "cancelled"}))),
+        Err(e) => {
+            log::error!("Cancel job error: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
 pub async fn stream_logs_handler(
     State(state): State<crate::AppState>,
     Path(id): Path<String>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
     
-    let (tx, historical_logs) = {
+    let (receiver, historical_logs) = {
         let jobs = state.jobs.read().await;
         if let Some(metadata_lock) = jobs.get(&id) {
             let metadata = metadata_lock.read().await;
-            (metadata.tx.clone(), metadata.logs.clone())
+            (metadata.tx.subscribe(), metadata.logs.clone())
         } else {
             return Err(StatusCode::NOT_FOUND);
         }
     };
-
-    let receiver = tx.subscribe();
     
     // First, emit all historical logs that we already have
     let history_stream = tokio_stream::iter(historical_logs.into_iter().map(|line| {

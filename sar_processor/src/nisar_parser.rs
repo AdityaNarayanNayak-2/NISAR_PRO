@@ -390,7 +390,7 @@ fn extract_bbox_from_identification(file: &File) -> Option<GeoBoundingBox> {
     let poly_path = format!("{}/boundingPolygon", base);
     
     // We do a manual dataset parsing to grab raw byte strings
-    if let Ok(dataset) = file.dataset(&poly_path) {
+    if let Ok(_dataset) = file.dataset(&poly_path) {
         let file_data = file.as_bytes();
         let sb = file.superblock();
         if let Ok(addr) = rustyhdf5_format::group_v2::resolve_path_any(file_data, sb, &poly_path) {
@@ -413,10 +413,10 @@ fn extract_bbox_from_identification(file: &File) -> Option<GeoBoundingBox> {
                                  
                                  let mut lats = Vec::new();
                                  let mut lons = Vec::new();
-                                 let coords: Vec<&str> = wkt_str.split(|c| c == '(' || c == ')' || c == ',').collect();
+                                 let coords: Vec<&str> = wkt_str.split(['(', ')', ',']).collect();
                                  
                                  for chunk in coords {
-                                     let parts: Vec<&str> = chunk.trim().split_whitespace().collect();
+                                     let parts: Vec<&str> = chunk.split_whitespace().collect();
                                      if parts.len() >= 2 {
                                          if let (Ok(lon), Ok(lat)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
                                              lons.push(lon);

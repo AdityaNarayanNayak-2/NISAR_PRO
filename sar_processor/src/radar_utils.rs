@@ -1,4 +1,4 @@
-use ndarray::{Array1, ArrayView1};
+use ndarray::Array1;
 use num_complex::Complex32;
 use rustfft::{Fft, FftPlanner};
 use std::f32::consts::PI;
@@ -40,7 +40,6 @@ pub fn generate_chirp(duration: f32, bandwidth: f32, sample_rate: f32) -> Array1
 pub struct FFTProcessor {
     forward_fft: Arc<dyn Fft<f32>>,
     inverse_fft: Arc<dyn Fft<f32>>,
-    len: usize,
 }
 
 impl FFTProcessor {
@@ -52,7 +51,6 @@ impl FFTProcessor {
         Self {
             forward_fft,
             inverse_fft,
-            len,
         }
     }
 

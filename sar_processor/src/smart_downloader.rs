@@ -9,6 +9,12 @@ pub struct SmartDownloader {
 }
 
 #[allow(dead_code)]
+impl Default for SmartDownloader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SmartDownloader {
     pub fn new() -> Self {
         Self {
@@ -46,6 +52,7 @@ impl SmartDownloader {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(output_path)?;
 
         // Seek to the start position to write the chunk
