@@ -151,7 +151,7 @@ async fn spawn_local_job(
         tokio::fs::create_dir_all(results_dir).await.ok();
     }
 
-    let output_path = format!("results/{}.png", job_id);
+    let output_path = format!("results/{}.tif", job_id);
     let is_synthetic = input_file.is_none()
         || input_file.as_deref() == Some("internal://generate_test_pattern");
 
@@ -276,7 +276,7 @@ async fn spawn_local_job(
         let mut m = metadata.write().await;
         if status.success() {
             m.status = JobStatus::Completed;
-            m.output_path = Some(format!("/results/{}.png", job_id));
+            m.output_path = Some(format!("/results/{}.tif", job_id));
             let _ = m.tx.send("[SYSTEM] PROCESS_COMPLETED".to_string());
             info!("Job {} completed successfully", job_id);
         } else {
@@ -379,7 +379,7 @@ async fn spawn_k8s_job(
                 m.status = phase_to_status(&status.phase);
 
                 if status.phase == "Completed" {
-                    m.output_path = Some(format!("/results/{}.png", job_id));
+                    m.output_path = Some(format!("/results/{}.tif", job_id));
                     let _ = m.tx.send("[SYSTEM] PROCESS_COMPLETED".to_string());
                     break;
                 } else if status.phase == "Failed" {
