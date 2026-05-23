@@ -115,6 +115,7 @@ function AppDashboard() {
     const [assetLon, setAssetLon] = useState('');
     const [envContext, setEnvContext] = useState(null);
     const [fetchingContext, setFetchingContext] = useState(false);
+    const [activeLayer, setActiveLayer] = useState('amplitude');
 
     // ── Gateway Health Check (PRESERVED) ──
     useEffect(() => {
@@ -277,6 +278,7 @@ function AppDashboard() {
                     if (data.status === 'completed' && currentJobs[id].status !== 'completed') {
                         const jobBounds = currentJobs[id].bounds || (data.bbox ? [[data.bbox.south, data.bbox.west], [data.bbox.north, data.bbox.east]] : null);
                         setTimeout(() => { setViewingResult({ url: api(data.output_path), bounds: jobBounds, insarReport: jobsRef.current[id]?.insarReport || null, ships: jobsRef.current[id]?.ships || null, pipeline: jobsRef.current[id]?.pipeline || 'standard_rda', elapsed: elapsedRef.current[id] || null, bbox: jobsRef.current[id]?.bbox || data.bbox || null }); }, 800);
+                        setActiveLayer('amplitude');
                     }
                     setJobs(prev => ({ ...prev, [id]: { ...prev[id], status: data.status, output_path: data.output_path } }));
                 } catch (e) {}
@@ -318,6 +320,7 @@ function AppDashboard() {
     useEffect(() => {
         if (profile === 'infrastructure') setPipeline('insar');
         if (profile === 'maritime') setPipeline('cfar');
+        setActiveLayer('amplitude');
     }, [profile]);
 
     // ══════════════════════ RENDER ══════════════════════
@@ -504,13 +507,32 @@ function AppDashboard() {
                     const resultPath = viewingResult.url.startsWith('/results/')
                         ? viewingResult.url.replace('/results/', '')
                         : viewingResult.url.split('/results/').pop();
-                    const tifUrl = `file:///home/aditya/Desktop/sar_analyzer/sar-gateway/results/${resultPath}`;
+                    
+                    let finalTifPath = resultPath;
+                    let extraParams = '';
+
+                    if (profile === 'infrastructure') {
+                        const baseName = resultPath.replace('.tif', '');
+                        if (activeLayer === 'deformation') {
+                            finalTifPath = baseName + '_defo_phase.tif';
+                            extraParams = '&colormap_name=rdylgn&rescale=-20,20';
+                        } else if (activeLayer === 'coherence') {
+                            finalTifPath = baseName + '_coherence.tif';
+                            extraParams = '&colormap_name=greys&rescale=0,1';
+                        }
+                    }
+
+                    const tifUrl = encodeURIComponent(
+                        `file:///home/aditya/Desktop/sar_analyzer/sar-gateway/results/${finalTifPath}`
+                    );
                     return (
                         <TileLayer
-                            url={`http://localhost:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}@2x?url=${encodeURIComponent(tifUrl)}`}
+                            url={`http://localhost:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}?url=${tifUrl}&tilesize=512${extraParams}`}
                             attribution=""
                             opacity={0.75}
-                            key={viewingResult.url}
+                            key={`${viewingResult.url}_${activeLayer}`}
+                            minZoom={7}
+                            maxZoom={13}
                         />
                     );
                 })()}
@@ -824,6 +846,34 @@ function AppDashboard() {
                     {/* SECTION: PIPELINE */}
                     <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginBottom: '8px' }}>PIPELINE</div>
                     <div style={{ fontFamily: MONO, fontSize: '12px', color: '#C8A96E', marginBottom: '16px' }}>InSAR Analysis</div>
+
+                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
+
+                    {/* SECTION: MAP LAYER */}
+                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginBottom: '8px' }}>MAP LAYER</div>
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                        {['amplitude', 'deformation', 'coherence'].map((layer) => {
+                            const isActive = activeLayer === layer;
+                            return (
+                                <button
+                                    key={layer}
+                                    onClick={() => setActiveLayer(layer)}
+                                    style={{
+                                        fontFamily: MONO,
+                                        fontSize: '11px',
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: '4px 0',
+                                        cursor: 'pointer',
+                                        color: isActive ? '#F0F0F0' : '#555555',
+                                        borderBottom: isActive ? '2px solid #C8A96E' : '2px solid transparent',
+                                    }}
+                                >
+                                    {layer.toUpperCase()}
+                                </button>
+                            );
+                        })}
+                    </div>
 
                     <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
 
