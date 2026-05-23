@@ -239,7 +239,7 @@ async fn main() -> Result<()> {
         info!("✓ Done. GeoTIFF written to: {}", output_tif);
 
         // Keep generating the PNG to ensure the legacy Dashboard is not broken
-        if cli.output.ends_with(".png") {
+        if cli.output.ends_with(".png") && cli.process {
             info!("Saving SAR PNG (Dashboard fallback) → {}", cli.output);
             save_sar_image(focused.view(), &cli.output)?;
         }

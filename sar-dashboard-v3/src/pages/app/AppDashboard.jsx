@@ -500,16 +500,20 @@ function AppDashboard() {
                 )}
 
                 {/* COG TileLayer via TiTiler */}
-                {viewingResult && (
-                    viewingResult.url ? (
+                {viewingResult && viewingResult.url && (() => {
+                    const resultPath = viewingResult.url.startsWith('/results/')
+                        ? viewingResult.url.replace('/results/', '')
+                        : viewingResult.url.split('/results/').pop();
+                    const tifUrl = `file:///home/aditya/Desktop/sar_analyzer/sar-gateway/results/${resultPath}`;
+                    return (
                         <TileLayer
-                            url={`http://localhost:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}@2x?url=${encodeURIComponent('file://' + viewingResult.url.replace(/^\/results\//, '/home/aditya/Desktop/sar_analyzer/sar-gateway/results/'))}`}
+                            url={`http://localhost:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}@2x?url=${encodeURIComponent(tifUrl)}`}
                             attribution=""
                             opacity={0.75}
                             key={viewingResult.url}
                         />
-                    ) : null
-                )}
+                    );
+                })()}
 
                 {/* InSAR Persistent Scatterer Overlays */}
                 {viewingResult && viewingResult.insarReport && viewingResult.insarReport.scatterers && (
