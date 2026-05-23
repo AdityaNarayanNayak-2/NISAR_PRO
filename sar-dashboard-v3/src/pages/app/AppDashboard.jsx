@@ -499,17 +499,16 @@ function AppDashboard() {
                     />
                 )}
 
-                {/* Conditional TileLayer (COG) vs ImageOverlay (PNG) */}
-                {viewingResult && viewingResult.bounds && (
-                    viewingResult.url && viewingResult.url.includes('localhost:8000') ? (
+                {/* COG TileLayer via TiTiler */}
+                {viewingResult && (
+                    viewingResult.url ? (
                         <TileLayer
-                            url={`http://localhost:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}@2x?url=${encodeURIComponent(viewingResult.url)}`}
+                            url={`http://localhost:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}@2x?url=${encodeURIComponent('file://' + viewingResult.url.replace(/^\/results\//, '/home/aditya/Desktop/sar_analyzer/sar-gateway/results/'))}`}
                             attribution=""
                             opacity={0.75}
+                            key={viewingResult.url}
                         />
-                    ) : (
-                        <ImageOverlay url={viewingResult.url} bounds={viewingResult.bounds} opacity={0.65} />
-                    )
+                    ) : null
                 )}
 
                 {/* InSAR Persistent Scatterer Overlays */}
