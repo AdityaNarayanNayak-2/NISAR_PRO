@@ -497,12 +497,16 @@ pub fn apply_speckle_filter_chain(intensity: &Array2<f32>) -> Array2<f32> {
 /// Writes a 256×256 internally-tiled TIFF with three GeoTIFF tags injected
 /// directly into the IFD (no GDAL, no Python, no new crate dependencies):
 ///
-///   - **ModelTiepointTag (33922):** Maps pixel (0,0) → (west, north)
 ///   - **ModelPixelScaleTag (33550):** Pixel dimensions in degrees
+///   - **ModelTiepointTag (33922):** Maps pixel (0,0) → (west, north)
 ///   - **GeoKeyDirectoryTag (34735):** Declares Geographic CRS = EPSG:4326
 ///
+/// Uses the universally-supported 33550+33922 tag pair instead of the
+/// optional ModelTransformationTag (34264) to ensure maximum compatibility
+/// with GDAL, rasterio, TiTiler, and other GeoTIFF readers.
+///
 /// The f32 input is normalized to u8 using 2nd–98th percentile log-stretch
-/// with gamma correction (γ = 0.6), matching the existing SAR display pipeline.
+/// with gamma correction (γ = 0.5), matching the existing SAR display pipeline.
 ///
 /// # Arguments
 /// * `intensity` - 2D f32 array (rows × cols) of SAR intensity values
@@ -597,11 +601,27 @@ pub fn save_sar_geotiff(
     //
     // Layout: [Header 8B] [Tile data] [IFD] [Overflow values]
     //
+    // IFD has 14 entries (sorted by tag number ascending):
+    //   256  ImageWidth           SHORT  inline
+    //   257  ImageLength          SHORT  inline
+    //   258  BitsPerSample        SHORT  inline
+    //   259  Compression          SHORT  inline
+    //   262  PhotometricInterp    SHORT  inline
+    //   277  SamplesPerPixel      SHORT  inline
+    //   322  TileWidth            SHORT  inline
+    //   323  TileLength           SHORT  inline
+    //   324  TileOffsets           LONG  → overflow
+    //   325  TileByteCounts        LONG  → overflow
+    //   339  SampleFormat         SHORT  inline
+    // 33550  ModelPixelScaleTag  DOUBLE  → overflow (3 doubles = 24 bytes)
+    // 33922  ModelTiepointTag    DOUBLE  → overflow (6 doubles = 48 bytes)
+    // 34735  GeoKeyDirectoryTag   SHORT  → overflow (16 shorts = 32 bytes)
+    //
     let header_size: u32 = 8;
     let tile_data_total = (n_tiles * tile_bytes) as u32;
     let ifd_offset = header_size + tile_data_total;
 
-    let num_ifd_entries: u16 = 13;
+    let num_ifd_entries: u16 = 14;
     // IFD = 2 (count) + entries*12 + 4 (next IFD pointer)
     let ifd_size = 2 + (num_ifd_entries as u32 * 12) + 4;
     let overflow_base = ifd_offset + ifd_size;
@@ -609,8 +629,9 @@ pub fn save_sar_geotiff(
     // Overflow area layout (sequential):
     let off_tile_offsets = overflow_base;
     let off_tile_bytecounts = off_tile_offsets + (n_tiles as u32 * 4);
-    let off_transform = off_tile_bytecounts + (n_tiles as u32 * 4);
-    let off_geokeys = off_transform + 128; // 16 × f64 = 128 bytes
+    let off_pixel_scale = off_tile_bytecounts + (n_tiles as u32 * 4);
+    let off_tiepoint = off_pixel_scale + 24;   // 3 × f64 = 24 bytes
+    let off_geokeys = off_tiepoint + 48;       // 6 × f64 = 48 bytes
     // geokeys: 16 × u16 = 32 bytes
 
     // Pre-compute per-tile offsets within the file
@@ -631,7 +652,7 @@ pub fn save_sar_geotiff(
     buf.extend_from_slice(&tile_data);
 
     // ─── IFD (Image File Directory) ──────────────────────────────────────
-    // TIFF spec requires entries sorted by tag number.
+    // TIFF spec requires entries sorted by tag number ascending.
     buf.extend_from_slice(&num_ifd_entries.to_le_bytes());
 
     //  Tag   | Type   | Count | Value/Offset
@@ -648,9 +669,10 @@ pub fn save_sar_geotiff(
     geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts);// TileByteCounts → overflow
     geotiff_ifd_short(&mut buf, 339, 1, 1);                 // SampleFormat = UnsignedInteger
 
-    // GeoTIFF tags (ascending tag order: 34264 < 34735)
-    geotiff_ifd_double_arr(&mut buf, 34264, 16, off_transform); // ModelTransformationTag
-    geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys);   // GeoKeyDirectoryTag
+    // GeoTIFF tags (ascending tag order: 33550 < 33922 < 34735)
+    geotiff_ifd_double_arr(&mut buf, 33550, 3, off_pixel_scale);   // ModelPixelScaleTag
+    geotiff_ifd_double_arr(&mut buf, 33922, 6, off_tiepoint);      // ModelTiepointTag
+    geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys);       // GeoKeyDirectoryTag
 
     buf.extend_from_slice(&0u32.to_le_bytes()); // Next IFD offset = 0 (single image)
 
@@ -666,26 +688,18 @@ pub fn save_sar_geotiff(
         buf.extend_from_slice(&(tile_bytes as u32).to_le_bytes());
     }
 
-    // ModelTransformationTag (34264): 4×4 affine matrix (row-major, 16 doubles)
-    //
-    // This replaces ModelPixelScaleTag + ModelTiepointTag with a single
-    // explicit transform. The NEGATIVE scale_y is critical: TIFF row 0 is
-    // the top of the image (= north), and each subsequent row moves south.
-    //
-    //   | scale_x    0       0    west  |
-    //   | 0         -scale_y 0    north |
-    //   | 0          0       0    0     |
-    //   | 0          0       0    1     |
-    //
+    // ModelPixelScaleTag (33550): [ScaleX, ScaleY, ScaleZ] (3 doubles)
     let scale_x = (east - west) / cols as f64;
     let scale_y = (north - south) / rows as f64;
-    let transform: [f64; 16] = [
-        scale_x,  0.0,      0.0,  west,   // row 0: X = west + col * scale_x
-        0.0,     -scale_y,  0.0,  north,  // row 1: Y = north - row * scale_y  ← north-up
-        0.0,      0.0,      0.0,  0.0,    // row 2: Z (unused)
-        0.0,      0.0,      0.0,  1.0,    // row 3: homogeneous
-    ];
-    for &v in &transform {
+    let pixel_scale: [f64; 3] = [scale_x, scale_y, 0.0];
+    for &v in &pixel_scale {
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+
+    // ModelTiepointTag (33922): [I, J, K, X, Y, Z] (6 doubles)
+    // Maps pixel (0, 0, 0) → geographic (west, north, 0)
+    let tiepoint: [f64; 6] = [0.0, 0.0, 0.0, west, north, 0.0];
+    for &v in &tiepoint {
         buf.extend_from_slice(&v.to_le_bytes());
     }
 
@@ -1064,6 +1078,32 @@ mod tests {
         
         let bytes = fs::read(path).unwrap();
         assert_eq!(&bytes[0..4], b"II\x2A\x00");
+    }
+
+    #[test]
+    fn test_geotiff_gdal_readable() {
+        use std::process::Command;
+        let rows = 512usize;
+        let cols = 512usize;
+        let data = ndarray::Array2::<f32>::ones((rows, cols));
+        let path = "/tmp/test_gdal.tif";
+        let bbox = [-118.5f64, 33.5, -117.5, 34.5];
+        save_sar_geotiff(data.view(), path, bbox).unwrap();
+
+        let out = Command::new("gdalinfo")
+            .arg(path)
+            .output();
+
+        if let Ok(o) = out {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            assert!(stdout.contains("EPSG:4326") || stdout.contains("WGS 84"),
+                "gdalinfo output missing CRS: {}", stdout);
+            assert!(o.status.success(), "gdalinfo failed");
+        }
+        // If gdalinfo not available, just verify file exists and has TIFF magic
+        let bytes = std::fs::read(path).unwrap();
+        assert_eq!(&bytes[0..2], b"II");
+        assert_eq!(u16::from_le_bytes([bytes[2], bytes[3]]), 42);
     }
 }
 
