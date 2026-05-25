@@ -318,7 +318,10 @@ function AppDashboard() {
 
     // Force pipeline when switching profiles
     useEffect(() => {
-        if (profile === 'infrastructure') setPipeline('insar');
+        if (profile === 'infrastructure') {
+            setPipeline('insar');
+            setDataMode('local');
+        }
         if (profile === 'maritime') setPipeline('cfar');
         setActiveLayer('amplitude');
     }, [profile]);
@@ -838,6 +841,35 @@ function AppDashboard() {
                             {!fetchingContext && envContext === null && assetLat && assetLon && (
                                 <div style={{ fontFamily: MONO, fontSize: '11px', color: '#555555', marginTop: '8px', textAlign: 'center' }}>CONTEXT UNAVAILABLE</div>
                             )}
+                        </div>
+                    )}
+
+                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
+
+                    {/* DATA SOURCE */}
+                    <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>DATA SOURCE</div>
+                    <input
+                        type="text" value={localFilePath} onChange={e => setLocalFilePath(e.target.value)}
+                        placeholder="/path/to/NISAR_*.h5"
+                        style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px' }}
+                        onFocus={e => e.target.style.borderColor = C.bg4}
+                        onBlur={e => e.target.style.borderColor = C.bg3}
+                    />
+                    {metadata && (
+                        <div style={{ marginTop: '10px' }}>
+                            {[
+                                ['Mission', metadata.mission],
+                                ['Product', `${metadata.product} — ${metadata.productFull}`],
+                                ['Level', metadata.level],
+                                ['Band', metadata.band],
+                                ['Orbit', metadata.direction],
+                                ...(metadata.acquisitionDate ? [['Acquired', metadata.acquisitionDate]] : []),
+                            ].map(([label, value]) => (
+                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${C.bg2}`, fontFamily: MONO, fontSize: '11px' }}>
+                                    <span style={{ color: C.textDim }}>{label}</span>
+                                    <span style={{ color: label === 'Band' ? C.stable : C.text }}>{value}</span>
+                                </div>
+                            ))}
                         </div>
                     )}
 
