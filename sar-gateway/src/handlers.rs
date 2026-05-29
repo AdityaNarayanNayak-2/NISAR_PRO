@@ -44,8 +44,12 @@ pub async fn start_job_handler(
     let job_id = crate::jobs::spawn_processing_job(
         state.clone(), 
         payload.input_file, 
+        payload.slave_file,
         is_synthetic,
-        payload.pipeline
+        payload.pipeline,
+        payload.crop_lat,
+        payload.crop_lon,
+        payload.crop_radius_km,
     ).await;
     
     Json(json!({

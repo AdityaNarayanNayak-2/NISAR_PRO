@@ -83,6 +83,20 @@ struct Cli {
     /// Perpendicular baseline in meters (required for topo removal)
     #[arg(long)]
     baseline_perp: Option<f64>,
+
+    // ── Geographic crop flags (infrastructure monitoring) ─────────────────
+
+    /// Center latitude for geographic crop (infrastructure monitoring)
+    #[arg(long)]
+    crop_lat: Option<f64>,
+
+    /// Center longitude for geographic crop
+    #[arg(long)]
+    crop_lon: Option<f64>,
+
+    /// Crop radius in km (default: 10.0)
+    #[arg(long, default_value = "10.0")]
+    crop_radius_km: f64,
 }
 
 #[tokio::main]
@@ -120,7 +134,22 @@ async fn main() -> Result<()> {
         match ext.as_str() {
             "h5" | "hdf5" | "he5" => {
                 info!("Mode: NISAR HDF5  →  {:?}", input);
-                let product = nisar_parser::parse_nisar_auto(input, &cli.polarization)?;
+                let crop = if let (Some(lat), Some(lon)) = (cli.crop_lat, cli.crop_lon) {
+                    Some(nisar_parser::CropRegion {
+                        center_lat: lat,
+                        center_lon: lon,
+                        radius_km: cli.crop_radius_km,
+                    })
+                } else {
+                    None
+                };
+                let product = if let Some(ref crop_region) = crop {
+                    info!("Geographic crop enabled: ({:.4}°, {:.4}°) r={:.1}km",
+                        crop_region.center_lat, crop_region.center_lon, crop_region.radius_km);
+                    nisar_parser::parse_nisar_cropped(input, &cli.polarization, crop_region)?
+                } else {
+                    nisar_parser::parse_nisar_auto(input, &cli.polarization)?
+                };
 
                 info!("Product type: {:?}", product.product_type);
 
@@ -236,6 +265,7 @@ async fn main() -> Result<()> {
             });
 
         save_sar_geotiff(intensity.view(), &output_tif, bbox_arr)?;
+        drop(intensity); // ← free ~1 GB immediately
         info!("✓ Done. GeoTIFF written to: {}", output_tif);
 
         // Keep generating the PNG to ensure the legacy Dashboard is not broken
@@ -267,7 +297,7 @@ async fn main() -> Result<()> {
         // ── Step 1: Load slave SLC ────────────────────────────────────────
         info!("[1/12] Loading slave SLC: {:?}", slave_path);
 
-        let slave_data = if cli.synthetic {
+        let slave_data = if cli.synthetic || slave_path.to_str() == Some("synthetic") {
             // Synthetic mode: inject a Gaussian subsidence bowl into slave
             info!("[1/12] Synthetic mode: creating slave with Gaussian subsidence bowl");
             let (rows, cols) = focused.dim();
@@ -289,7 +319,18 @@ async fn main() -> Result<()> {
             let ext = slave_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
             match ext.as_str() {
                 "h5" | "hdf5" | "he5" => {
-                    let product = nisar_parser::parse_nisar_auto(&slave_path, &cli.polarization)?;
+                    let product = if let (Some(lat), Some(lon)) = (cli.crop_lat, cli.crop_lon) {
+                        let crop_region = nisar_parser::CropRegion {
+                            center_lat: lat,
+                            center_lon: lon,
+                            radius_km: cli.crop_radius_km,
+                        };
+                        info!("[1/12] Cropping slave to ({:.4}°, {:.4}°) r={:.1}km",
+                            lat, lon, cli.crop_radius_km);
+                        nisar_parser::parse_nisar_cropped(&slave_path, &cli.polarization, &crop_region)?
+                    } else {
+                        nisar_parser::parse_nisar_auto(&slave_path, &cli.polarization)?
+                    };
                     if cli.limit_lines > 0 {
                         let limit = cli.limit_lines.min(product.slc.nrows());
                         product.slc.slice(ndarray::s![..limit, ..]).to_owned()
@@ -303,18 +344,23 @@ async fn main() -> Result<()> {
         info!("[1/12] Slave loaded: {}×{}", slave_data.nrows(), slave_data.ncols());
 
         // ── Step 2: Coregistration ────────────────────────────────────────
-        let aligned_slave = if cli.skip_coregistration {
-            info!("[2/12] Coregistration SKIPPED (--skip-coregistration)");
-            slave_data
-        } else {
-            info!("[2/12] Coregistering slave to master (FFT cross-correlation)...");
-            sar_processor::coregister::coregister(
-                &focused,
-                &slave_data,
-                64,   // patch_size (reserved)
-                32,   // overlap (reserved)
-                2,    // oversample_factor (reserved)
-            )?
+        let aligned_slave = {
+            let result = if cli.skip_coregistration {
+                info!("[2/12] Coregistration SKIPPED (--skip-coregistration)");
+                slave_data
+            } else {
+                info!("[2/12] Coregistering slave to master (FFT cross-correlation)...");
+                let aligned = sar_processor::coregister::coregister(
+                    &focused,
+                    &slave_data,
+                    64,   // patch_size (reserved)
+                    32,   // overlap (reserved)
+                    2,    // oversample_factor (reserved)
+                )?;
+                drop(slave_data); // ← free ~2 GB (raw slave no longer needed)
+                aligned
+            };
+            result
         };
 
         // ── Step 3: Multilook ─────────────────────────────────────────────
@@ -333,6 +379,10 @@ async fn main() -> Result<()> {
         info!("[3/12] Multilooked: {}×{} → {}×{} ({}rg × {}az)",
             focused.nrows(), focused.ncols(), ml_master.nrows(), ml_master.ncols(),
             rg_looks, az_looks);
+
+        // Free full-resolution arrays — only multilooked versions needed from here
+        drop(aligned_slave); // ← free ~2 GB
+        info!("[MEM] Released full-resolution arrays to reclaim memory");
 
         // ── Step 4: Interferogram ─────────────────────────────────────────
         info!("[4/12] Computing interferogram...");

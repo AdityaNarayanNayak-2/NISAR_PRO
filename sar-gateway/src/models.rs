@@ -11,8 +11,12 @@ pub struct SearchQuery {
 #[derive(Deserialize, Debug)]
 pub struct ProcessRequest {
     pub input_file: Option<String>,
+    pub slave_file: Option<String>,
     pub synthetic: Option<bool>,
     pub pipeline: Option<String>,
+    pub crop_lat: Option<f64>,
+    pub crop_lon: Option<f64>,
+    pub crop_radius_km: Option<f64>,
 }
 
 #[derive(Deserialize, Debug)]

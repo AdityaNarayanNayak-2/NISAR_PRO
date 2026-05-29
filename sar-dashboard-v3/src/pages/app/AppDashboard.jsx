@@ -116,6 +116,7 @@ function AppDashboard() {
     const [envContext, setEnvContext] = useState(null);
     const [fetchingContext, setFetchingContext] = useState(false);
     const [activeLayer, setActiveLayer] = useState('amplitude');
+    const [slaveFilePath, setSlaveFilePath] = useState('');
 
     // ── Gateway Health Check (PRESERVED) ──
     useEffect(() => {
@@ -187,11 +188,29 @@ function AppDashboard() {
         const inputFile = getInputFile();
         if (!inputFile) return;
         if (!gatewayOnline) { showError('Gateway is offline. Start it with: LOCAL_MODE=true RUST_LOG=info cargo run --release'); return; }
+        const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'maritime' ? 'cfar' : pipeline;
+        
         try {
-            const res = await fetch(api('/jobs'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input_file: inputFile, synthetic: false, pipeline }) });
+            const body = {
+                input_file: inputFile,
+                synthetic: false,
+                pipeline: profile === 'infrastructure' ? 'insar' : 
+                          profile === 'maritime' ? 'cfar' : pipeline
+            };
+            if (profile === 'infrastructure') {
+                body.slave_file = slaveFilePath || null;
+                body.crop_lat = parseFloat(assetLat) || null;
+                body.crop_lon = parseFloat(assetLon) || null;
+                body.crop_radius_km = 10.0;
+            }
+            const res = await fetch(api('/jobs'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
             const data = await res.json();
             const id = data.job_id;
-            setJobs(prev => ({ ...prev, [id]: { id, status: 'running', name: getInputLabel(), bounds: null, bbox: null, pipeline, startedAt: Date.now() } }));
+            setJobs(prev => ({ ...prev, [id]: { id, status: 'running', name: getInputLabel(), bounds: null, bbox: null, pipeline: activePipeline, startedAt: Date.now() } }));
             setActiveJobId(id); setTerminalOpen(true);
             const sse = new EventSource(api(`/jobs/${id}/logs`));
             sse.onmessage = (event) => {
@@ -848,30 +867,78 @@ function AppDashboard() {
 
                     {/* DATA SOURCE */}
                     <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>DATA SOURCE</div>
+                    
+                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#888888', marginBottom: '4px' }}>MASTER (Reference)</div>
                     <input
                         type="text" value={localFilePath} onChange={e => setLocalFilePath(e.target.value)}
                         placeholder="/path/to/NISAR_*.h5"
-                        style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px' }}
+                        style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px', marginBottom: '8px' }}
                         onFocus={e => e.target.style.borderColor = C.bg4}
                         onBlur={e => e.target.style.borderColor = C.bg3}
                     />
                     {metadata && (
-                        <div style={{ marginTop: '10px' }}>
+                        <div style={{ marginBottom: '12px' }}>
                             {[
                                 ['Mission', metadata.mission],
                                 ['Product', `${metadata.product} — ${metadata.productFull}`],
                                 ['Level', metadata.level],
-                                ['Band', metadata.band],
-                                ['Orbit', metadata.direction],
-                                ...(metadata.acquisitionDate ? [['Acquired', metadata.acquisitionDate]] : []),
+                                ['Acquired', metadata.acquisitionDate || 'N/A'],
                             ].map(([label, value]) => (
                                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${C.bg2}`, fontFamily: MONO, fontSize: '11px' }}>
                                     <span style={{ color: C.textDim }}>{label}</span>
-                                    <span style={{ color: label === 'Band' ? C.stable : C.text }}>{value}</span>
+                                    <span style={{ color: C.text }}>{value}</span>
                                 </div>
                             ))}
                         </div>
                     )}
+
+                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#888888', marginBottom: '4px', marginTop: '4px' }}>SLAVE (Repeat Pass)</div>
+                    <input
+                        type="text" value={slaveFilePath} onChange={e => setSlaveFilePath(e.target.value)}
+                        placeholder="/path/to/NISAR_*.h5"
+                        style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px', marginBottom: '8px' }}
+                        onFocus={e => e.target.style.borderColor = C.bg4}
+                        onBlur={e => e.target.style.borderColor = C.bg3}
+                    />
+                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', fontStyle: 'italic', marginBottom: '8px', marginTop: '-4px' }}>
+                        Leave blank to use synthetic slave for testing
+                    </div>
+                    {(() => {
+                        const slaveMeta = parseNisarFilename(slaveFilePath);
+                        return slaveMeta && (
+                            <div style={{ marginBottom: '12px' }}>
+                                {[
+                                    ['Mission', slaveMeta.mission],
+                                    ['Product', `${slaveMeta.product} — ${slaveMeta.productFull}`],
+                                    ['Level', slaveMeta.level],
+                                    ['Acquired', slaveMeta.acquisitionDate || 'N/A'],
+                                ].map(([label, value]) => (
+                                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${C.bg2}`, fontFamily: MONO, fontSize: '11px' }}>
+                                        <span style={{ color: C.textDim }}>{label}</span>
+                                        <span style={{ color: C.text }}>{value}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })()}
+
+                    {(() => {
+                        const masterMeta = parseNisarFilename(localFilePath);
+                        const slaveMeta = parseNisarFilename(slaveFilePath);
+                        if (masterMeta && masterMeta.acquisitionDate && slaveMeta && slaveMeta.acquisitionDate) {
+                            const date1 = new Date(masterMeta.acquisitionDate);
+                            const date2 = new Date(slaveMeta.acquisitionDate);
+                            const diffTime = Math.abs(date2 - date1);
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            return (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', marginTop: '4px', borderTop: `1px solid ${C.bg3}`, fontFamily: MONO, fontSize: '11px', fontWeight: 'bold', color: '#C8A96E' }}>
+                                    <span>TEMPORAL BASELINE</span>
+                                    <span>{diffDays} days</span>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
 
                     <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
 

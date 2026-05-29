@@ -113,6 +113,19 @@ pub enum NisarProductType {
     GUNW, // Level-2 Geocoded Unwrapped Interferogram
 }
 
+/// Geographic crop region for infrastructure monitoring.
+/// Defines a circular area around a target asset (dam, bridge, etc.)
+/// to limit processing to only the relevant pixels.
+#[derive(Debug, Clone)]
+pub struct CropRegion {
+    /// Center latitude (degrees, WGS84)
+    pub center_lat: f64,
+    /// Center longitude (degrees, WGS84)
+    pub center_lon: f64,
+    /// Radius around center in kilometers (default: 10.0)
+    pub radius_km: f64,
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // Main Entry Point
 // ───────────────────────────────────────────────────────────────────────────
@@ -147,6 +160,174 @@ pub fn parse_nisar_auto(path: &Path, polarization: &str) -> Result<NisarProduct>
         NisarProductType::GCOV => parse_nisar_gcov(path, polarization),
         NisarProductType::GUNW => parse_nisar_gunw(path, polarization),
     }
+}
+
+/// Parse a NISAR product with geographic cropping (Option A approach).
+///
+/// This loads the full dataset into memory, then crops the SLC array
+/// to only the geographic region around the specified coordinates.
+/// The full array is dropped after cropping, reclaiming memory before
+/// the next image is loaded.
+///
+/// For a 16020×16560 GCOV with a 10 km crop radius, this reduces the
+/// array from ~2 GB to ~1 MB (typically ~500×500 pixels).
+pub fn parse_nisar_cropped(
+    path: &Path,
+    polarization: &str,
+    crop: &CropRegion,
+) -> Result<NisarProduct> {
+    // Step 1: Parse the full product (loads entire dataset into memory)
+    info!("Loading full product for geographic crop...");
+    let mut product = parse_nisar_auto(path, polarization)?;
+    let full_rows = product.slc.nrows();
+    let full_cols = product.slc.ncols();
+
+    // Step 2: Determine the product type string for coordinate paths
+    let product_type_str = match product.product_type {
+        NisarProductType::RSLC => "RSLC",
+        NisarProductType::GSLC => "GSLC",
+        NisarProductType::GCOV => "GCOV",
+        NisarProductType::GUNW => "GUNW",
+    };
+
+    // Step 3: Re-open file to read coordinate arrays (lightweight)
+    let file = File::open(path)
+        .with_context(|| format!("Failed to re-open HDF5 file for cropping: {:?}", path))?;
+
+    let x_path = format!("/science/LSAR/{}/grids/frequencyA/xCoordinates", product_type_str);
+    let y_path = format!("/science/LSAR/{}/grids/frequencyA/yCoordinates", product_type_str);
+
+    let x_coords = read_1d_f64(&file, &x_path);
+    let y_coords = read_1d_f64(&file, &y_path);
+
+    match (x_coords, y_coords) {
+        (Some(lons), Some(lats)) => {
+            // Convert radius_km to approximate degree bounds
+            let lat_radius = crop.radius_km / 111.0;
+            let cos_lat = crop.center_lat.to_radians().cos().abs().max(0.01);
+            let lon_radius = crop.radius_km / (111.0 * cos_lat);
+
+            let lat_min = crop.center_lat - lat_radius;
+            let lat_max = crop.center_lat + lat_radius;
+            let lon_min = crop.center_lon - lon_radius;
+            let lon_max = crop.center_lon + lon_radius;
+
+            info!("Crop target: ({:.4}°, {:.4}°) radius {:.1} km",
+                crop.center_lat, crop.center_lon, crop.radius_km);
+            info!("Crop bounds: lat [{:.4}, {:.4}], lon [{:.4}, {:.4}]",
+                lat_min, lat_max, lon_min, lon_max);
+
+            // Find row indices (latitude) and col indices (longitude)
+            let (row_start, row_end) = find_index_range(&lats, lat_min, lat_max);
+            let (col_start, col_end) = find_index_range(&lons, lon_min, lon_max);
+
+            // Clamp to valid range
+            let row_start = row_start.min(full_rows);
+            let row_end = row_end.min(full_rows);
+            let col_start = col_start.min(full_cols);
+            let col_end = col_end.min(full_cols);
+
+            if row_end <= row_start || col_end <= col_start {
+                info!("WARNING: Crop region does not intersect image. Using full image.");
+                return Ok(product);
+            }
+
+            let crop_rows = row_end - row_start;
+            let crop_cols = col_end - col_start;
+
+            info!("Cropping: {}×{} → {}×{} (rows {}..{}, cols {}..{})",
+                full_rows, full_cols, crop_rows, crop_cols,
+                row_start, row_end, col_start, col_end);
+
+            // Step 4: Slice the SLC array (allocates only the crop)
+            let cropped_slc = product.slc
+                .slice(ndarray::s![row_start..row_end, col_start..col_end])
+                .to_owned();
+
+            // Compute tight bounding box from actual coordinate values
+            let crop_lat_min = lats[row_start].min(lats[row_end - 1]);
+            let crop_lat_max = lats[row_start].max(lats[row_end - 1]);
+            let crop_lon_min = lons[col_start];
+            let crop_lon_max = lons[col_end - 1];
+
+            let crop_bbox = GeoBoundingBox {
+                south: crop_lat_min,
+                north: crop_lat_max,
+                west: crop_lon_min,
+                east: crop_lon_max,
+            };
+
+            info!("Cropped bbox: [{:.4}°N, {:.4}°E] → [{:.4}°N, {:.4}°E]",
+                crop_bbox.south, crop_bbox.west, crop_bbox.north, crop_bbox.east);
+            info!("Memory: crop = {} × {} = {:.2} MB (full {:.0} MB array will be dropped)",
+                crop_rows, crop_cols,
+                (crop_rows * crop_cols * 8) as f64 / (1024.0 * 1024.0),
+                (full_rows * full_cols * 8) as f64 / (1024.0 * 1024.0));
+
+            // Replace the full array with the crop (full array is dropped here)
+            product.slc = cropped_slc;
+            product.bbox = Some(crop_bbox);
+
+            Ok(product)
+        }
+        _ => {
+            info!("No coordinate grids found for product type '{}'. Using full image.", product_type_str);
+            Ok(product)
+        }
+    }
+}
+
+/// Find the start and end indices in a coordinate array that encompass [min_val, max_val].
+/// Handles both ascending and descending coordinate arrays.
+fn find_index_range(coords: &[f64], min_val: f64, max_val: f64) -> (usize, usize) {
+    let n = coords.len();
+    if n == 0 {
+        return (0, 0);
+    }
+
+    let ascending = coords[0] < coords[n - 1];
+
+    let mut start = n; // default: no match
+    let mut end = 0;
+
+    if ascending {
+        // Find first index >= min_val
+        for (i, &v) in coords.iter().enumerate() {
+            if v >= min_val {
+                start = i;
+                break;
+            }
+        }
+        // Find last index <= max_val
+        for (i, &v) in coords.iter().enumerate().rev() {
+            if v <= max_val {
+                end = i + 1;
+                break;
+            }
+        }
+    } else {
+        // Descending: coords[0] is largest
+        // Find first index <= max_val
+        for (i, &v) in coords.iter().enumerate() {
+            if v <= max_val {
+                start = i;
+                break;
+            }
+        }
+        // Find last index >= min_val
+        for (i, &v) in coords.iter().enumerate().rev() {
+            if v >= min_val {
+                end = i + 1;
+                break;
+            }
+        }
+    }
+
+    if start >= end {
+        return (0, 0); // No intersection
+    }
+
+    (start, end)
 }
 
 /// Parse a NISAR RSLC HDF5 file (Level-1, radar coordinates)

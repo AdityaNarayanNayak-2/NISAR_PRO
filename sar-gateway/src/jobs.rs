@@ -92,8 +92,12 @@ fn is_local_mode() -> bool {
 pub async fn spawn_processing_job(
     state: crate::AppState,
     input_file: Option<String>,
+    slave_file: Option<String>,
     _is_synthetic: bool,
     pipeline: Option<String>,
+    crop_lat: Option<f64>,
+    crop_lon: Option<f64>,
+    crop_radius_km: Option<f64>,
 ) -> String {
     let job_id = format!("sar-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
     let (tx, _rx) = broadcast::channel(256);
@@ -124,7 +128,17 @@ pub async fn spawn_processing_job(
         // LOCAL SUBPROCESS MODE: spawn sar_processor as a child process
         // ═══════════════════════════════════════════════════════════════
         tokio::spawn(async move {
-            spawn_local_job(job_id_clone, input_file, metadata, pipeline, cancel_rx).await;
+            spawn_local_job(
+                job_id_clone,
+                input_file,
+                slave_file,
+                metadata,
+                pipeline,
+                crop_lat,
+                crop_lon,
+                crop_radius_km,
+                cancel_rx,
+            ).await;
         });
     } else {
         // ═══════════════════════════════════════════════════════════════
@@ -142,8 +156,12 @@ pub async fn spawn_processing_job(
 async fn spawn_local_job(
     job_id: String,
     input_file: Option<String>,
+    slave_file: Option<String>,
     metadata: Arc<RwLock<JobMetadata>>,
     pipeline: Option<String>,
+    crop_lat: Option<f64>,
+    crop_lon: Option<f64>,
+    crop_radius_km: Option<f64>,
     mut cancel_rx: tokio::sync::mpsc::Receiver<()>,
 ) {
     let results_dir = std::path::Path::new("results");
@@ -171,9 +189,17 @@ async fn spawn_local_job(
         cmd.args(["--input", &input, "--output", &output_path]);
         
         if pipeline.as_deref() == Some("insar") {
-            // For testing: we simulate a slave image by just passing the same input file 
-            // OR a distinct file if it exists. Reusing input file serves as zero baseline.
-            cmd.args(["--insar-slave", &input]);
+            let slave = match slave_file.as_deref() {
+                Some(s) if !s.trim().is_empty() => s,
+                _ => "synthetic",
+            };
+            cmd.args(["--insar-slave", slave]);
+            if let (Some(lat), Some(lon)) = (crop_lat, crop_lon) {
+                cmd.args(["--crop-lat", &lat.to_string(), "--crop-lon", &lon.to_string()]);
+                if let Some(r) = crop_radius_km {
+                    cmd.args(["--crop-radius-km", &r.to_string()]);
+                }
+            }
         } else if pipeline.as_deref() == Some("cfar") {
             cmd.args(["--ship-detect"]);
         }
