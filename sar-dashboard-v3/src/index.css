@@ -30,3 +30,44 @@ body {
   animation-duration: 0.25s;
   animation-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
 }
+
+/* ── Processing scan ring pulse ── */
+@keyframes scan-pulse {
+  0% { stroke-opacity: 0.9; stroke-width: 2; }
+  100% { stroke-opacity: 0; stroke-width: 0.5; }
+}
+.scan-pulse {
+  animation: scan-pulse 1.5s ease-out infinite;
+}
+
+/* ── Map crosshair overlay ── */
+.map-crosshair {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 500;
+}
+.map-crosshair::before,
+.map-crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.12);
+}
+.map-crosshair::before {
+  width: 1px; height: 40px;
+  top: -20px; left: 0;
+}
+.map-crosshair::after {
+  width: 40px; height: 1px;
+  top: 0; left: -20px;
+}
+.map-crosshair-box {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 18px; height: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+  z-index: 500;
+}

@@ -36,10 +36,13 @@ async fn main() {
     let app = Router::new()
         .route("/search", get(handlers::search_handler))
         .route("/search/nisar", get(handlers::search_nisar_handler))
+        .route("/assets/search", get(handlers::search_assets_handler))
+        .route("/context", get(handlers::context_handler))
         .route("/jobs", post(handlers::start_job_handler))
         .route("/jobs/:id", get(handlers::get_job_handler))
         .route("/jobs/:id/cancel", post(handlers::cancel_job_handler))
         .route("/jobs/:id/logs", get(handlers::stream_logs_handler))
+        .route("/asf/download-stream", get(handlers::download_stream_handler))
         .nest_service("/results", ServeDir::new("results"))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .with_state(state);

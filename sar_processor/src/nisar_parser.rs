@@ -126,6 +126,71 @@ pub struct CropRegion {
     pub radius_km: f64,
 }
 
+/// Validate that crop coordinates intersect the scene bounding box
+/// WITHOUT loading the full dataset. This is a lightweight check that
+/// only reads bbox metadata from the HDF5 file.
+///
+/// Returns Ok(()) if the crop region intersects the scene,
+/// or an error with a descriptive message if it does not.
+pub fn validate_crop_intersection(path: &Path, crop: &CropRegion) -> Result<()> {
+    let file = File::open(path)
+        .with_context(|| format!("Failed to open HDF5 file for bbox check: {:?}", path))?;
+
+    // Detect product type from filename
+    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let product_type_str = if filename.contains("_GSLC_") {
+        "GSLC"
+    } else if filename.contains("_GCOV_") {
+        "GCOV"
+    } else if filename.contains("_GUNW_") {
+        "GUNW"
+    } else {
+        "RSLC"
+    };
+
+    // Try coordinate grids first, then identification metadata
+    let bbox = extract_bbox_from_grids(&file, product_type_str)
+        .or_else(|| extract_bbox_from_identification(&file));
+
+    let bbox = match bbox {
+        Some(b) => b,
+        None => {
+            info!("No scene bbox available for pre-load validation, skipping check");
+            return Ok(());
+        }
+    };
+
+    // Convert crop radius to degree bounds
+    let lat_radius = crop.radius_km / 111.0;
+    let cos_lat = crop.center_lat.to_radians().cos().abs().max(0.01);
+    let lon_radius = crop.radius_km / (111.0 * cos_lat);
+
+    let crop_south = crop.center_lat - lat_radius;
+    let crop_north = crop.center_lat + lat_radius;
+    let crop_west = crop.center_lon - lon_radius;
+    let crop_east = crop.center_lon + lon_radius;
+
+    // Check AABB intersection
+    let intersects = crop_south <= bbox.north
+        && crop_north >= bbox.south
+        && crop_west <= bbox.east
+        && crop_east >= bbox.west;
+
+    if !intersects {
+        bail!(
+            "Asset at lat={:.1} lon={:.1} (radius {:.0}km) is outside scene coverage \
+             [S:{:.2} N:{:.2} W:{:.2} E:{:.2}]. \
+             Download a NISAR scene covering this location.",
+            crop.center_lat, crop.center_lon, crop.radius_km,
+            bbox.south, bbox.north, bbox.west, bbox.east
+        );
+    }
+
+    info!("Pre-load bbox check passed: asset ({:.4}, {:.4}) intersects scene [{:.2}..{:.2}, {:.2}..{:.2}]",
+        crop.center_lat, crop.center_lon, bbox.south, bbox.north, bbox.west, bbox.east);
+    Ok(())
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // Main Entry Point
 // ───────────────────────────────────────────────────────────────────────────
@@ -228,8 +293,18 @@ pub fn parse_nisar_cropped(
             let col_end = col_end.min(full_cols);
 
             if row_end <= row_start || col_end <= col_start {
-                info!("WARNING: Crop region does not intersect image. Using full image.");
-                return Ok(product);
+                // Compute scene bbox for the error message
+                let scene_south = lats.iter().copied().fold(f64::MAX, f64::min);
+                let scene_north = lats.iter().copied().fold(f64::MIN, f64::max);
+                let scene_west = lons.iter().copied().fold(f64::MAX, f64::min);
+                let scene_east = lons.iter().copied().fold(f64::MIN, f64::max);
+                bail!(
+                    "Asset at lat={:.1} lon={:.1} (radius {:.0}km) is outside scene coverage \
+                     [S:{:.2} N:{:.2} W:{:.2} E:{:.2}]. \
+                     Download a NISAR scene covering this location.",
+                    crop.center_lat, crop.center_lon, crop.radius_km,
+                    scene_south, scene_north, scene_west, scene_east
+                );
             }
 
             let crop_rows = row_end - row_start;

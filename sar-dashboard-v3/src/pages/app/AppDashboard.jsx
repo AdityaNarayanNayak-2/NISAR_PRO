@@ -1,84 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapContainer, TileLayer, ImageOverlay, GeoJSON, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, ImageOverlay, GeoJSON, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { api, getGatewayUrl } from '../../config/api';
 import { Terminal, Play, ChevronDown, CheckCircle, AlertTriangle, Loader, Search, FolderOpen, Satellite, Eye, Download, ArrowLeft, MapPin, Calendar, Layers, X, Anchor, Crosshair, Waves, Palette, WifiOff, Clock, Info, Ship } from 'lucide-react';
 
-// ── Fonts ──
-const MONO = '"IBM Plex Mono", monospace';
-const SANS = '"Inter", sans-serif';
+import { MONO, SANS, C, PROFILES } from './constants';
+import { parseNisarFilename, sevColor, dispColor, formatBytes, formatElapsed } from './helpers';
+import { MapFlyTo, MapEventTracker } from './MapComponents';
+import SarSciencePanel from './SarSciencePanel';
+import InfrastructurePanel from './InfrastructurePanel';
+import MaritimePanel from './MaritimePanel';
 
-// ── Colors ──
-const C = {
-    bg0: '#0A0A0A', bg1: '#111111', bg2: '#1A1A1A', bg3: '#2A2A2A', bg4: '#404040',
-    text: '#F0F0F0', textMid: '#888888', textDim: '#555555',
-    accent: { sar: '#9B8EC4', infra: '#C8A96E', maritime: '#4A8FA8' },
-    stable: '#4CAF50', caution: '#E6A817', alert: '#D4822A', critical: '#C0392B',
-    data: '#7EB8D4',
-};
 
-// ── Profiles ──
-const PROFILES = [
-    { id: 'sar_science', label: 'SAR SCIENCE', accent: C.accent.sar },
-    { id: 'infrastructure', label: 'INFRASTRUCTURE', accent: C.accent.infra },
-    { id: 'maritime', label: 'MARITIME INTEL', accent: C.accent.maritime },
-];
-
-// ── Map Hooks ──
-function MapFlyTo({ center }) {
-    const map = useMap();
-    useEffect(() => { if (center) map.flyTo(center, 8, { duration: 1.5 }); }, [center, map]);
-    return null;
-}
-function MapEventTracker({ setCoords, setMapBounds }) {
-    const map = useMap();
-    useMapEvents({
-        mousemove(e) { setCoords({ lat: e.latlng.lat.toFixed(4), lon: e.latlng.lng.toFixed(4) }); },
-        moveend(e) { setMapBounds(e.target.getBounds()); }
-    });
-    useEffect(() => { setMapBounds(map.getBounds()); }, [map]);
-    return null;
-}
-
-// ── Parse NISAR Filename ──
-function parseNisarFilename(filepath) {
-    if (!filepath) return null;
-    const fname = filepath.split('/').pop();
-    const parts = fname.split('_');
-    if (parts.length < 10 || !parts[0].startsWith('NISAR')) return null;
-    const level = parts[1]; const mode = parts[2]; const product = parts[3]; const direction = parts[6];
-    const dateStr = parts.find(p => /^\d{8}T\d{6}$/.test(p));
-    const productNames = { RSLC: 'Range-compressed SLC', GSLC: 'Geocoded SLC', GCOV: 'Geocoded Covariance', GUNW: 'Unwrapped Interferogram' };
-    const levelNames = { L1: 'Level-1', L2: 'Level-2', L0: 'Level-0' };
-    let acqDate = null;
-    if (dateStr) { acqDate = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`; }
-    return {
-        mission: 'NISAR (NASA/ISRO)', level: levelNames[level] || level, product,
-        productFull: productNames[product] || product, mode: mode === 'PR' ? 'L-Band + S-Band' : mode,
-        band: 'L-Band (1.26 GHz)', direction: direction === 'D' ? 'Descending' : direction === 'A' ? 'Ascending' : direction,
-        acquisitionDate: acqDate, filename: fname,
-    };
-}
-
-// ── Severity color helper ──
-function sevColor(sev) {
-    if (sev === 'Critical') return C.critical;
-    if (sev === 'Alert') return C.alert;
-    if (sev === 'Caution') return C.caution;
-    return C.stable;
-}
-function dispColor(mm) {
-    const v = Math.abs(mm);
-    if (v >= 20) return C.critical;
-    if (v >= 10) return C.alert;
-    if (v >= 5) return C.caution;
-    return C.stable;
-}
-
-// ══════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ══════════════════════════════════════════════════════
 function AppDashboard() {
     // ── All original state (PRESERVED) ──
     const [mouseCoords, setMouseCoords] = useState({ lat: '0.0000', lon: '0.0000' });
@@ -117,6 +51,11 @@ function AppDashboard() {
     const [fetchingContext, setFetchingContext] = useState(false);
     const [activeLayer, setActiveLayer] = useState('amplitude');
     const [slaveFilePath, setSlaveFilePath] = useState('');
+    const [assetSearch, setAssetSearch] = useState('');
+    const [assetResults, setAssetResults] = useState([]);
+    const [assetSearchOpen, setAssetSearchOpen] = useState(false);
+    const [assetState, setAssetState] = useState('');
+    const [contextFetchedAt, setContextFetchedAt] = useState(null);
 
     // ── Gateway Health Check (PRESERVED) ──
     useEffect(() => {
@@ -248,7 +187,22 @@ function AppDashboard() {
         if (!filePath) return;
         const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'maritime' ? 'cfar' : pipeline;
         try {
-            const res = await fetch(api('/jobs'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input_file: filePath, synthetic: false, pipeline: activePipeline }) });
+            const body = {
+                input_file: filePath,
+                synthetic: false,
+                pipeline: activePipeline
+            };
+            if (profile === 'infrastructure') {
+                body.slave_file = slaveFilePath || null;
+                body.crop_lat = parseFloat(assetLat) || null;
+                body.crop_lon = parseFloat(assetLon) || null;
+                body.crop_radius_km = 10.0;
+            }
+            const res = await fetch(api('/jobs'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
             const data = await res.json();
             const id = data.job_id;
             const label = filePath.split('/').pop();
@@ -315,9 +269,20 @@ function AppDashboard() {
         setFetchingContext(true);
         try {
             const res = await fetch(api(`/context?lat=${assetLat}&lon=${assetLon}&asset_type=${assetType}`));
-            const data = await res.json(); setEnvContext(data);
+            const data = await res.json(); setEnvContext(data); setContextFetchedAt(new Date());
         } catch { setEnvContext(null); }
         finally { setFetchingContext(false); }
+    };
+
+    // ── Search infrastructure assets via Nominatim ──
+    const searchAssets = async (query) => {
+        if (query.length < 2) { setAssetResults([]); setAssetSearchOpen(false); return; }
+        try {
+            const res = await fetch(api(`/assets/search?q=${encodeURIComponent(query)}`));
+            const data = await res.json();
+            setAssetResults(data);
+            setAssetSearchOpen(data.length > 0);
+        } catch { setAssetResults([]); }
     };
 
     const allPipelines = [
@@ -334,6 +299,14 @@ function AppDashboard() {
     const activeJob = activeJobId ? jobs[activeJobId] : null;
     const activeProfile = PROFILES.find(p => p.id === profile);
     const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'maritime' ? 'cfar' : pipeline;
+
+    // Auto-fetch context when asset coordinates are set
+    useEffect(() => {
+        if (assetLat && assetLon && profile === 'infrastructure') {
+            const timer = setTimeout(fetchContext, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [assetLat, assetLon]);
 
     // Force pipeline when switching profiles
     useEffect(() => {
@@ -415,8 +388,10 @@ function AppDashboard() {
 
             {/* ═══ TOPBAR ═══ */}
             <div style={{
-                position: 'fixed', top: 0, left: 0, right: 0, height: '40px', zIndex: 200,
-                background: C.bg1, borderBottom: `1px solid ${C.bg3}`,
+                position: 'fixed', top: 0, left: 0, right: 0, height: '42px', zIndex: 200,
+                background: 'rgba(17, 17, 17, 0.82)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+                borderTop: `2px solid ${activeProfile.accent}`,
+                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '0 16px',
             }}>
@@ -508,7 +483,7 @@ function AppDashboard() {
             <MapContainer
                 center={[28.65, -0.53]}
                 zoom={5}
-                style={{ position: 'absolute', top: '40px', left: 0, right: 0, bottom: 0, cursor: 'crosshair', zIndex: 0 }}
+                style={{ position: 'absolute', top: '42px', left: profile === 'infrastructure' ? '240px' : 0, right: 0, bottom: profile === 'infrastructure' ? '80px' : 0, cursor: 'crosshair', zIndex: 0 }}
                 zoomControl={false}
                 attributionControl={false}
             >
@@ -616,600 +591,129 @@ function AppDashboard() {
                         </CircleMarker>
                     ))
                 )}
+                {/* Processing scan ring (Phase E) */}
+                {runningJobs.length > 0 && assetLat && assetLon && profile === 'infrastructure' && (
+                    <CircleMarker
+                        center={[parseFloat(assetLat), parseFloat(assetLon)]}
+                        radius={20}
+                        pathOptions={{
+                            color: activeProfile.accent,
+                            fillOpacity: 0,
+                            weight: 2,
+                            className: 'scan-pulse'
+                        }}
+                    />
+                )}
             </MapContainer>
 
+            {/* ═══ MAP CROSSHAIR (Phase D) ═══ */}
+            <div className="map-crosshair" />
+            <div className="map-crosshair-box" />
+
             {/* Continued in part 4... */}
-            {/* ═══ RIGHT PANEL ═══ */}
+            {/* ═══ INFRASTRUCTURE: 3-ZONE LAYOUT (rendered outside right panel) ═══ */}
+            {profile === 'infrastructure' && (
+                <InfrastructurePanel
+                    assetSearch={assetSearch}
+                    setAssetSearch={setAssetSearch}
+                    searchAssets={searchAssets}
+                    assetSearchOpen={assetSearchOpen}
+                    setAssetSearchOpen={setAssetSearchOpen}
+                    assetResults={assetResults}
+                    setAssetResults={setAssetResults}
+                    assetName={assetName}
+                    setAssetName={setAssetName}
+                    assetType={assetType}
+                    setAssetType={setAssetType}
+                    assetLat={assetLat}
+                    setAssetLat={setAssetLat}
+                    assetLon={assetLon}
+                    setAssetLon={setAssetLon}
+                    assetState={assetState}
+                    setAssetState={setAssetState}
+                    setFlyToCenter={setFlyToCenter}
+                    envContext={envContext}
+                    fetchingContext={fetchingContext}
+                    fetchContext={fetchContext}
+                    contextFetchedAt={contextFetchedAt}
+                    localFilePath={localFilePath}
+                    setLocalFilePath={setLocalFilePath}
+                    metadata={metadata}
+                    slaveFilePath={slaveFilePath}
+                    setSlaveFilePath={setSlaveFilePath}
+                    activeLayer={activeLayer}
+                    setActiveLayer={setActiveLayer}
+                    startJob={startJob}
+                    getInputFile={getInputFile}
+                    runningJobs={runningJobs}
+                    gatewayOnline={gatewayOnline}
+                    elapsed={elapsed}
+                    viewingResult={viewingResult}
+                />
+            )}
+
+            {/* ═══ RIGHT PANEL (SAR Science / Maritime only) ═══ */}
             <div style={{
-                position: 'absolute', top: '40px', right: 0, bottom: 0, width: '340px', zIndex: 100,
-                background: C.bg1, borderLeft: `1px solid ${C.bg3}`,
-                display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                position: 'absolute', top: '42px', right: 0, bottom: 0, width: '340px', zIndex: 100,
+                background: 'rgba(17, 17, 17, 0.82)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
+                display: profile === 'infrastructure' ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden',
             }}>
 
             {/* ── PROFILE: SAR SCIENCE ── */}
             {profile === 'sar_science' && (
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-
-                {/* DATA SOURCE */}
-                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>DATA SOURCE</div>
-                <div style={{ display: 'flex', gap: '0', marginBottom: '12px' }}>
-                    {['local','catalog'].map(m => (
-                        <button key={m} onClick={() => setDataMode(m)} style={{
-                            flex: 1, padding: '8px', background: 'none', cursor: 'pointer',
-                            fontFamily: MONO, fontSize: '11px', border: 'none',
-                            borderBottom: dataMode === m ? `2px solid ${C.accent.infra}` : '2px solid transparent',
-                            color: dataMode === m ? C.text : C.textDim,
-                        }}>
-                            {m === 'local' ? 'LOCAL FILE' : 'NASA CATALOG'}
-                        </button>
-                    ))}
-                </div>
-
-                {dataMode === 'local' && (<>
-                    <input
-                        type="text" value={localFilePath} onChange={e => setLocalFilePath(e.target.value)}
-                        placeholder="/path/to/NISAR_*.h5"
-                        style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px' }}
-                        onFocus={e => e.target.style.borderColor = C.bg4}
-                        onBlur={e => e.target.style.borderColor = C.bg3}
-                    />
-                    {metadata && (
-                        <div style={{ marginTop: '10px' }}>
-                            {[
-                                ['Mission', metadata.mission],
-                                ['Product', `${metadata.product} — ${metadata.productFull}`],
-                                ['Level', metadata.level],
-                                ['Band', metadata.band],
-                                ['Orbit', metadata.direction],
-                                ...(metadata.acquisitionDate ? [['Acquired', metadata.acquisitionDate]] : []),
-                            ].map(([label, value]) => (
-                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${C.bg2}`, fontFamily: MONO, fontSize: '11px' }}>
-                                    <span style={{ color: C.textDim }}>{label}</span>
-                                    <span style={{ color: label === 'Band' ? C.stable : C.text }}>{value}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </>)}
-
-                {dataMode === 'catalog' && (<>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '11px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px' }} />
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '11px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px' }} />
-                    </div>
-                    <button onClick={handleSearch} disabled={isSearching} style={{ width: '100%', padding: '8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '11px', cursor: 'pointer', borderRadius: '2px' }}
-                        onMouseEnter={e => { e.target.style.borderColor = C.bg4; e.target.style.color = C.text; }}
-                        onMouseLeave={e => { e.target.style.borderColor = C.bg3; e.target.style.color = C.textMid; }}
-                    >{isSearching ? 'SEARCHING...' : 'SEARCH CATALOG'}</button>
-                    {searchResults.length > 0 && (
-                        <div style={{ marginTop: '10px' }}>
-                            {searchResults.map(scene => (
-                                <div key={scene.id} onClick={() => setSelectedScene(scene)} style={{
-                                    padding: '8px', borderBottom: `1px solid ${C.bg2}`, cursor: 'pointer',
-                                    borderLeft: selectedScene?.id === scene.id ? `3px solid ${C.accent.infra}` : '3px solid transparent',
-                                    paddingLeft: selectedScene?.id === scene.id ? '13px' : '8px',
-                                }}>
-                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textMid, wordBreak: 'break-all' }}>{scene.id}</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-                                        <span>{scene.date?.split('T')[0]}</span>
-                                        <span>{formatBytes(scene.size_bytes)}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </>)}
-
-                {/* DIVIDER */}
-                <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />
-
-                {/* PIPELINE */}
-                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>PIPELINE</div>
-                {pipelines.map(p => (
-                    <div key={p.id} onClick={() => setPipeline(p.id)} style={{
-                        padding: '8px 12px', cursor: 'pointer',
-                        borderLeft: pipeline === p.id ? `3px solid ${C.accent.infra}` : '3px solid transparent',
-                        background: pipeline === p.id ? 'rgba(200,169,110,0.06)' : 'transparent',
-                        marginBottom: '2px',
-                    }}
-                        onMouseEnter={e => { if (pipeline !== p.id) e.target.style.background = C.bg2; }}
-                        onMouseLeave={e => { if (pipeline !== p.id) e.target.style.background = 'transparent'; }}
-                    >
-                        <div style={{ fontFamily: MONO, fontSize: '12px', color: pipeline === p.id ? C.text : C.textMid }}>{p.label}</div>
-                        <div style={{ fontFamily: SANS, fontSize: '11px', color: C.textDim, marginTop: '2px' }}>{p.desc}</div>
-                    </div>
-                ))}
-
-                {/* DIVIDER */}
-                <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />
-
-                {/* EXECUTE */}
-                <button onClick={startJob} disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline} style={{
-                    width: '100%', padding: '10px', background: C.accent.infra, color: C.bg0,
-                    fontFamily: MONO, fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '2px',
-                    cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 'not-allowed' : 'pointer',
-                    opacity: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 0.3 : 1,
-                }}>
-                    {runningJobs.length > 0 ? 'PROCESSING...' : 'START PROCESSING'}
-                </button>
-                {runningJobs.length > 0 && (
-                    <div style={{ marginTop: '8px', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
-                        <div>ELAPSED  {formatElapsed(elapsed[runningJobs[0]?.id])}</div>
-                        <div>JOB ID   {runningJobs[0]?.id?.slice(0, 8)}</div>
-                    </div>
-                )}
-
-                {/* DIVIDER */}
-                {Object.values(jobs).length > 0 && <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />}
-
-                {/* COMPLETED JOBS */}
-                {Object.values(jobs).length > 0 && (<>
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>COMPLETED JOBS</div>
-                    {Object.values(jobs).map(job => (
-                        <div key={job.id} onClick={() => { setActiveJobId(job.id); setTerminalOpen(true); }} style={{ padding: '8px', borderBottom: `1px solid ${C.bg2}`, cursor: 'pointer' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontFamily: MONO, fontSize: '11px', color: C.textMid }}>{job.name}</span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
-                                    {job.status === 'completed' && <span style={{ color: C.stable }}>●</span>}
-                                    {job.status === 'running' && <span style={{ color: C.accent.infra }}>●</span>}
-                                    {job.status === 'failed' && <span style={{ color: C.critical }}>●</span>}
-                                    {elapsed[job.id] != null && formatElapsed(elapsed[job.id])}
-                                </span>
-                            </div>
-                            {job.status === 'completed' && (
-                                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                                    <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
-                                        style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.stable, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>VIEW</button>
-                                    <button onClick={(e) => { e.stopPropagation(); window.open(api(job.output_path), '_blank'); }}
-                                        style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>DL</button>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </>)}
-            </div>
-            )}
-
-            {/* Continued in part 4b — Infrastructure + Maritime panels... */}
-            {/* ── PROFILE 2: INFRASTRUCTURE ── */}
-            {profile === 'infrastructure' && (
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-                    {/* SECTION: ASSET SELECTION */}
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginBottom: '8px' }}>MONITORED ASSET</div>
-                    <select
-                        value={assetType}
-                        onChange={(e) => setAssetType(e.target.value)}
-                        style={{ width: '100%', background: '#1A1A1A', border: '1px solid #2A2A2A', color: '#F0F0F0', fontFamily: MONO, fontSize: '12px', padding: '8px 10px', outline: 'none', borderRadius: '2px', marginBottom: '8px' }}
-                    >
-                        <option value="DAM">DAM</option>
-                        <option value="BRIDGE">BRIDGE</option>
-                        <option value="EMBANKMENT">EMBANKMENT</option>
-                    </select>
-                    <input
-                        type="text"
-                        value={assetName}
-                        onChange={(e) => setAssetName(e.target.value)}
-                        placeholder="e.g. Hirakud Dam, Odisha"
-                        style={{ width: '100%', background: '#1A1A1A', border: '1px solid #2A2A2A', color: '#F0F0F0', fontFamily: MONO, fontSize: '12px', padding: '8px 10px', outline: 'none', borderRadius: '2px', marginBottom: '8px' }}
-                        onFocus={(e) => e.target.style.borderColor = '#404040'}
-                        onBlur={(e) => e.target.style.borderColor = '#2A2A2A'}
-                    />
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                        <input
-                            type="text"
-                            value={assetLat}
-                            onChange={(e) => setAssetLat(e.target.value)}
-                            placeholder="LAT"
-                            style={{ flex: 1, background: '#1A1A1A', border: '1px solid #2A2A2A', color: '#F0F0F0', fontFamily: MONO, fontSize: '11px', padding: '8px 10px', outline: 'none', borderRadius: '2px', width: '100%' }}
-                            onFocus={(e) => e.target.style.borderColor = '#404040'}
-                            onBlur={(e) => e.target.style.borderColor = '#2A2A2A'}
-                        />
-                        <input
-                            type="text"
-                            value={assetLon}
-                            onChange={(e) => setAssetLon(e.target.value)}
-                            placeholder="LON"
-                            style={{ flex: 1, background: '#1A1A1A', border: '1px solid #2A2A2A', color: '#F0F0F0', fontFamily: MONO, fontSize: '11px', padding: '8px 10px', outline: 'none', borderRadius: '2px', width: '100%' }}
-                            onFocus={(e) => e.target.style.borderColor = '#404040'}
-                            onBlur={(e) => e.target.style.borderColor = '#2A2A2A'}
-                        />
-                    </div>
-
-                    {/* SECTION: ENVIRONMENTAL CONTEXT */}
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginBottom: '8px' }}>FIELD CONTEXT</div>
-                    {envContext ? (
-                        <div style={{ marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                <span style={{ color: '#555555' }}>RESERVOIR</span>
-                                <span style={{ color: '#F0F0F0' }}>{envContext.reservoir}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                <span style={{ color: '#555555' }}>RAINFALL 72H</span>
-                                <span style={{ color: '#F0F0F0' }}>{envContext.rainfall}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                <span style={{ color: '#555555' }}>SOIL MOIST.</span>
-                                <span style={{ color: '#F0F0F0' }}>{envContext.soil_moisture}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                <span style={{ color: '#555555' }}>SEISMIC</span>
-                                <span style={{ color: '#F0F0F0' }}>{envContext.seismic}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                <span style={{ color: '#555555' }}>SEASON</span>
-                                <span style={{ color: '#F0F0F0' }}>{envContext.season}</span>
-                            </div>
-                            <div style={{ marginTop: '8px' }}>
-                                <div style={{ fontFamily: SANS, fontSize: '12px', color: '#F0F0F0' }}>{envContext.assessment}</div>
-                                <div style={{ fontFamily: MONO, fontSize: '11px', color: envContext.confidence === 'HIGH' ? '#4CAF50' : envContext.confidence === 'MODERATE' ? '#E6A817' : '#C0392B' }}>{envContext.confidence}</div>
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555' }}>{envContext.source || "ERA5, GRanD, USGS, SMAP"}</div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div style={{ marginBottom: '16px' }}>
-                            {assetLat && assetLon && (
-                                <button
-                                    onClick={fetchContext}
-                                    style={{ width: '100%', background: 'transparent', border: '1px solid #2A2A2A', color: '#888888', fontFamily: MONO, fontSize: '11px', padding: '8px 10px', borderRadius: '2px', cursor: 'pointer' }}
-                                    onMouseEnter={(e) => { e.target.style.borderColor = '#404040'; e.target.style.color = '#F0F0F0'; }}
-                                    onMouseLeave={(e) => { e.target.style.borderColor = '#2A2A2A'; e.target.style.color = '#888888'; }}
-                                >
-                                    {fetchingContext ? 'FETCHING FIELD DATA...' : 'FETCH CONTEXT'}
-                                </button>
-                            )}
-                            {!fetchingContext && envContext === null && assetLat && assetLon && (
-                                <div style={{ fontFamily: MONO, fontSize: '11px', color: '#555555', marginTop: '8px', textAlign: 'center' }}>CONTEXT UNAVAILABLE</div>
-                            )}
-                        </div>
-                    )}
-
-                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
-
-                    {/* DATA SOURCE */}
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>DATA SOURCE</div>
-                    
-                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#888888', marginBottom: '4px' }}>MASTER (Reference)</div>
-                    <input
-                        type="text" value={localFilePath} onChange={e => setLocalFilePath(e.target.value)}
-                        placeholder="/path/to/NISAR_*.h5"
-                        style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px', marginBottom: '8px' }}
-                        onFocus={e => e.target.style.borderColor = C.bg4}
-                        onBlur={e => e.target.style.borderColor = C.bg3}
-                    />
-                    {metadata && (
-                        <div style={{ marginBottom: '12px' }}>
-                            {[
-                                ['Mission', metadata.mission],
-                                ['Product', `${metadata.product} — ${metadata.productFull}`],
-                                ['Level', metadata.level],
-                                ['Acquired', metadata.acquisitionDate || 'N/A'],
-                            ].map(([label, value]) => (
-                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${C.bg2}`, fontFamily: MONO, fontSize: '11px' }}>
-                                    <span style={{ color: C.textDim }}>{label}</span>
-                                    <span style={{ color: C.text }}>{value}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#888888', marginBottom: '4px', marginTop: '4px' }}>SLAVE (Repeat Pass)</div>
-                    <input
-                        type="text" value={slaveFilePath} onChange={e => setSlaveFilePath(e.target.value)}
-                        placeholder="/path/to/NISAR_*.h5"
-                        style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px', marginBottom: '8px' }}
-                        onFocus={e => e.target.style.borderColor = C.bg4}
-                        onBlur={e => e.target.style.borderColor = C.bg3}
-                    />
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', fontStyle: 'italic', marginBottom: '8px', marginTop: '-4px' }}>
-                        Leave blank to use synthetic slave for testing
-                    </div>
-                    {(() => {
-                        const slaveMeta = parseNisarFilename(slaveFilePath);
-                        return slaveMeta && (
-                            <div style={{ marginBottom: '12px' }}>
-                                {[
-                                    ['Mission', slaveMeta.mission],
-                                    ['Product', `${slaveMeta.product} — ${slaveMeta.productFull}`],
-                                    ['Level', slaveMeta.level],
-                                    ['Acquired', slaveMeta.acquisitionDate || 'N/A'],
-                                ].map(([label, value]) => (
-                                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${C.bg2}`, fontFamily: MONO, fontSize: '11px' }}>
-                                        <span style={{ color: C.textDim }}>{label}</span>
-                                        <span style={{ color: C.text }}>{value}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        );
-                    })()}
-
-                    {(() => {
-                        const masterMeta = parseNisarFilename(localFilePath);
-                        const slaveMeta = parseNisarFilename(slaveFilePath);
-                        if (masterMeta && masterMeta.acquisitionDate && slaveMeta && slaveMeta.acquisitionDate) {
-                            const date1 = new Date(masterMeta.acquisitionDate);
-                            const date2 = new Date(slaveMeta.acquisitionDate);
-                            const diffTime = Math.abs(date2 - date1);
-                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                            return (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', marginTop: '4px', borderTop: `1px solid ${C.bg3}`, fontFamily: MONO, fontSize: '11px', fontWeight: 'bold', color: '#C8A96E' }}>
-                                    <span>TEMPORAL BASELINE</span>
-                                    <span>{diffDays} days</span>
-                                </div>
-                            );
-                        }
-                        return null;
-                    })()}
-
-                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
-
-                    {/* SECTION: PIPELINE */}
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginBottom: '8px' }}>PIPELINE</div>
-                    <div style={{ fontFamily: MONO, fontSize: '12px', color: '#C8A96E', marginBottom: '16px' }}>InSAR Analysis</div>
-
-                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
-
-                    {/* SECTION: MAP LAYER */}
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginBottom: '8px' }}>MAP LAYER</div>
-                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-                        {['amplitude', 'deformation', 'coherence'].map((layer) => {
-                            const isActive = activeLayer === layer;
-                            return (
-                                <button
-                                    key={layer}
-                                    onClick={() => setActiveLayer(layer)}
-                                    style={{
-                                        fontFamily: MONO,
-                                        fontSize: '11px',
-                                        background: 'none',
-                                        border: 'none',
-                                        padding: '4px 0',
-                                        cursor: 'pointer',
-                                        color: isActive ? '#F0F0F0' : '#555555',
-                                        borderBottom: isActive ? '2px solid #C8A96E' : '2px solid transparent',
-                                    }}
-                                >
-                                    {layer.toUpperCase()}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
-
-                    {/* SECTION: EXECUTE */}
-                    <button
-                        onClick={startJob}
-                        disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline}
-                        style={{
-                            width: '100%', background: '#C8A96E', color: '#0A0A0A', fontFamily: MONO, fontSize: '12px', fontWeight: 600, padding: '10px', border: 'none', borderRadius: '2px',
-                            cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 'not-allowed' : 'pointer',
-                            opacity: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 0.3 : 1,
-                        }}
-                    >
-                        {runningJobs.length > 0 ? 'PROCESSING...' : 'START PROCESSING'}
-                    </button>
-                    {runningJobs.length > 0 && (
-                        <div style={{ marginTop: '8px', fontFamily: MONO, fontSize: '10px', color: '#555555' }}>
-                            <div>ELAPSED  {formatElapsed(elapsed[runningJobs[0]?.id])}</div>
-                            <div>JOB ID   {runningJobs[0]?.id?.substring(0, 8)}</div>
-                        </div>
-                    )}
-
-                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
-
-                    {/* SECTION: INSAR RESULTS */}
-                    {viewingResult?.insarReport?.summary && (() => {
-                        const s = viewingResult.insarReport.summary;
-                        const topScatterers = (viewingResult.insarReport.scatterers || [])
-                            .sort((a, b) => Math.abs(b.displacement_mm) - Math.abs(a.displacement_mm))
-                            .slice(0, 10);
-                        const dispMagnitude = Math.abs(s.max_displacement_mm || 0);
-                        const dispColorVal = dispMagnitude < 5 ? '#4CAF50' : dispMagnitude < 10 ? '#E6A817' : dispMagnitude < 20 ? '#D4822A' : '#C0392B';
-
-                        return (
-                            <div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#2A2A2A', border: '1px solid #2A2A2A', marginBottom: '16px' }}>
-                                    <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                        <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>STABLE</div>
-                                        <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: '#4CAF50' }}>{s.stable_count}</div>
-                                    </div>
-                                    <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                        <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>CAUTION</div>
-                                        <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: '#E6A817' }}>{s.caution_count}</div>
-                                    </div>
-                                    <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                        <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>ALERT</div>
-                                        <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: '#D4822A' }}>{s.alert_count}</div>
-                                    </div>
-                                    <div style={{ background: '#111111', padding: '8px', textAlign: 'center', border: s.critical_count > 0 ? '1px solid #C0392B' : 'none' }}>
-                                        <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>CRITICAL</div>
-                                        <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: '#C0392B' }}>{s.critical_count}</div>
-                                    </div>
-                                </div>
-
-                                <div style={{ marginBottom: '16px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                        <span style={{ color: '#555555' }}>MAX DISPLACEMENT</span>
-                                        <span>
-                                            <span style={{ color: dispColorVal }}>{s.max_displacement_mm?.toFixed(2)} mm</span>
-                                            {(s.max_displacement_mm || 0) < 0 && <span style={{ color: '#E6A817', marginLeft: '4px' }}>(SUBSIDENCE)</span>}
-                                        </span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                        <span style={{ color: '#555555' }}>MEDIAN</span>
-                                        <span style={{ color: '#F0F0F0' }}>{s.median_displacement_mm?.toFixed(2)} mm</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                        <span style={{ color: '#555555' }}>TOTAL PS POINTS</span>
-                                        <span style={{ color: '#F0F0F0' }}>{s.total_ps_points}</span>
-                                    </div>
-                                </div>
-
-                                {topScatterers.length > 0 && (
-                                    <div>
-                                        <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', display: 'flex', paddingBottom: '4px', borderBottom: '1px solid #1A1A1A' }}>
-                                            <div style={{ width: '20px' }}>#</div>
-                                            <div style={{ flex: 1 }}>DISP (mm)</div>
-                                            <div style={{ width: '40px' }}>COH</div>
-                                            <div style={{ width: '60px' }}>SEV</div>
-                                        </div>
-                                        {topScatterers.map((pt, idx) => (
-                                            <div key={idx} style={{ fontFamily: MONO, fontSize: '10px', display: 'flex', padding: '4px 0', borderBottom: '1px solid #1A1A1A' }}>
-                                                <div style={{ width: '20px', color: '#888888' }}>{idx + 1}</div>
-                                                <div style={{ flex: 1, color: sevColor(pt.severity) }}>{pt.displacement_mm?.toFixed(2)}</div>
-                                                <div style={{ width: '40px', color: '#F0F0F0' }}>{pt.coherence?.toFixed(2)}</div>
-                                                <div style={{ width: '60px', color: sevColor(pt.severity) }}>{pt.severity}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })()}
-                </div>
+                <SarSciencePanel
+                    dataMode={dataMode}
+                    setDataMode={setDataMode}
+                    localFilePath={localFilePath}
+                    setLocalFilePath={setLocalFilePath}
+                    metadata={metadata}
+                    startDate={startDate}
+                    setStartDate={setStartDate}
+                    endDate={endDate}
+                    setEndDate={setEndDate}
+                    handleSearch={handleSearch}
+                    isSearching={isSearching}
+                    searchResults={searchResults}
+                    selectedScene={selectedScene}
+                    setSelectedScene={setSelectedScene}
+                    pipelines={pipelines}
+                    pipeline={pipeline}
+                    setPipeline={setPipeline}
+                    startJob={startJob}
+                    getInputFile={getInputFile}
+                    runningJobs={runningJobs}
+                    gatewayOnline={gatewayOnline}
+                    elapsed={elapsed}
+                    jobs={jobs}
+                    setActiveJobId={setActiveJobId}
+                    setTerminalOpen={setTerminalOpen}
+                    setViewingResult={setViewingResult}
+                />
             )}
 
             {/* ── PROFILE 3: MARITIME INTEL ── */}
             {profile === 'maritime' && (
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-                    {/* SECTION: SEARCH AREA */}
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginBottom: '8px' }}>SEARCH AREA</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            style={{ width: '100%', background: '#1A1A1A', border: '1px solid #2A2A2A', color: '#F0F0F0', fontFamily: MONO, fontSize: '12px', padding: '8px 10px', outline: 'none', borderRadius: '2px', boxSizing: 'border-box' }}
-                            onFocus={(e) => e.target.style.borderColor = '#404040'}
-                            onBlur={(e) => e.target.style.borderColor = '#2A2A2A'}
-                        />
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            style={{ width: '100%', background: '#1A1A1A', border: '1px solid #2A2A2A', color: '#F0F0F0', fontFamily: MONO, fontSize: '12px', padding: '8px 10px', outline: 'none', borderRadius: '2px', boxSizing: 'border-box' }}
-                            onFocus={(e) => e.target.style.borderColor = '#404040'}
-                            onBlur={(e) => e.target.style.borderColor = '#2A2A2A'}
-                        />
-                    </div>
-                    <button
-                        onClick={handleSearch}
-                        disabled={isSearching}
-                        style={{ width: '100%', background: 'transparent', border: '1px solid #2A2A2A', color: '#888888', fontFamily: MONO, fontSize: '11px', padding: '8px 10px', borderRadius: '2px', cursor: 'pointer', marginBottom: '16px' }}
-                        onMouseEnter={(e) => { e.target.style.borderColor = '#404040'; e.target.style.color = '#F0F0F0'; }}
-                        onMouseLeave={(e) => { e.target.style.borderColor = '#2A2A2A'; e.target.style.color = '#888888'; }}
-                    >
-                        {isSearching ? 'SEARCHING...' : 'SEARCH CATALOG'}
-                    </button>
-                    {searchResults.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '16px' }}>
-                            {searchResults.map((scene) => (
-                                <div
-                                    key={scene.id}
-                                    onClick={() => setSelectedScene(scene)}
-                                    style={{ padding: '8px', borderBottom: '1px solid #1A1A1A', borderLeft: selectedScene?.id === scene.id ? `3px solid #4A8FA8` : '3px solid transparent', paddingLeft: selectedScene?.id === scene.id ? '13px' : '8px', cursor: 'pointer' }}
-                                >
-                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#888888' }}>{scene.id}</div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '10px', color: '#555555', marginTop: '4px' }}>
-                                        <span>{scene.date?.split('T')[0]}</span>
-                                        <span>{formatBytes(scene.size_bytes)}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginBottom: '8px' }}>PIPELINE</div>
-                    <div style={{ fontFamily: MONO, fontSize: '12px', color: '#F0F0F0', marginBottom: '16px' }}>Maritime CFAR</div>
-
-                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
-
-                    {/* SECTION: EXECUTE */}
-                    {dataMode === 'catalog' && selectedScene ? (
-                        <button
-                            onClick={handleAcquireAndProcess}
-                            disabled={runningJobs.length > 0 || !gatewayOnline}
-                            style={{
-                                width: '100%', background: '#C8A96E', color: '#0A0A0A', fontFamily: MONO, fontSize: '12px', fontWeight: 600, padding: '10px', border: 'none', borderRadius: '2px',
-                                cursor: (runningJobs.length > 0 || !gatewayOnline) ? 'not-allowed' : 'pointer',
-                                opacity: (runningJobs.length > 0 || !gatewayOnline) ? 0.3 : 1,
-                            }}
-                        >
-                            {downloadProgress !== null ? (
-                                downloadProgress === 'complete' ? 'DOWNLOADING COMPLETE' : `DOWNLOADING  ${downloadProgress}%`
-                            ) : runningJobs.length > 0 ? 'PROCESSING...' : 'ACQUIRE + PROCESS'}
-                        </button>
-                    ) : (
-                        <button
-                            onClick={startJob}
-                            disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline}
-                            style={{
-                                width: '100%', background: '#C8A96E', color: '#0A0A0A', fontFamily: MONO, fontSize: '12px', fontWeight: 600, padding: '10px', border: 'none', borderRadius: '2px',
-                                cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 'not-allowed' : 'pointer',
-                                opacity: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 0.3 : 1,
-                            }}
-                        >
-                            {runningJobs.length > 0 ? 'PROCESSING...' : 'START PROCESSING'}
-                        </button>
-                    )}
-                    {downloadProgress !== null && downloadProgress !== 'complete' && (
-                        <div style={{ height: '2px', background: '#1A1A1A', marginTop: '8px' }}>
-                            <div style={{ height: '100%', width: `${downloadProgress}%`, background: '#C8A96E' }}></div>
-                        </div>
-                    )}
-                    {runningJobs.length > 0 && (
-                        <div style={{ marginTop: '8px', fontFamily: MONO, fontSize: '10px', color: '#555555' }}>
-                            <div>ELAPSED  {formatElapsed(elapsed[runningJobs[0]?.id])}</div>
-                            <div>JOB ID   {runningJobs[0]?.id?.substring(0, 8)}</div>
-                        </div>
-                    )}
-
-                    <div style={{ height: '1px', background: '#2A2A2A', margin: '16px 0' }}></div>
-
-                    {/* SECTION: DETECTION RESULTS */}
-                    {viewingResult?.ships?.length > 0 && (() => {
-                        const ships = viewingResult.ships;
-                        const intensities = ships.map((s) => s.intensity);
-                        const maxBackscatter = Math.max(...intensities);
-                        const minBackscatter = Math.min(...intensities);
-                        const meanBackscatter = intensities.reduce((a, b) => a + b, 0) / ships.length;
-
-                        return (
-                            <div>
-                                <div style={{ fontFamily: MONO, fontSize: '32px', fontWeight: 600, color: '#C0392B' }}>{ships.length}</div>
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: '#888888', marginBottom: '16px' }}>VESSELS DETECTED VIA CA-CFAR</div>
-
-                                <div style={{ marginBottom: '16px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontFamily: MONO, fontSize: '11px' }}>
-                                        <span style={{ color: '#555555' }}>MAX BACKSCATTER</span>
-                                        <span style={{ color: '#7EB8D4' }}>{maxBackscatter.toFixed(2)} dB</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontFamily: MONO, fontSize: '11px' }}>
-                                        <span style={{ color: '#555555' }}>MEAN BACKSCATTER</span>
-                                        <span style={{ color: '#7EB8D4' }}>{meanBackscatter.toFixed(2)} dB</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontFamily: MONO, fontSize: '11px' }}>
-                                        <span style={{ color: '#555555' }}>MIN BACKSCATTER</span>
-                                        <span style={{ color: '#7EB8D4' }}>{minBackscatter.toFixed(2)} dB</span>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    {ships.map((ship, idx) => (
-                                        <div
-                                            key={idx}
-                                            style={{ padding: '6px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '10px', color: '#888888', cursor: 'pointer' }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.background = '#1A1A1A'; }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                                        >
-                                            V{idx + 1}  {ship.lat.toFixed(5)}°N  {ship.lon.toFixed(5)}°E  {ship.intensity.toFixed(2)}dB
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })()}
-                </div>
+                <MaritimePanel
+                    startDate={startDate}
+                    setStartDate={setStartDate}
+                    endDate={endDate}
+                    setEndDate={setEndDate}
+                    handleSearch={handleSearch}
+                    isSearching={isSearching}
+                    searchResults={searchResults}
+                    selectedScene={selectedScene}
+                    setSelectedScene={setSelectedScene}
+                    dataMode={dataMode}
+                    handleAcquireAndProcess={handleAcquireAndProcess}
+                    runningJobs={runningJobs}
+                    gatewayOnline={gatewayOnline}
+                    downloadProgress={downloadProgress}
+                    startJob={startJob}
+                    getInputFile={getInputFile}
+                    elapsed={elapsed}
+                    viewingResult={viewingResult}
+                />
             )}
         </div>
         // Continued in part 5...
@@ -1243,25 +747,33 @@ function AppDashboard() {
 
             {/* ═══ COORDINATES HUD ═══ */}
             <div style={{
-                position: 'absolute', bottom: '16px', left: '16px', zIndex: 900,
-                background: '#111111', border: '1px solid #2A2A2A', padding: '4px 10px',
-                fontFamily: MONO, fontSize: '11px', color: '#7EB8D4',
-                display: 'flex', alignItems: 'center', gap: '12px', borderRadius: '2px'
+                position: 'absolute', bottom: profile === 'infrastructure' ? '90px' : '16px', left: profile === 'infrastructure' ? '248px' : '16px', zIndex: 900,
+                background: 'rgba(17, 17, 17, 0.85)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.06)', padding: '4px 12px',
+                fontFamily: MONO, fontSize: '11px', color: C.data,
+                display: 'flex', alignItems: 'center', gap: '10px', borderRadius: '2px'
             }}>
                 <span>LAT: {mouseCoords.lat}°</span>
                 <span>LON: {mouseCoords.lon}°</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#888888' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: gatewayOnline ? '#4CAF50' : '#C0392B' }} />
+                {metadata && <>
+                    <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)' }} />
+                    <span style={{ color: C.textMid, fontSize: '10px' }}>{metadata.band?.split(' ')[0] || 'L-BAND'}</span>
+                    <span style={{ color: C.textMid, fontSize: '10px' }}>{metadata.direction || ''}</span>
+                </>}
+                <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)' }} />
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: C.textMid, fontSize: '10px' }}>
+                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: gatewayOnline ? C.stable : C.critical }} />
                     {gatewayOnline ? 'ONLINE' : 'OFFLINE'}
                 </span>
             </div>
 
             {/* ═══ TERMINAL DRAWER ═══ */}
             <div style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000,
+                position: 'absolute', bottom: profile === 'infrastructure' ? '80px' : 0, left: profile === 'infrastructure' ? '240px' : 0, right: 0, zIndex: 1000,
                 height: terminalOpen && activeJobId ? '240px' : '0px',
                 transition: 'height 200ms ease', overflow: 'hidden',
-                background: '#0A0A0A', borderTop: '1px solid #2A2A2A',
+                background: 'rgba(10, 10, 10, 0.9)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                borderTop: '1px solid rgba(255, 255, 255, 0.06)',
                 display: 'flex', flexDirection: 'column'
             }}>
                 <div style={{ height: '36px', background: '#111111', borderBottom: '1px solid #2A2A2A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', flexShrink: 0 }}>
@@ -1317,6 +829,90 @@ function AppDashboard() {
                 >
                     LOG [{logs[activeJobId]?.length || 0} LINES]{activeJob?.status === 'running' ? ' ···' : ''}
                 </button>
+            )}
+
+            {/* ═══ MAP LEGEND OVERLAY ═══ */}
+            {profile === 'infrastructure' && viewingResult && (activeLayer === 'deformation' || activeLayer === 'coherence') && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '96px',
+                    left: '256px',
+                    zIndex: 900,
+                    background: 'rgba(17, 17, 17, 0.92)',
+                    border: '1px solid #2A2A2A',
+                    padding: '12px',
+                    width: '120px',
+                    boxSizing: 'border-box',
+                    borderRadius: '2px',
+                }}>
+                    {activeLayer === 'deformation' ? (
+                        <>
+                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                                InSAR DISPLACEMENT
+                            </div>
+                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#888888', marginBottom: '8px' }}>
+                                LOS mm
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                                <div style={{
+                                    height: '120px',
+                                    width: '16px',
+                                    borderRadius: '1px',
+                                    background: 'linear-gradient(to bottom, #C0392B, #D4822A, #E6A817, #F0F0F0, #4A8FA8, #2E6B8A, #1A3A5C)'
+                                }} />
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between',
+                                    height: '120px',
+                                }}>
+                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#C0392B', lineHeight: '9px' }}>+20</span>
+                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#D4822A', lineHeight: '9px' }}>+10</span>
+                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#888888', lineHeight: '9px' }}>0</span>
+                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#2E6B8A', lineHeight: '9px' }}>-10</span>
+                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#1A3A5C', lineHeight: '9px' }}>-20</span>
+                                </div>
+                            </div>
+                            <div style={{ height: '1px', background: '#2A2A2A', margin: '8px 0' }} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#C0392B', textAlign: 'left' }}>UPLIFT</div>
+                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#1A3A5C', textAlign: 'left' }}>SUBSIDENCE</div>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                                COHERENCE
+                            </div>
+                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#888888', marginBottom: '8px' }}>
+                                0 — 1
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                                <div style={{
+                                    height: '120px',
+                                    width: '16px',
+                                    borderRadius: '1px',
+                                    background: 'linear-gradient(to bottom, #F0F0F0, #888888, #1A1A1A)'
+                                }} />
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between',
+                                    height: '120px',
+                                }}>
+                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#F0F0F0', lineHeight: '9px' }}>1.0</span>
+                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#888888', lineHeight: '9px' }}>0.5</span>
+                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', lineHeight: '9px' }}>0.0</span>
+                                </div>
+                            </div>
+                            <div style={{ height: '1px', background: '#2A2A2A', margin: '8px 0' }} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#F0F0F0', textAlign: 'left' }}>HIGH COHERENCE</div>
+                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', textAlign: 'left' }}>LOW COHERENCE</div>
+                            </div>
+                        </>
+                    )}
+                </div>
             )}
 
         </div>

@@ -646,6 +646,206 @@ const PageMaritimeSurveillance = () => (
         </ol>
     </div>
 );
+
+const PageInfraUserManual = () => (
+    <div>
+        <Header 
+            title="InSAR Infrastructure Monitoring User Manual" 
+            desc="Enterprise-grade guide to geolocating assets, aggregating multi-risk context, and tracking structural subsidence using NISARPro." 
+        />
+
+        <div style={{ display: 'flex', gap: '12px', background: 'rgba(200, 169, 110, 0.05)', border: '1px solid rgba(200, 169, 110, 0.2)', borderRadius: '6px', padding: '1.25rem', marginBottom: '2rem' }}>
+            <span style={{ fontSize: '1.5rem', lineHeight: '1' }}>🛡️</span>
+            <div>
+                <strong style={{ color: '#C8A96E', display: 'block', marginBottom: '4px', fontSize: '0.95rem' }}>ICEYE-Grade Infrastructure Intelligence</strong>
+                <span style={{ fontSize: '0.9rem', color: theme.textDef, lineHeight: 1.5 }}>
+                    NISARPro delivers centimeter to millimeter-level displacement tracking for critical earth dams, concrete reservoirs, and transportation corridors using repeat-pass Interferometric SAR (InSAR).
+                </span>
+            </div>
+        </div>
+
+        <H2 id="manual-locating">1. Locate & Select Your Asset</H2>
+        <P>
+            The monitoring workflow begins in the <strong>Infrastructure Profile</strong>. Use the integrated Nominatim search engine to pin-point the structural asset.
+        </P>
+        <ul style={{ color: theme.textDef, lineHeight: 1.8, paddingLeft: '1.5rem', marginBottom: '1.5rem' }}>
+            <li>Open the left profile switcher and select <strong>Infrastructure</strong>.</li>
+            <li>In the <strong>SEARCH ASSET</strong> input field, type the name of the dam, bridge, or reservoir (e.g., <em>Oroville Dam</em> or <em>Golden Gate Bridge</em>).</li>
+            <li>Select the correct asset from the live drop-down suggestions. The map will immediately fly to the coordinates and place a <strong>glowing scan marker</strong> over the structure.</li>
+        </ul>
+
+        <H2 id="manual-context">2. Analyze Environmental Context</H2>
+        <P>
+            Large structures do not fail in isolation. Geotechnical stability is highly coupled to climate factors. NISARPro aggregates real-time environmental context at the asset's exact coordinates:
+        </P>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px', margin: '1.5rem 0' }}>
+            {[
+                { title: 'Precipitation Tracking', desc: 'Queries Open-Meteo API to check active rainfall (mm/hr). Excess rainfall correlates with soil saturation and reservoir pressure loads.', icon: '🌧️', status: 'Active API' },
+                { title: 'Soil Moisture Estimation', desc: 'Evaluates top-layer soil moisture from satellite models. Saturated ground decreases soil friction, increasing lateral stress on dam footings.', icon: '🌱', status: 'Active API' },
+                { title: 'Seismic Risk Assessment', desc: 'Scans the USGS Earthquake catalog for active seismic events within a 100km radius over the past 7 days.', icon: '🎛️', status: 'Active API' }
+            ].map((c, i) => (
+                <div key={i} style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '6px', padding: '1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '1.2rem' }}>{c.icon}</span>
+                        <span style={{ fontSize: '0.7rem', color: '#C8A96E', border: '1px solid rgba(200, 169, 110, 0.3)', padding: '1px 6px', borderRadius: '4px', fontFamily: theme.mono }}>{c.status}</span>
+                    </div>
+                    <strong style={{ display: 'block', color: '#fff', fontSize: '0.95rem', marginBottom: '4px' }}>{c.title}</strong>
+                    <span style={{ fontSize: '0.85rem', color: theme.textMuted, lineHeight: 1.5 }}>{c.desc}</span>
+                </div>
+            ))}
+        </div>
+
+        <H2 id="manual-files">3. Configure Master & Slave Baselines</H2>
+        <P>
+            InSAR measures phase differences between two different acquisitions. You must specify a temporal pair:
+        </P>
+        <Step n="1" title="Master (Reference File)">
+            Input the path to the reference NISAR HDF5 scene (e.g. <code>/data/NISAR_L1_20260110.h5</code>). This establishes the base geometry.
+        </Step>
+        <Step n="2" title="Slave (Repeat Pass File)">
+            Input the path to the secondary acquisition (e.g. <code>/data/NISAR_L1_20260122.h5</code>). 
+            <Alert type="note" title="Testing Sandbox">
+                Leave the Slave path empty to automatically generate a synthetic repeat-pass scene with displacement anomalies. This is ideal for validating the workflow.
+            </Alert>
+        </Step>
+        <Step n="3" title="Temporal Baseline calculation">
+            Once both paths are populated, NISARPro extracts acquisition dates from the file headers and displays the **Temporal Baseline** (in days) to help verify pair feasibility.
+        </Step>
+
+        <H2 id="manual-execute">4. Execute Processing & Stream Telemetry</H2>
+        <P>
+            Click **START PROCESSING** to dispatch the InSAR pipeline. The integrated command console slides up from the bottom:
+        </P>
+        <ul style={{ color: theme.textDef, lineHeight: 1.8, paddingLeft: '1.5rem', marginBottom: '1.5rem' }}>
+            <li><strong>Live Console Log Stream:</strong> Displays live stdout/stderr from the Rust mathematical engine.</li>
+            <li><strong>Scanning HUD Marker:</strong> On-map indicator pulses dynamically while the processing job is running.</li>
+            <li><strong>Completed Jobs:</strong> After execution, the result is saved under the gateway's output directory, available for immediate visualization (<strong>VIEW</strong>) or physical download (<strong>DL</strong>).</li>
+        </ul>
+
+        <H2 id="manual-visualization">5. Visual Displacement Analytics</H2>
+        <P>
+            Once loaded, the processed interferogram overlays the Leaflet map. Analyze the output parameters in the right panel:
+        </P>
+        <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '6px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', textAlign: 'center', marginBottom: '1.25rem' }}>
+                <div style={{ borderRight: `1px solid ${theme.border}` }}>
+                    <div style={{ fontSize: '0.8rem', color: theme.textMuted }}>STABLE</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4CAF50' }}>942</div>
+                </div>
+                <div style={{ borderRight: `1px solid ${theme.border}` }}>
+                    <div style={{ fontSize: '0.8rem', color: theme.textMuted }}>CAUTION</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#E6A817' }}>41</div>
+                </div>
+                <div style={{ borderRight: `1px solid ${theme.border}` }}>
+                    <div style={{ fontSize: '0.8rem', color: theme.textMuted }}>ALERT</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#D4822A' }}>12</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: '0.8rem', color: theme.textMuted }}>CRITICAL</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#C0392B' }}>3</div>
+                </div>
+            </div>
+            <P>
+                <strong>Scatterer Table:</strong> Select individual Persistent Scatterer (PS) points on the dam face to query specific displacement velocities (in mm/year) and coherence indices. Red markers denote subsidence; blue markers denote structural uplift.
+            </P>
+        </div>
+    </div>
+);
+
+const PageInfraDevGuide = () => (
+    <div>
+        <Header 
+            title="InSAR Infrastructure Dev Guide" 
+            desc="Developer architecture, REST API specifications, and mathematical formulas for the InSAR pipeline." 
+        />
+
+        <H2 id="dev-architecture">System Architecture Flow</H2>
+        <P>
+            The infrastructure monitoring section integrates three distinct services: geocoding queries, local climate data fetch, and local InSAR processing.
+        </P>
+        
+        <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '1.5rem', fontFamily: theme.mono, fontSize: '0.82rem', lineHeight: 1.8, color: 'rgba(255,255,255,0.75)' }}>
+            <div style={{ color: '#C8A96E', fontWeight: 700, marginBottom: '0.5rem' }}>DATA FLOW MODEL</div>
+            <div>[Dashboard UI] ──(1) q=dam ───────────► [Gateway: GET /assets/search] ──► OpenStreetMap</div>
+            <div>[Dashboard UI] ──(2) lat, lon ───────► [Gateway: GET /context] ────────► Open-Meteo & USGS</div>
+            <div>[Dashboard UI] ──(3) master, slave ──► [Gateway: POST /jobs] ─────────► Spawn sar_processor</div>
+        </div>
+
+        <H2 id="dev-api">API Specifications</H2>
+        <P>
+            The gateway implements three routes specifically for the Infrastructure panel:
+        </P>
+
+        <H3>1. Asset Search Endpoint</H3>
+        <P>Proxies OpenStreetMap Nominatim queries to locate infrastructure objects securely.</P>
+        <CodeTab tabs={[
+            {
+                name: 'Request',
+                code: 'GET http://localhost:3000/assets/search?q=hoover+dam'
+            },
+            {
+                name: 'Response (200 OK)',
+                code: '[\n  {\n    "id": "node/12345678",\n    "name": "Hoover Dam",\n    "asset_type": "dam",\n    "lat": 36.0162,\n    "lon": -114.7377,\n    "display_name": "Hoover Dam, Nevada, USA"\n  }\n]'
+            }
+        ]} />
+
+        <H3>2. Environmental Context Endpoint</H3>
+        <P>Aggregates weather, soil moisture, and active seismic logs dynamically.</P>
+        <CodeTab tabs={[
+            {
+                name: 'Request',
+                code: 'GET http://localhost:3000/context?lat=36.0162&lon=-114.7377'
+            },
+            {
+                name: 'Response (200 OK)',
+                code: '{\n  "reservoir": "Hoover Dam Reservoir",\n  "rainfall": "0.1 mm/hr (Clear Skies)",\n  "soil_moisture": "0.18 m³/m³ (Stable)",\n  "seismic": "No active events within 100km (7d)",\n  "season": "Winter Dry Period",\n  "assessment": "Structure status stable. Low environmental load.",\n  "confidence": "HIGH",\n  "source": "Open-Meteo & USGS Seismology"\n}'
+            }
+        ]} />
+
+        <H3>3. Job Submission (InSAR Pipeline)</H3>
+        <P>Submits a processing job. Spawns the Rust core InSAR execution pipeline with crop coordinates.</P>
+        <CodeTab tabs={[
+            {
+                name: 'Request',
+                code: 'POST http://localhost:3000/jobs\nContent-Type: application/json\n\n{\n  "input_file": "/data/master_scene.h5",\n  "slave_file": "/data/slave_scene.h5",\n  "pipeline": "insar",\n  "crop_lat": 36.0162,\n  "crop_lon": -114.7377,\n  "crop_radius_km": 5.0\n}'
+            },
+            {
+                name: 'Response (202 Accepted)',
+                code: '{\n  "id": "insar-job-98f5a",\n  "status": "queued"\n}'
+            }
+        ]} />
+
+        <H2 id="dev-insar-math">InSAR Math & Rust Core Implementation</H2>
+        <P>
+            The backend coregistration uses two steps:
+        </P>
+        <ol style={{ color: theme.textDef, lineHeight: 1.8, paddingLeft: '1.5rem' }}>
+            <li><strong>Cross-Correlation:</strong> Computed in the frequency domain to identify coarse pixel offsets:</li>
+        </ol>
+        <KaTeXBlock math="R_{ms} = \mathcal{F}^{-1} \left\{ \mathcal{F}\{Master\} \cdot \mathcal{F}\{Slave\}^* \right\}" />
+        <ol start="2" style={{ color: theme.textDef, lineHeight: 1.8, paddingLeft: '1.5rem' }}>
+            <li><strong>Coherence Matrix (O(N) Integral Image Implementation):</strong> Rather than running a sliding sum over window size W x W which leads to O(N² · W²) operations, the engine uses integral images:</li>
+        </ol>
+        <CodeTab tabs={[
+            {
+                name: 'insar_coherence.rs',
+                code: 'let mut integral_m_sq = Array2::<f64>::zeros((rows + 1, cols + 1));\n// pre-calculate integral image sums in one pass O(N²)\nfor r in 0..rows {\n    for c in 0..cols {\n        integral_m_sq[[r+1, c+1]] = m_sq[[r, c]] + integral_m_sq[[r, c+1]] + integral_m_sq[[r+1, c]] - integral_m_sq[[r, c]];\n    }\n}\n// Sum query is O(1) for any window size\nlet sum_m_sq = rect_sum(&integral_m_sq, r0, c0, r1, c1);'
+            }
+        ]} />
+
+        <H2 id="dev-cli-example">Developer Testing CLI Example</H2>
+        <P>
+            To run and test the crop-enabled InSAR pipeline manually from the command line:
+        </P>
+        <CodeTab tabs={[
+            {
+                name: 'CLI execution',
+                code: './target/release/sar_processor \\\n  --input /data/master.h5 \\\n  --insar-slave /data/slave.h5 \\\n  --crop-lat 36.0162 \\\n  --crop-lon -114.7377 \\\n  --crop-radius-km 5.0 \\\n  --output /data/insar_dam_crop.png'
+            }
+        ]} />
+    </div>
+);
+
 // SECTION_3_END
 
 // SECTION_4_START
@@ -983,6 +1183,13 @@ export default function DocsPage() {
             items: [
                 { id: 'dam_monitoring', label: 'Dam & Infrastructure Monitoring', component: PageDamMonitoring },
                 { id: 'maritime', label: 'Maritime Surveillance', component: PageMaritimeSurveillance },
+            ]
+        },
+        {
+            title: "Infrastructure Suite",
+            items: [
+                { id: 'infra_user_manual', label: 'InSAR User Manual', component: PageInfraUserManual },
+                { id: 'infra_dev_guide', label: 'InSAR Dev Guide', component: PageInfraDevGuide },
             ]
         },
         {

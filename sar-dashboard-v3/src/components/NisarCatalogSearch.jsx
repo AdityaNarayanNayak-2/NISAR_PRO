@@ -7,14 +7,16 @@ function NisarCatalogSearch({ bounds, onSceneSelect }) {
     const [endDate, setEndDate] = useState('2026-06-01');
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState([]);
+    const [searchedPlatform, setSearchedPlatform] = useState('NISAR');
 
-    const handleSearch = async () => {
+    const handleSearch = async (platformOverride = 'NISAR') => {
         if (!bounds) {
             alert("No map bounds detected. Please move the map to your area of interest.");
             return;
         }
 
         setIsLoading(true);
+        setSearchedPlatform(platformOverride);
         try {
             // boundaries from react-leaflet are [southWest, northEast]
             const minLat = bounds.getSouth();
@@ -24,7 +26,7 @@ function NisarCatalogSearch({ bounds, onSceneSelect }) {
 
             const bbox = `${minLon},${minLat},${maxLon},${maxLat}`;
             
-            const res = await fetch(api(`/search/nisar?bbox=${bbox}&start_date=${startDate}T00:00:00Z&end_date=${endDate}T23:59:59Z`));
+            const res = await fetch(api(`/search/nisar?bbox=${bbox}&start_date=${startDate}T00:00:00Z&end_date=${endDate}T23:59:59Z&platform=${platformOverride}`));
             const data = await res.json();
             setResults(data);
         } catch (error) {
@@ -93,8 +95,27 @@ function NisarCatalogSearch({ bounds, onSceneSelect }) {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {results.length === 0 && !isLoading ? (
-                        <div style={{ padding: '20px', textAlign: 'center', color: '#475569', fontSize: '0.7rem', fontFamily: '"JetBrains Mono", monospace', border: '1px dashed #1e293b' }}>
-                            [NO_DATA_MATCHES_PARAMETERS]
+                        <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '0.7rem', fontFamily: '"JetBrains Mono", monospace', border: '1px dashed #1e293b' }}>
+                            {searchedPlatform === 'NISAR' ? (
+                                <>
+                                    <div style={{ color: '#ef4444', marginBottom: '10px', fontWeight: 600 }}>No NISAR products found</div>
+                                    <button
+                                        onClick={() => handleSearch('SENTINEL-1')}
+                                        style={{
+                                            background: 'transparent', border: '1px solid #C8A96E',
+                                            color: '#C8A96E', padding: '6px 12px', fontSize: '0.65rem',
+                                            fontFamily: '"JetBrains Mono", monospace', cursor: 'pointer',
+                                            textTransform: 'uppercase', transition: 'all 0.2s', fontWeight: 700
+                                        }}
+                                        onMouseOver={e => e.target.style.background = 'rgba(200, 169, 110, 0.1)'}
+                                        onMouseOut={e => e.target.style.background = 'transparent'}
+                                    >
+                                        [Search Sentinel-1 GUNW]
+                                    </button>
+                                </>
+                            ) : (
+                                '[NO_DATA_MATCHES_PARAMETERS]'
+                            )}
                         </div>
                     ) : (
                         results.map(scene => (
@@ -110,6 +131,19 @@ function NisarCatalogSearch({ bounds, onSceneSelect }) {
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem', color: '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Calendar size={12} /> {scene.date.split('T')[0]}</div>
+                                    {scene.platform && (
+                                        <div style={{
+                                            background: scene.platform.includes('Sentinel') ? 'rgba(200, 169, 110, 0.15)' : 'rgba(14, 165, 233, 0.15)',
+                                            color: scene.platform.includes('Sentinel') ? '#C8A96E' : '#0ea5e9',
+                                            padding: '2px 6px',
+                                            fontSize: '0.6rem',
+                                            fontFamily: '"JetBrains Mono", monospace',
+                                            fontWeight: 'bold',
+                                            border: scene.platform.includes('Sentinel') ? '1px solid rgba(200, 169, 110, 0.3)' : '1px solid rgba(14, 165, 233, 0.3)'
+                                        }}>
+                                            {scene.platform}
+                                        </div>
+                                    )}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981' }}><Layers size={12} /> {formatBytes(scene.size_bytes)}</div>
                                 </div>
                             </div>

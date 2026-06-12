@@ -1,11 +1,12 @@
 use anyhow::Result;
 use clap::Parser;
-use log::info;
+use log::{info, warn};
 use ndarray::Array2;
 use num_complex::Complex32;
 use sar_processor::io::{save_sar_geotiff, save_sar_image, generate_xyz_tiles, save_geotiff_f32};
 use sar_processor::nisar_parser;
 use sar_processor::nisar_parser::NisarProductType;
+use sar_processor::gunw_parser;
 use sar_processor::rcmc::RcmcParams;
 use sar_processor::rda::SARProcessor;
 use std::path::PathBuf;
@@ -84,6 +85,14 @@ struct Cli {
     #[arg(long)]
     baseline_perp: Option<f64>,
 
+    /// Path to an external .wbd SWBD water mask file
+    #[arg(long, value_name = "WATER_MASK_FILE")]
+    water_mask: Option<PathBuf>,
+
+    /// Adaptive intensity threshold factor for water masking (default: 0.15)
+    #[arg(long, default_value = "0.15")]
+    water_mask_threshold: f32,
+
     // ── Geographic crop flags (infrastructure monitoring) ─────────────────
 
     /// Center latitude for geographic crop (infrastructure monitoring)
@@ -134,6 +143,80 @@ async fn main() -> Result<()> {
         match ext.as_str() {
             "h5" | "hdf5" | "he5" => {
                 info!("Mode: NISAR HDF5  →  {:?}", input);
+
+                // ══════════════════════════════════════════════════
+                //  GUNW Fast-Path: Skip entire RDA + InSAR pipeline
+                //  GUNW is a completed NASA product — just read and display
+                // ══════════════════════════════════════════════════
+                let filename = input.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if filename.contains("_GUNW_") {
+                    info!("╔══════════════════════════════════════════════╗");
+                    info!("║     GUNW Direct Pipeline (NASA product)      ║");
+                    info!("╚══════════════════════════════════════════════╝");
+
+                    info!("[1/5] Parsing GUNW product...");
+                    let gunw = gunw_parser::parse_gunw(input, &cli.polarization)?;
+
+                    let base = cli.output.replace(".tif", "").replace(".png", "");
+                    let bbox_opt = Some([gunw.bbox.west, gunw.bbox.south, gunw.bbox.east, gunw.bbox.north]);
+
+                    // Emit georef event for gateway
+                    println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}",
+                        gunw.bbox.south, gunw.bbox.north, gunw.bbox.west, gunw.bbox.east);
+
+                    // [2/5] Save displacement GeoTIFF (same filename the dashboard expects)
+                    info!("[2/5] Saving displacement GeoTIFF...");
+                    let defo_path = format!("{}_defo_phase.tif", base);
+                    save_geotiff_f32(gunw.displacement.view(), &defo_path, bbox_opt)?;
+                    info!("  ✓ Displacement: {}", defo_path);
+
+                    // [3/5] Save coherence GeoTIFF
+                    info!("[3/5] Saving coherence GeoTIFF...");
+                    let coh_path = format!("{}_coherence.tif", base);
+                    save_geotiff_f32(gunw.coherence.view(), &coh_path, bbox_opt)?;
+                    info!("  ✓ Coherence: {}", coh_path);
+
+                    // [4/5] Infrastructure health analysis (uses real displacement values)
+                    info!("[4/5] Analyzing infrastructure health (PS-InSAR on GUNW)...");
+                    let bbox_arr = [gunw.bbox.south, gunw.bbox.west, gunw.bbox.north, gunw.bbox.east];
+                    let options = sar_processor::infra_health::InfraHealthOptions {
+                        bbox: Some(bbox_arr),
+                        wavelength_m: gunw.wavelength_m,
+                        coherence_threshold: cli.insar_coherence_threshold,
+                        max_points: 2000,
+                    };
+                    let report = sar_processor::infra_health::analyze_infrastructure_unwrapped(
+                        &gunw.displacement,
+                        &gunw.coherence,
+                        &options,
+                    );
+
+                    info!("  PS summary: {} points, {}S/{}C/{}A/{}CR, max_disp={:.2}mm",
+                        report.summary.total_ps_points,
+                        report.summary.stable_count,
+                        report.summary.caution_count,
+                        report.summary.alert_count,
+                        report.summary.critical_count,
+                        report.summary.max_displacement_mm,
+                    );
+
+                    let report_path = format!("{}_insar.json", base);
+                    std::fs::write(&report_path, serde_json::to_string_pretty(&report)?)?;
+                    info!("  ✓ InSAR report: {}", report_path);
+
+                    // [5/5] Emit gateway events
+                    info!("[5/5] Emitting structured events for gateway...");
+                    println!("{{\"event\":\"insar_report\",\"path\":\"{}\",\"summary\":{}}}",
+                        report_path, serde_json::to_string(&report.summary)?);
+                    println!("{{\"event\":\"insar_outputs\",\"defo_phase\":\"{}\",\"coherence\":\"{}\",\"report\":\"{}\"}}",
+                        defo_path, coh_path, report_path);
+
+                    info!("╔══════════════════════════════════════════════╗");
+                    info!("║       GUNW Pipeline Complete ✓               ║");
+                    info!("╚══════════════════════════════════════════════╝");
+                    return Ok(());
+                }
+
                 let crop = if let (Some(lat), Some(lon)) = (cli.crop_lat, cli.crop_lon) {
                     Some(nisar_parser::CropRegion {
                         center_lat: lat,
@@ -146,6 +229,8 @@ async fn main() -> Result<()> {
                 let product = if let Some(ref crop_region) = crop {
                     info!("Geographic crop enabled: ({:.4}°, {:.4}°) r={:.1}km",
                         crop_region.center_lat, crop_region.center_lon, crop_region.radius_km);
+                    // Pre-load validation: check bbox intersection WITHOUT loading the full dataset
+                    nisar_parser::validate_crop_intersection(input, crop_region)?;
                     nisar_parser::parse_nisar_cropped(input, &cli.polarization, crop_region)?
                 } else {
                     nisar_parser::parse_nisar_auto(input, &cli.polarization)?
@@ -327,6 +412,8 @@ async fn main() -> Result<()> {
                         };
                         info!("[1/12] Cropping slave to ({:.4}°, {:.4}°) r={:.1}km",
                             lat, lon, cli.crop_radius_km);
+                        // Pre-load validation: check bbox intersection WITHOUT loading the full dataset
+                        nisar_parser::validate_crop_intersection(&slave_path, &crop_region)?;
                         nisar_parser::parse_nisar_cropped(&slave_path, &cli.polarization, &crop_region)?
                     } else {
                         nisar_parser::parse_nisar_auto(&slave_path, &cli.polarization)?
@@ -390,7 +477,32 @@ async fn main() -> Result<()> {
 
         // ── Step 5: Coherence estimation ──────────────────────────────────
         info!("[5/12] Estimating coherence (SAT-based)...");
-        let coherence = sar_processor::insar::estimate_coherence(&ml_master, &ml_slave, 5);
+        let mut coherence = sar_processor::insar::estimate_coherence(&ml_master, &ml_slave, 5);
+
+        // ── Step 5b: Water Body Masking (ISCE learned lesson) ──────────────
+        if let Some(ref wbd_path) = cli.water_mask {
+            info!("[5b/12] Applying external SWBD water body mask from {:?}", wbd_path);
+            match sar_processor::water_mask::read_swbd_wbd(wbd_path) {
+                Ok(mask) => {
+                    sar_processor::water_mask::apply_external_water_mask(&mut coherence, &mask);
+                }
+                Err(e) => {
+                    warn!("[5b/12] Failed to read external water mask: {:?}. Falling back to adaptive intensity mask.", e);
+                    sar_processor::water_mask::apply_intensity_water_mask(
+                        &mut coherence,
+                        &ml_master,
+                        cli.water_mask_threshold,
+                    );
+                }
+            }
+        } else {
+            info!("[5b/12] Applying adaptive radar-intensity water body mask...");
+            sar_processor::water_mask::apply_intensity_water_mask(
+                &mut coherence,
+                &ml_master,
+                cli.water_mask_threshold,
+            );
+        }
 
         // ── Step 6: Goldstein phase filter ────────────────────────────────
         info!("[6/12] Applying Goldstein adaptive phase filter...");
@@ -440,6 +552,10 @@ async fn main() -> Result<()> {
             info!("[9/12] Topographic phase removal SKIPPED (no --baseline-perp provided)");
             unwrapped_phase
         };
+
+        // ── Step 9b: Phase Deramping (ISCE learned lesson) ────────────────
+        info!("[9b/12] Removing spatial orbital/atmospheric phase ramp...");
+        let defo_phase = sar_processor::deramp::deramp_phase(&defo_phase, &coherence, cli.insar_coherence_threshold);
 
         // ── Step 10: Infrastructure health / PS analysis ──────────────────
         info!("[10/12] Analyzing persistent scatterers (PS-InSAR)...");

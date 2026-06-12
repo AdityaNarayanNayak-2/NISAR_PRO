@@ -1,0 +1,6 @@
+[2026-05-29T15:04:06Z INFO  sar_gateway] 🚀 SAR Gateway listening on 0.0.0.0:3000
+[2026-06-02T06:29:23Z INFO  sar_gateway::jobs] Local Mode: Using binary at "../sar_processor/target/release/sar_processor"
+[2026-06-02T06:31:15Z INFO  sar_gateway::jobs] Local Mode: Using binary at "../sar_processor/target/release/sar_processor"
+[2026-06-02T06:33:52Z INFO  sar_gateway::jobs] Local Mode: Using binary at "../sar_processor/target/release/sar_processor"
+[2026-06-02T06:37:30Z INFO  sar_gateway::jobs] Local Mode: Using binary at "../sar_processor/target/release/sar_processor"
+[2026-06-02T06:40:48Z INFO  sar_gateway::jobs] Local Mode: Using binary at "../sar_processor/target/release/sar_processor"

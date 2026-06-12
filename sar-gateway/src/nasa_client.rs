@@ -21,15 +21,23 @@ impl NasaClient {
     }
 
     pub async fn search_nisar(&self, query: NisarSearchQuery) -> Result<Vec<NisarScene>, Box<dyn Error>> {
-        let mut url = format!(
-            "https://api.daac.asf.alaska.edu/services/search/param?platform=NISAR&output=geojson&intersectsWith={}",
-            Self::bbox_to_wkt(&query.bbox)
-        );
+        let platform_query = query.platform.as_deref().unwrap_or("NISAR");
+        let mut url = if platform_query.to_uppercase() == "SENTINEL-1" || platform_query.to_uppercase() == "SENTINEL" {
+            format!(
+                "https://api.daac.asf.alaska.edu/services/search/param?dataset=ARIA S1 GUNW&output=geojson&intersectsWith={}",
+                Self::bbox_to_wkt(&query.bbox)
+            )
+        } else {
+            format!(
+                "https://api.daac.asf.alaska.edu/services/search/param?platform=NISAR&output=geojson&intersectsWith={}",
+                Self::bbox_to_wkt(&query.bbox)
+            )
+        };
 
-        if let Some(start) = query.start_date {
+        if let Some(start) = &query.start_date {
             url.push_str(&format!("&start={}", start));
         }
-        if let Some(end) = query.end_date {
+        if let Some(end) = &query.end_date {
             url.push_str(&format!("&end={}", end));
         }
 
@@ -38,6 +46,12 @@ impl NasaClient {
         let res = self.client.get(&url).send().await?.json::<Value>().await?;
         
         let mut scenes = Vec::new();
+
+        let platform_label = if platform_query.to_uppercase() == "SENTINEL-1" || platform_query.to_uppercase() == "SENTINEL" {
+            "Sentinel-1 (ARIA GUNW)".to_string()
+        } else {
+            "NISAR".to_string()
+        };
 
         if let Some(features) = res.get("features").and_then(|f| f.as_array()) {
             for feature in features.iter().take(20) {
@@ -55,6 +69,7 @@ impl NasaClient {
                         footprint,
                         download_url,
                         size_bytes: bytes,
+                        platform: platform_label.clone(),
                     });
                 }
             }

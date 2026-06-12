@@ -19,11 +19,42 @@ pub struct ProcessRequest {
     pub crop_radius_km: Option<f64>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AssetResult {
+    pub id: String,
+    pub name: String,
+    pub asset_type: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub display_name: String,
+    pub country: String,
+    pub state: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ContextResponse {
+    pub reservoir: Option<String>,
+    pub rainfall: Option<String>,
+    pub soil_moisture: Option<String>,
+    pub seismic: Option<String>,
+    pub season: Option<String>,
+    pub assessment: Option<String>,
+    pub confidence: Option<String>,
+    pub source: Option<String>,
+    // Live WRIS data
+    pub current_level_m: Option<f64>,
+    pub full_reservoir_level_m: Option<f64>,
+    pub storage_pct: Option<f64>,
+    pub inflow_cumecs: Option<f64>,
+    pub outflow_cumecs: Option<f64>,
+    pub river_basin: Option<String>,
+}
 #[derive(Deserialize, Debug)]
 pub struct NisarSearchQuery {
     pub bbox: String, // format: "minLon,minLat,maxLon,maxLat"
     pub start_date: Option<String>,
     pub end_date: Option<String>,
+    pub platform: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -33,6 +64,7 @@ pub struct NisarScene {
     pub footprint: serde_json::Value,
     pub download_url: String,
     pub size_bytes: String,
+    pub platform: String,
 }
 
 #[derive(Serialize, Debug, Clone)]

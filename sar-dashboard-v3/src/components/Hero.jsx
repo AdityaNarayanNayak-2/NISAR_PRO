@@ -7,30 +7,30 @@ import * as THREE from 'three'
 // The rotating 3D Earth matching the huge scale and lighting of the SpaceX planet
 // Restyled to represent a Synthetic Aperture Radar (SAR) digital visualization
 function Earth() {
-  const meshRef = useRef()
-  
-  // Use local textures
-  const [colorMap, nightMap] = useLoader(THREE.TextureLoader, ['/earth.jpg', '/earth_night.png'])
+    const meshRef = useRef()
 
-  // Define our custom day/night shader uniforms
-  const uniforms = React.useMemo(() => ({
-    dayMap: { value: colorMap },
-    nightMap: { value: nightMap },
-    sunDirection: { value: new THREE.Vector3(-8, 2, 4).normalize() }
-  }), [colorMap, nightMap])
+    // Use local textures
+    const [colorMap, nightMap] = useLoader(THREE.TextureLoader, ['/earth.jpg', '/earth_night.png'])
 
-  // Slow smooth rotation
-  useFrame((state, delta) => {
-    meshRef.current.rotation.y += delta * 0.03
-  })
+    // Define our custom day/night shader uniforms
+    const uniforms = React.useMemo(() => ({
+        dayMap: { value: colorMap },
+        nightMap: { value: nightMap },
+        sunDirection: { value: new THREE.Vector3(-8, 2, 4).normalize() }
+    }), [colorMap, nightMap])
 
-  return (
-    <group position={[2.3, 0, 0]}>
-      {/* Main globe: sized down and positioned further right */}
-      <Sphere ref={meshRef} args={[2.0, 64, 64]}>
-        <shaderMaterial 
-          uniforms={uniforms}
-          vertexShader={`
+    // Slow smooth rotation
+    useFrame((state, delta) => {
+        meshRef.current.rotation.y += delta * 0.03
+    })
+
+    return (
+        <group position={[2.3, 0, 0]}>
+            {/* Main globe: sized down and positioned further right */}
+            <Sphere ref={meshRef} args={[2.0, 64, 64]}>
+                <shaderMaterial
+                    uniforms={uniforms}
+                    vertexShader={`
             varying vec2 vUv;
             varying vec3 vNormal;
             void main() {
@@ -40,7 +40,7 @@ function Earth() {
               gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
           `}
-          fragmentShader={`
+                    fragmentShader={`
             uniform sampler2D dayMap;
             uniform sampler2D nightMap;
             uniform vec3 sunDirection;
@@ -80,10 +80,10 @@ function Earth() {
               gl_FragColor = finalColor;
             }
           `}
-        />
-      </Sphere>
-    </group>
-  )
+                />
+            </Sphere>
+        </group>
+    )
 }
 
 function Hero() {
@@ -97,21 +97,21 @@ function Hero() {
         }}>
             <div style={{
                 position: 'absolute',
-                top: 0, 
-                left: 0, 
+                top: 0,
+                left: 0,
                 width: '100%',
                 height: '100%',
                 zIndex: 0,
             }}>
                 <Canvas camera={{ position: [0, 0, 7], fov: 45 }}>
                     <ambientLight intensity={0.005} />
-                    
-                    <directionalLight 
-                        position={[-8, 2, 4]} 
-                        intensity={4.0} 
-                        color="#ffffff" 
+
+                    <directionalLight
+                        position={[-8, 2, 4]}
+                        intensity={4.0}
+                        color="#ffffff"
                     />
-                    
+
                     <Suspense fallback={null}>
                         <Earth />
                     </Suspense>
@@ -153,7 +153,7 @@ function Hero() {
                     margin: '0 0 24px 0',
                     pointerEvents: 'auto',
                 }}>
-                    Earth Observation<br/> at Hyperscale
+                    Earth Observation<br /> at Hyperscale
                 </h1>
 
                 <p style={{
@@ -169,7 +169,7 @@ function Hero() {
                 </p>
 
                 <div style={{ pointerEvents: 'auto' }}>
-                    <Link to="/app" 
+                    <Link to="/app"
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -195,7 +195,7 @@ function Hero() {
                             e.currentTarget.style.color = '#ffffff';
                         }}
                     >
-                        Explore 
+                        Explore
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                             <polyline points="12 5 19 12 12 19"></polyline>
@@ -203,7 +203,7 @@ function Hero() {
                     </Link>
                 </div>
             </div>
-            
+
             <header style={{
                 position: 'absolute',
                 top: 0,
