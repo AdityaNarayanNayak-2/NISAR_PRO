@@ -189,13 +189,27 @@ async fn spawn_local_job(
         cmd.args(["--input", &input, "--output", &output_path]);
         
         if pipeline.as_deref() == Some("insar") {
-            let slave = match slave_file.as_deref() {
-                Some(s) if !s.trim().is_empty() => s,
-                _ => "synthetic",
-            };
-            cmd.args(["--insar-slave", slave]);
+            // GUNW files contain pre-computed InSAR
+            // No slave needed — processor handles it
+            let is_gunw = input.contains("_GUNW_") || 
+                          input.ends_with("_gunw.h5");
+            
+            if !is_gunw {
+                // Only add slave for non-GUNW files
+                if let Some(ref slave) = slave_file {
+                    cmd.args(["--insar-slave", slave]);
+                } else {
+                    // synthetic slave fallback
+                    cmd.args(["--insar-slave", &input]);
+                }
+            }
+            // GUNW: processor auto-detects, no slave needed
+            
             if let (Some(lat), Some(lon)) = (crop_lat, crop_lon) {
-                cmd.args(["--crop-lat", &lat.to_string(), "--crop-lon", &lon.to_string()]);
+                cmd.args([
+                    "--crop-lat", &lat.to_string(),
+                    "--crop-lon", &lon.to_string(),
+                ]);
                 if let Some(r) = crop_radius_km {
                     cmd.args(["--crop-radius-km", &r.to_string()]);
                 }

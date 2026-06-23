@@ -154,8 +154,18 @@ async fn main() -> Result<()> {
                     info!("║     GUNW Direct Pipeline (NASA product)      ║");
                     info!("╚══════════════════════════════════════════════╝");
 
+                    let crop = if let (Some(lat), Some(lon)) = (cli.crop_lat, cli.crop_lon) {
+                        Some(nisar_parser::CropRegion {
+                            center_lat: lat,
+                            center_lon: lon,
+                            radius_km: cli.crop_radius_km,
+                        })
+                    } else {
+                        None
+                    };
+
                     info!("[1/5] Parsing GUNW product...");
-                    let gunw = gunw_parser::parse_gunw(input, &cli.polarization)?;
+                    let gunw = gunw_parser::parse_gunw(input, &cli.polarization, crop.as_ref())?;
 
                     let base = cli.output.replace(".tif", "").replace(".png", "");
                     let bbox_opt = Some([gunw.bbox.west, gunw.bbox.south, gunw.bbox.east, gunw.bbox.north]);

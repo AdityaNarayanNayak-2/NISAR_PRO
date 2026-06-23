@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Upload } from 'lucide-react';
 import { MONO, SANS, C } from './constants';
 import { parseNisarFilename, sevColor, formatElapsed } from './helpers';
+import { api } from '../../config/api';
 
 export default function InfrastructurePanel({
     assetSearch,
@@ -43,10 +44,101 @@ export default function InfrastructurePanel({
     const [editingMaster, setEditingMaster] = useState(false);
     const [editingSlave, setEditingSlave] = useState(false);
     const [activeView, setActiveView] = useState('STRUCTURAL');
+    const [uploading, setUploading] = useState(false);
 
     const showResults = viewingResult?.insarReport?.summary;
     const masterFilename = localFilePath ? localFilePath.split('/').pop() : '';
     const slaveFilename = slaveFilePath ? slaveFilePath.split('/').pop() : '';
+
+    const isGunw = !localFilePath || localFilePath.toLowerCase().includes('_gunw') || localFilePath.toLowerCase().endsWith('.h5') || localFilePath.toLowerCase().endsWith('.he5');
+
+    const handleUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch(api('/upload'), {
+                method: 'POST',
+                body: formData,
+            });
+            if (!res.ok) throw new Error('Upload failed');
+            const data = await res.json();
+            if (data.path) {
+                setLocalFilePath(data.path);
+            }
+        } catch (err) {
+            console.error('File upload error:', err);
+            alert('Upload failed: ' + err.message);
+        } finally {
+            setUploading(false);
+            e.target.value = '';
+        }
+    };
+
+    // ── 6-METRIC SCORECARD MATHEMATICAL CALCULATIONS ──
+    const insarSummary = viewingResult?.insarReport?.summary;
+
+    // B. Deformation Score (0-100)
+    let deformationScore = 0;
+    if (insarSummary) {
+        const crit = insarSummary.critical_count || 0;
+        const alrt = insarSummary.alert_count || 0;
+        const maxDisp = Math.abs(insarSummary.max_displacement_mm || 0);
+        deformationScore = Math.min(100, Math.max(0, Math.round(
+            (crit * 15) + (alrt * 1.5) + (maxDisp * 3.5)
+        )));
+    }
+
+    // C. Water Spread / Reservoir Expansion Score (0-100)
+    const storagePct = envContext?.storage_pct != null ? envContext.storage_pct : null;
+    const waterSpreadScore = storagePct !== null ? Math.min(100, Math.max(0, Math.round(storagePct))) : 0;
+
+    // D. External Stress Score (0-100)
+    const rainfall = parseFloat(envContext?.rainfall) || 0;
+    const rainContrib = Math.min(40, rainfall * 0.5);
+
+    const soilText = envContext?.soil_moisture?.toLowerCase() || '';
+    const soilContrib = soilText.includes('saturated') ? 30 :
+        (soilText.includes('high') || soilText.includes('anomaly')) ? 18 :
+            (soilText.includes('moist') || soilText.includes('moisture')) ? 10 : 0;
+
+    const seismicText = envContext?.seismic?.toLowerCase() || '';
+    const seismicContrib = seismicText.includes('events') ? 30 : 0;
+
+    const externalStressScore = Math.min(100, Math.max(0, Math.round(
+        rainContrib + soilContrib + seismicContrib
+    )));
+
+    // F. Trend Score (0-100)
+    let trendScore = 0;
+    if (deformationScore > 0) {
+        trendScore = Math.min(100, Math.max(0, Math.round(deformationScore * 0.8 + 10)));
+    }
+
+    // E. Confidence Score (0-100)
+    let confidenceScore = 15; // default low baseline
+    if (insarSummary && envContext) {
+        confidenceScore = 95;
+    } else if (envContext) {
+        confidenceScore = 70;
+    } else if (insarSummary) {
+        confidenceScore = 60;
+    }
+    if (insarSummary && insarSummary.mean_coherence != null) {
+        confidenceScore = Math.max(20, Math.round(confidenceScore * (insarSummary.mean_coherence / 0.8)));
+    }
+
+    // A. Overall Dam Risk Score (0-100)
+    const overallRiskScore = Math.min(100, Math.max(0, Math.round(
+        (deformationScore * 0.40) +
+        (waterSpreadScore * 0.20) +
+        (externalStressScore * 0.20) +
+        (trendScore * 0.20)
+    )));
 
     return (
         <>
@@ -192,9 +284,9 @@ export default function InfrastructurePanel({
                             ].map(({ label, value, status }) => {
                                 const dotColor = status === 'ok' ? C.stable
                                     : status === 'warn' ? C.caution
-                                    : status === 'data' ? C.data
-                                    : status === 'accent' ? C.accent.infra
-                                    : '#333333';
+                                        : status === 'data' ? C.data
+                                            : status === 'accent' ? C.accent.infra
+                                                : '#333333';
                                 return (
                                     <div key={label} style={{
                                         display: 'flex', alignItems: 'center', gap: '8px',
@@ -225,8 +317,8 @@ export default function InfrastructurePanel({
                                     const conf = envContext?.confidence;
                                     const pillColor = conf === 'HIGH' ? C.critical
                                         : conf === 'MODERATE' ? C.caution
-                                        : conf === 'LOW' ? C.stable
-                                        : '#333333';
+                                            : conf === 'LOW' ? C.stable
+                                                : '#333333';
                                     return (
                                         <span style={{
                                             fontFamily: MONO, fontSize: '8px', fontWeight: 600,
@@ -398,6 +490,29 @@ export default function InfrastructurePanel({
                                     letterSpacing: '0.08em', marginBottom: '8px',
                                 }}>{level} RISK</div>
                                 <div style={{ fontFamily: MONO, fontSize: '8px', color: '#444444' }}>NISAR · WRIS · IMD · USGS</div>
+
+                                {/* Contributors breakdown */}
+                                <div style={{ marginTop: '12px' }}>
+                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '6px' }}>CONTRIBUTORS</div>
+                                    {(() => {
+                                        const active = factors.filter(f => f.scored > 0).sort((a, b) => b.scored - a.scored);
+                                        if (active.length === 0) {
+                                            return <div style={{ fontFamily: MONO, fontSize: '10px', color: '#888888' }}>No active risk contributors</div>;
+                                        }
+                                        return (
+                                            <>
+                                                {active.map(f => (
+                                                    <div key={f.label} style={{ fontFamily: MONO, fontSize: '10px', color: '#888888', lineHeight: 1.6 }}>
+                                                        + {f.label} {'·'.repeat(Math.max(1, 18 - f.label.length))} {f.scored}
+                                                    </div>
+                                                ))}
+                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#C8A96E', marginTop: '6px' }}>
+                                                    Highest: {active[0].label} at {active[0].scored}/{active[0].max}
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
                             </div>
 
                             {/* ── PANEL 3: FACTOR BREAKDOWN (bars) ── */}
@@ -440,9 +555,11 @@ export default function InfrastructurePanel({
             }}>
                 {/* LEFT GROUP: Master + Slave + Pipeline */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
-                    {/* MASTER */}
+                    {/* MASTER / GNUW FILE */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', flexShrink: 0 }}>MASTER</span>
+                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', flexShrink: 0 }}>
+                            {isGunw ? 'GNUW FILE' : 'MASTER'}
+                        </span>
                         {editingMaster ? (
                             <input
                                 autoFocus
@@ -466,44 +583,70 @@ export default function InfrastructurePanel({
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#555555', display: 'flex', alignItems: 'center' }}
                             onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'}
                             onMouseLeave={e => e.currentTarget.style.color = '#555555'}
+                            title="Edit file path"
                         >
                             <FolderOpen size={14} />
                         </button>
-                    </div>
-
-                    {/* Separator */}
-                    <div style={{ width: '1px', height: '32px', background: '#2A2A2A', flexShrink: 0 }} />
-
-                    {/* SLAVE */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', flexShrink: 0 }}>SLAVE</span>
-                        {editingSlave ? (
+                        <label
+                            style={{ display: 'flex', alignItems: 'center', cursor: uploading ? 'not-allowed' : 'pointer', padding: '2px', color: '#555555' }}
+                            onMouseEnter={e => !uploading && (e.currentTarget.style.color = '#F0F0F0')}
+                            onMouseLeave={e => !uploading && (e.currentTarget.style.color = '#555555')}
+                            title="Upload local HDF5 product"
+                        >
+                            <Upload size={14} />
                             <input
-                                autoFocus
-                                type="text"
-                                value={slaveFilePath}
-                                onChange={e => setSlaveFilePath(e.target.value)}
-                                onBlur={() => setEditingSlave(false)}
-                                onKeyDown={e => { if (e.key === 'Enter') setEditingSlave(false); }}
-                                style={{ width: '220px', padding: '4px 8px', background: C.bg2, border: `1px solid ${C.bg3}`, color: '#F0F0F0', fontFamily: MONO, fontSize: '11px', outline: 'none', borderRadius: '2px', boxSizing: 'border-box' }}
+                                type="file"
+                                accept=".h5,.he5"
+                                onChange={handleUpload}
+                                disabled={uploading}
+                                style={{ display: 'none' }}
                             />
-                        ) : (
-                            <span
-                                style={{ fontFamily: MONO, fontSize: '11px', color: slaveFilename ? '#888888' : '#555555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}
-                                title={slaveFilePath}
-                            >
-                                {slaveFilename || 'SYNTHETIC'}
+                        </label>
+                        {uploading && (
+                            <span style={{ fontFamily: MONO, fontSize: '9px', color: '#E6A817', marginLeft: '4px' }}>
+                                UPLOADING...
                             </span>
                         )}
-                        <button
-                            onClick={() => setEditingSlave(true)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#555555', display: 'flex', alignItems: 'center' }}
-                            onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#555555'}
-                        >
-                            <FolderOpen size={14} />
-                        </button>
                     </div>
+
+                    {!isGunw && (
+                        <>
+                            {/* Separator */}
+                            <div style={{ width: '1px', height: '32px', background: '#2A2A2A', flexShrink: 0 }} />
+
+                            {/* SLAVE */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', flexShrink: 0 }}>SLAVE</span>
+                                {editingSlave ? (
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={slaveFilePath}
+                                        onChange={e => setSlaveFilePath(e.target.value)}
+                                        onBlur={() => setEditingSlave(false)}
+                                        onKeyDown={e => { if (e.key === 'Enter') setEditingSlave(false); }}
+                                        style={{ width: '220px', padding: '4px 8px', background: C.bg2, border: `1px solid ${C.bg3}`, color: '#F0F0F0', fontFamily: MONO, fontSize: '11px', outline: 'none', borderRadius: '2px', boxSizing: 'border-box' }}
+                                    />
+                                ) : (
+                                    <span
+                                        style={{ fontFamily: MONO, fontSize: '11px', color: slaveFilename ? '#888888' : '#555555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}
+                                        title={slaveFilePath}
+                                    >
+                                        {slaveFilename || 'SYNTHETIC'}
+                                    </span>
+                                )}
+                                <button
+                                    onClick={() => setEditingSlave(true)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#555555', display: 'flex', alignItems: 'center' }}
+                                    onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'}
+                                    onMouseLeave={e => e.currentTarget.style.color = '#555555'}
+                                    title="Edit slave file path"
+                                >
+                                    <FolderOpen size={14} />
+                                </button>
+                            </div>
+                        </>
+                    )}
 
                     {/* Separator */}
                     <div style={{ width: '1px', height: '32px', background: '#2A2A2A', flexShrink: 0 }} />
@@ -562,12 +705,8 @@ export default function InfrastructurePanel({
                 </div>
             </div>
 
-            {/* ════════════════════════════════════════════════════
-                ZONE 4: RIGHT RESULTS PANEL (320px, slide-in)
-                Shows for: STRUCTURAL (insarReport) OR FLOOD RISK (envContext)
-                ════════════════════════════════════════════════════ */}
             {(() => {
-                const showStructural = showResults && activeView === 'STRUCTURAL';
+                const showStructural = (showResults || localFilePath) && activeView === 'STRUCTURAL';
                 const showFloodRight = activeView === 'FLOOD RISK' && !!envContext;
                 const panelVisible = showStructural || showFloodRight;
 
@@ -583,11 +722,11 @@ export default function InfrastructurePanel({
                     }}>
                         {/* ── STRUCTURAL ANALYSIS (existing) ── */}
                         {showStructural && (() => {
-                            const s = viewingResult.insarReport.summary;
-                            const topScatterers = (viewingResult.insarReport.scatterers || [])
+                            const s = viewingResult?.insarReport?.summary;
+                            const topScatterers = s ? (viewingResult?.insarReport?.scatterers || [])
                                 .sort((a, b) => Math.abs(b.displacement_mm) - Math.abs(a.displacement_mm))
-                                .slice(0, 10);
-                            const dispMagnitude = Math.abs(s.max_displacement_mm || 0);
+                                .slice(0, 10) : [];
+                            const dispMagnitude = s ? Math.abs(s.max_displacement_mm || 0) : 0;
                             const dispColorVal = dispMagnitude < 5 ? C.stable : dispMagnitude < 10 ? C.caution : dispMagnitude < 20 ? C.alert : C.critical;
 
                             return (
@@ -595,53 +734,57 @@ export default function InfrastructurePanel({
                                     <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', letterSpacing: '0.1em', marginBottom: '12px' }}>STRUCTURAL ANALYSIS</div>
 
                                     {/* HEALTH MATRIX */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#2A2A2A', border: '1px solid #2A2A2A', marginBottom: '16px' }}>
-                                        <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>STABLE</div>
-                                            <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.stable }}>{s.stable_count}</div>
+                                    {s && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#2A2A2A', border: '1px solid #2A2A2A', marginBottom: '16px' }}>
+                                            <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
+                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>STABLE</div>
+                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.stable }}>{s.stable_count}</div>
+                                            </div>
+                                            <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
+                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>CAUTION</div>
+                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.caution }}>{s.caution_count}</div>
+                                            </div>
+                                            <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
+                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>ALERT</div>
+                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.alert }}>{s.alert_count}</div>
+                                            </div>
+                                            <div style={{ background: C.bg1, padding: '8px', textAlign: 'center', border: s.critical_count > 0 ? `1px solid ${C.critical}` : 'none' }}>
+                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>CRITICAL</div>
+                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.critical }}>{s.critical_count}</div>
+                                            </div>
                                         </div>
-                                        <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>CAUTION</div>
-                                            <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.caution }}>{s.caution_count}</div>
-                                        </div>
-                                        <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>ALERT</div>
-                                            <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.alert }}>{s.alert_count}</div>
-                                        </div>
-                                        <div style={{ background: C.bg1, padding: '8px', textAlign: 'center', border: s.critical_count > 0 ? `1px solid ${C.critical}` : 'none' }}>
-                                            <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>CRITICAL</div>
-                                            <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.critical }}>{s.critical_count}</div>
-                                        </div>
-                                    </div>
+                                    )}
 
                                     {/* DIVIDER */}
-                                    <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
+                                    {s && <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />}
 
                                     {/* Displacement stats */}
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                            <span style={{ color: '#555555' }}>MAX DISPLACEMENT</span>
-                                            <span>
-                                                <span style={{ color: dispColorVal }}>{s.max_displacement_mm?.toFixed(2)} mm</span>
-                                                {(s.max_displacement_mm || 0) < 0 && <span style={{ color: '#E6A817', marginLeft: '4px' }}>(SUBSIDENCE)</span>}
-                                            </span>
+                                    {s && (
+                                        <div style={{ marginBottom: '16px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
+                                                <span style={{ color: '#555555' }}>MAX DISPLACEMENT</span>
+                                                <span>
+                                                    <span style={{ color: dispColorVal }}>{s.max_displacement_mm?.toFixed(2)} mm</span>
+                                                    {(s.max_displacement_mm || 0) < 0 && <span style={{ color: '#E6A817', marginLeft: '4px' }}>(SUBSIDENCE)</span>}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
+                                                <span style={{ color: '#555555' }}>MEDIAN</span>
+                                                <span style={{ color: C.text }}>{s.median_displacement_mm?.toFixed(2)} mm</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
+                                                <span style={{ color: C.textDim }}>TOTAL PS POINTS</span>
+                                                <span style={{ color: C.text }}>{s.total_ps_points}</span>
+                                            </div>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                            <span style={{ color: '#555555' }}>MEDIAN</span>
-                                            <span style={{ color: C.text }}>{s.median_displacement_mm?.toFixed(2)} mm</span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                            <span style={{ color: C.textDim }}>TOTAL PS POINTS</span>
-                                            <span style={{ color: C.text }}>{s.total_ps_points}</span>
-                                        </div>
-                                    </div>
+                                    )}
 
                                     {/* DIVIDER */}
-                                    <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
+                                    {s && <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />}
 
                                     {/* TOP 10 SCATTERERS */}
-                                    {topScatterers.length > 0 && (
-                                        <div>
+                                    {s && topScatterers.length > 0 && (
+                                        <div style={{ marginBottom: '16px' }}>
                                             <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', display: 'flex', paddingBottom: '4px', borderBottom: '1px solid #1A1A1A' }}>
                                                 <div style={{ width: '20px' }}>#</div>
                                                 <div style={{ flex: 1 }}>DISP (mm)</div>
@@ -658,6 +801,40 @@ export default function InfrastructurePanel({
                                             ))}
                                         </div>
                                     )}
+
+                                    {/* DIVIDER */}
+                                    {s && <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />}
+
+                                    {/* ACQUISITION METADATA */}
+                                    {localFilePath && (() => {
+                                        const filename = (viewingResult?.url || localFilePath || '').toUpperCase();
+                                        let productVal = 'NISAR Product';
+                                        if (filename.includes('_GUNW_')) productVal = 'GUNW — Pre-computed InSAR';
+                                        else if (filename.includes('_GCOV_')) productVal = 'GCOV — Geocoded Covariance';
+                                        else if (filename.includes('_RSLC_')) productVal = 'RSLC — Range SLC';
+
+                                        return (
+                                            <div>
+                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>ACQUISITION METADATA</div>
+                                                {[
+                                                    { label: 'SATELLITE', value: 'NISAR (NASA/ISRO)' },
+                                                    { label: 'PIPELINE', value: (viewingResult?.pipeline || 'insar') === 'insar' ? 'InSAR Analysis' : 'SAR Focus' },
+                                                    { label: 'PRODUCT', value: productVal },
+                                                    { label: 'BAND', value: 'L-Band (1.26 GHz)' },
+                                                    { label: 'ORBIT', value: 'Descending' },
+                                                ].map(({ label, value }) => (
+                                                    <div key={label} style={{
+                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                        padding: '6px 0',
+                                                        borderBottom: '1px solid #161616',
+                                                    }}>
+                                                        <span style={{ fontFamily: MONO, fontSize: '11px', color: '#555555' }}>{label}</span>
+                                                        <span style={{ fontFamily: MONO, fontSize: '11px', color: '#F0F0F0', textAlign: 'right' }}>{value || '—'}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
                                 </>
                             );
                         })()}
@@ -697,11 +874,11 @@ export default function InfrastructurePanel({
                             const score = reservoirScore + rainfallScore + soilScore + seismicScore + insarScore;
 
                             const factors = [
-                                { label: 'RESERVOIR', scored: reservoirScore, max: 30, color: '#D4822A', raw: envContext?.reservoir || '—' },
-                                { label: 'RAINFALL', scored: rainfallScore, max: 30, color: C.data, raw: envContext?.rainfall || '—' },
-                                { label: 'SOIL', scored: soilScore, max: 20, color: C.caution, raw: envContext?.soil_moisture || '—' },
+                                { label: 'RESERVOIR', scored: reservoirScore, max: 30, color: '#7EB8D4', raw: envContext?.reservoir || '—' },
+                                { label: 'RAINFALL', scored: rainfallScore, max: 30, color: '#4A8FA8', raw: envContext?.rainfall || '—' },
+                                { label: 'SOIL', scored: soilScore, max: 20, color: '#C8A96E', raw: envContext?.soil_moisture || '—' },
                                 { label: 'SEISMIC', scored: seismicScore, max: 10, color: '#9B8EC4', raw: envContext?.seismic || '—' },
-                                { label: 'INSAR', scored: insarScore, max: 10, color: C.accent.infra, raw: insarSummary ? `${insarSummary.total_ps_points} PS pts` : '—' },
+                                { label: 'INSAR', scored: insarScore, max: 10, color: '#4CAF50', raw: insarSummary ? `${insarSummary.total_ps_points} PS pts` : '—' },
                             ];
 
                             const totalMax = 100;
@@ -710,34 +887,59 @@ export default function InfrastructurePanel({
                                 <>
                                     <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '14px' }}>FACTOR ANALYSIS</div>
 
-                                    {/* ── HORIZONTAL STACKED BAR ── */}
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <div style={{ fontFamily: MONO, fontSize: '8px', color: '#444444', marginBottom: '6px' }}>SCORE COMPOSITION</div>
-                                        <div style={{
-                                            display: 'flex', height: '16px', borderRadius: '2px',
-                                            overflow: 'hidden', background: '#1A1A1A',
-                                        }}>
-                                            {factors.filter(f => f.scored > 0).map(f => (
-                                                <div key={f.label} style={{
-                                                    width: `${(f.scored / totalMax) * 100}%`,
-                                                    background: f.color,
-                                                    height: '100%',
-                                                    transition: 'width 300ms ease',
-                                                    position: 'relative',
-                                                }} title={`${f.label}: ${f.scored}/${f.max}`} />
-                                            ))}
-                                        </div>
-                                        {/* Legend row */}
-                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
-                                            {factors.filter(f => f.scored > 0).map(f => (
-                                                <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                    <div style={{ width: '6px', height: '6px', borderRadius: '1px', background: f.color }} />
-                                                    <span style={{ fontFamily: MONO, fontSize: '8px', color: '#888888' }}>{f.label}</span>
+                                    {/* ── DONUT/RING CHART ── */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '16px' }}>
+                                        <svg width="120" height="120" viewBox="0 0 120 120">
+                                            {/* Background circle */}
+                                            <circle cx="60" cy="60" r="45" fill="none" stroke="#1A1A1A" strokeWidth="12" />
+                                            {/* Segments */}
+                                            {(() => {
+                                                let accumulatedLength = 0;
+                                                const circumference = 282.7;
+                                                return factors.map(f => {
+                                                    const segmentLength = (f.scored / 100) * circumference;
+                                                    const dashOffset = -accumulatedLength;
+                                                    accumulatedLength += segmentLength;
+
+                                                    if (f.scored === 0) return null;
+
+                                                    return (
+                                                        <circle
+                                                            key={f.label}
+                                                            cx="60"
+                                                            cy="60"
+                                                            r="45"
+                                                            fill="none"
+                                                            stroke={f.color}
+                                                            strokeWidth="12"
+                                                            strokeDasharray={`${segmentLength} ${circumference}`}
+                                                            strokeDashoffset={dashOffset}
+                                                            transform="rotate(-90 60 60)"
+                                                            style={{ transition: 'stroke-dashoffset 300ms ease' }}
+                                                        />
+                                                    );
+                                                });
+                                            })()}
+                                            {/* Center text */}
+                                            <text x="60" y="56" textAnchor="middle" dominantBaseline="middle" style={{ fontFamily: MONO, fill: '#F0F0F0', fontSize: '18px', fontWeight: 600 }}>
+                                                {score}
+                                            </text>
+                                            <text x="60" y="74" textAnchor="middle" dominantBaseline="middle" style={{ fontFamily: MONO, fill: '#555555', fontSize: '11px' }}>
+                                                /100
+                                            </text>
+                                        </svg>
+
+                                        {/* Legend below chart */}
+                                        <div style={{ width: '100%', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            {factors.map(f => (
+                                                <div key={f.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: MONO, fontSize: '10px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: f.color }} />
+                                                        <span style={{ color: '#888888' }}>{f.label}</span>
+                                                    </div>
+                                                    <span style={{ color: f.scored > 0 ? '#F0F0F0' : '#333333', fontWeight: f.scored > 0 ? 600 : 400 }}>{f.scored}/{f.max}</span>
                                                 </div>
                                             ))}
-                                        </div>
-                                        <div style={{ fontFamily: MONO, fontSize: '10px', color: '#CCCCCC', marginTop: '6px' }}>
-                                            {score}<span style={{ color: '#444444' }}>/100</span>
                                         </div>
                                     </div>
 

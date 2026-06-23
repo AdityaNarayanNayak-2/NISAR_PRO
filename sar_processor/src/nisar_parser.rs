@@ -354,7 +354,7 @@ pub fn parse_nisar_cropped(
 
 /// Find the start and end indices in a coordinate array that encompass [min_val, max_val].
 /// Handles both ascending and descending coordinate arrays.
-fn find_index_range(coords: &[f64], min_val: f64, max_val: f64) -> (usize, usize) {
+pub fn find_index_range(coords: &[f64], min_val: f64, max_val: f64) -> (usize, usize) {
     let n = coords.len();
     if n == 0 {
         return (0, 0);

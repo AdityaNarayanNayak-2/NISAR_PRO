@@ -85,8 +85,8 @@ function AppDashboard() {
     useEffect(() => {
         const tick = () => {
             const n = new Date();
-            const d = n.toISOString().slice(0,10);
-            const t = n.toISOString().slice(11,19);
+            const d = n.toISOString().slice(0, 10);
+            const t = n.toISOString().slice(11, 19);
             setUtcTime(`${d} · ${t} UTC`);
         };
         tick(); const i = setInterval(tick, 1000);
@@ -103,7 +103,7 @@ function AppDashboard() {
 
     // ── Helpers (PRESERVED) ──
     const metadata = parseNisarFilename(localFilePath);
-    const formatBytes = (bytes) => { const b = parseInt(bytes, 10); if (isNaN(b) || b === 0) return '0 B'; const k = 1024, sizes = ['B','KB','MB','GB','TB']; const i = Math.floor(Math.log(b) / Math.log(k)); return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]; };
+    const formatBytes = (bytes) => { const b = parseInt(bytes, 10); if (isNaN(b) || b === 0) return '0 B'; const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB']; const i = Math.floor(Math.log(b) / Math.log(k)); return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]; };
     const formatElapsed = (secs) => { if (!secs) return '0s'; const m = Math.floor(secs / 60); const s = secs % 60; return m > 0 ? `${m}m ${s}s` : `${s}s`; };
     const getInputFile = () => { if (dataMode === 'catalog' && selectedScene) return selectedScene.download_url; if (dataMode === 'local' && localFilePath) return localFilePath; return null; };
     const getInputLabel = () => { if (dataMode === 'catalog' && selectedScene) return selectedScene.id; if (dataMode === 'local' && localFilePath) return localFilePath.split('/').pop(); return null; };
@@ -128,13 +128,13 @@ function AppDashboard() {
         if (!inputFile) return;
         if (!gatewayOnline) { showError('Gateway is offline. Start it with: LOCAL_MODE=true RUST_LOG=info cargo run --release'); return; }
         const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'maritime' ? 'cfar' : pipeline;
-        
+
         try {
             const body = {
                 input_file: inputFile,
                 synthetic: false,
-                pipeline: profile === 'infrastructure' ? 'insar' : 
-                          profile === 'maritime' ? 'cfar' : pipeline
+                pipeline: profile === 'infrastructure' ? 'insar' :
+                    profile === 'maritime' ? 'cfar' : pipeline
             };
             if (profile === 'infrastructure') {
                 body.slave_file = slaveFilePath || null;
@@ -211,10 +211,10 @@ function AppDashboard() {
             const sse = new EventSource(api(`/jobs/${id}/logs`));
             sse.onmessage = (event) => {
                 const line = event.data;
-                if (line.startsWith('{')) { try { const parsed = JSON.parse(line); if (parsed.event === 'georef' && parsed.bbox) { const { north, south, east, west } = parsed.bbox; if (Math.abs(north-south)>0.0001 && Math.abs(east-west)>0.0001) { setJobs(prev => ({ ...prev, [id]: { ...prev[id], bounds: [[south,west],[north,east]], bbox: parsed.bbox } })); setFlyToCenter([(north+south)/2,(east+west)/2]); } } else if (parsed.event === 'insar_report' && parsed.path) { fetch(api(`/${parsed.path}`)).then(r=>r.json()).then(report => { setJobs(prev => ({ ...prev, [id]: { ...prev[id], insarReport: report } })); }).catch(console.error); } else if (parsed.event === 'ships_detected' && parsed.path) { fetch(api(`/${parsed.path}`)).then(r=>r.json()).then(ships => { setJobs(prev => ({ ...prev, [id]: { ...prev[id], ships } })); }).catch(console.error); } } catch(e){} }
-                setLogs(prev => ({ ...prev, [id]: [...(prev[id]||[]), line] }));
+                if (line.startsWith('{')) { try { const parsed = JSON.parse(line); if (parsed.event === 'georef' && parsed.bbox) { const { north, south, east, west } = parsed.bbox; if (Math.abs(north - south) > 0.0001 && Math.abs(east - west) > 0.0001) { setJobs(prev => ({ ...prev, [id]: { ...prev[id], bounds: [[south, west], [north, east]], bbox: parsed.bbox } })); setFlyToCenter([(north + south) / 2, (east + west) / 2]); } } else if (parsed.event === 'insar_report' && parsed.path) { fetch(api(`/${parsed.path}`)).then(r => r.json()).then(report => { setJobs(prev => ({ ...prev, [id]: { ...prev[id], insarReport: report } })); }).catch(console.error); } else if (parsed.event === 'ships_detected' && parsed.path) { fetch(api(`/${parsed.path}`)).then(r => r.json()).then(ships => { setJobs(prev => ({ ...prev, [id]: { ...prev[id], ships } })); }).catch(console.error); } } catch (e) { } }
+                setLogs(prev => ({ ...prev, [id]: [...(prev[id] || []), line] }));
                 if (terminalRef.current && !userScrolledUp.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-                if (line.includes('[SYSTEM] PROCESS_COMPLETED') || line.includes('[SYSTEM] PROCESS_FAILED')) { sse.close(); setTimeout(() => { setJobs(prev => { const job = prev[id]; if (job) { setElapsed(e => ({ ...e, [id]: Math.floor((Date.now()-job.startedAt)/1000) })); } return prev; }); }, 500); }
+                if (line.includes('[SYSTEM] PROCESS_COMPLETED') || line.includes('[SYSTEM] PROCESS_FAILED')) { sse.close(); setTimeout(() => { setJobs(prev => { const job = prev[id]; if (job) { setElapsed(e => ({ ...e, [id]: Math.floor((Date.now() - job.startedAt) / 1000) })); } return prev; }); }, 500); }
             };
             sse.onerror = () => { showError('Lost connection to processing stream'); sse.close(); };
         } catch (err) { console.error(err); showError('Failed to start job'); }
@@ -254,7 +254,7 @@ function AppDashboard() {
                         setActiveLayer('amplitude');
                     }
                     setJobs(prev => ({ ...prev, [id]: { ...prev[id], status: data.status, output_path: data.output_path } }));
-                } catch (e) {}
+                } catch (e) { }
             }
         }, 3000);
         return () => clearInterval(interval);
@@ -332,14 +332,14 @@ function AppDashboard() {
                     <div style={{ position: 'absolute', top: '16px', right: '16px', fontFamily: MONO, fontSize: '11px', color: C.textDim }}>
                         v0.4.0 · 2026
                     </div>
-                    
+
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                         <div style={{ fontFamily: MONO, fontSize: '11px', color: C.textDim, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '24px' }}>
                             SELECT MISSION PROFILE
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: C.bg3, border: `1px solid ${C.bg3}` }}>
                             {/* Card 1: SAR SCIENCE */}
-                            <div 
+                            <div
                                 onClick={() => { setProfile('sar_science'); setMissionSelected(true); }}
                                 style={{ width: '280px', height: '160px', background: C.bg1, padding: '32px', cursor: 'pointer', boxSizing: 'border-box' }}
                                 onMouseEnter={e => { e.currentTarget.style.background = C.bg2; e.currentTarget.style.borderLeft = `3px solid ${C.accent.sar}`; e.currentTarget.style.paddingLeft = '29px'; }}
@@ -348,9 +348,9 @@ function AppDashboard() {
                                 <div style={{ fontFamily: MONO, fontSize: '11px', color: C.textMid, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '8px' }}>SAR SCIENCE</div>
                                 <div style={{ fontFamily: SANS, fontSize: '13px', color: C.text }}>Raw RSLC/GCOV processing pipeline</div>
                             </div>
-                            
+
                             {/* Card 2: MARITIME INTEL */}
-                            <div 
+                            <div
                                 onClick={() => { setProfile('maritime'); setMissionSelected(true); }}
                                 style={{ width: '280px', height: '160px', background: C.bg1, padding: '32px', cursor: 'pointer', boxSizing: 'border-box' }}
                                 onMouseEnter={e => { e.currentTarget.style.background = C.bg2; e.currentTarget.style.borderLeft = `3px solid ${C.accent.maritime}`; e.currentTarget.style.paddingLeft = '29px'; }}
@@ -361,7 +361,7 @@ function AppDashboard() {
                             </div>
 
                             {/* Card 3: INFRASTRUCTURE */}
-                            <div 
+                            <div
                                 onClick={() => { setProfile('infrastructure'); setMissionSelected(true); }}
                                 style={{ width: '280px', height: '160px', background: C.bg1, padding: '32px', cursor: 'pointer', boxSizing: 'border-box' }}
                                 onMouseEnter={e => { e.currentTarget.style.background = C.bg2; e.currentTarget.style.borderLeft = `3px solid ${C.accent.infra}`; e.currentTarget.style.paddingLeft = '29px'; }}
@@ -372,7 +372,7 @@ function AppDashboard() {
                             </div>
 
                             {/* Card 4: ANALYST */}
-                            <div 
+                            <div
                                 onClick={() => { setProfile('analyst'); setMissionSelected(true); }}
                                 style={{ width: '280px', height: '160px', background: C.bg1, padding: '32px', cursor: 'pointer', boxSizing: 'border-box' }}
                                 onMouseEnter={e => { e.currentTarget.style.background = C.bg2; e.currentTarget.style.borderLeft = `3px solid #888888`; e.currentTarget.style.paddingLeft = '29px'; }}
@@ -504,7 +504,7 @@ function AppDashboard() {
                     const resultPath = viewingResult.url.startsWith('/results/')
                         ? viewingResult.url.replace('/results/', '')
                         : viewingResult.url.split('/results/').pop();
-                    
+
                     let finalTifPath = resultPath;
                     let extraParams = '';
 
@@ -550,9 +550,9 @@ function AppDashboard() {
                         >
                             <Popup>
                                 <div style={{ fontSize: '0.7rem', fontFamily: MONO }}>
-                                    <strong style={{ color: '#0f172a' }}>PS Point #{idx}</strong><br/>
-                                    Severity: {point.severity}<br/>
-                                    Displacement: {point.displacement_mm.toFixed(2)} mm<br/>
+                                    <strong style={{ color: '#0f172a' }}>PS Point #{idx}</strong><br />
+                                    Severity: {point.severity}<br />
+                                    Displacement: {point.displacement_mm.toFixed(2)} mm<br />
                                     Coherence: {point.coherence.toFixed(2)}
                                 </div>
                             </Popup>
@@ -582,8 +582,8 @@ function AppDashboard() {
                                         <strong style={{ color: '#0f172a' }}>Vessel #{idx + 1}</strong>
                                     </div>
                                     <div style={{ color: '#475569', lineHeight: 1.6 }}>
-                                        Backscatter: {ship.intensity.toFixed(2)}<br/>
-                                        Lat: {ship.lat.toFixed(5)}°<br/>
+                                        Backscatter: {ship.intensity.toFixed(2)}<br />
+                                        Lat: {ship.lat.toFixed(5)}°<br />
                                         Lon: {ship.lon.toFixed(5)}°
                                     </div>
                                 </div>
@@ -660,62 +660,62 @@ function AppDashboard() {
                 display: profile === 'infrastructure' ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden',
             }}>
 
-            {/* ── PROFILE: SAR SCIENCE ── */}
-            {profile === 'sar_science' && (
-                <SarSciencePanel
-                    dataMode={dataMode}
-                    setDataMode={setDataMode}
-                    localFilePath={localFilePath}
-                    setLocalFilePath={setLocalFilePath}
-                    metadata={metadata}
-                    startDate={startDate}
-                    setStartDate={setStartDate}
-                    endDate={endDate}
-                    setEndDate={setEndDate}
-                    handleSearch={handleSearch}
-                    isSearching={isSearching}
-                    searchResults={searchResults}
-                    selectedScene={selectedScene}
-                    setSelectedScene={setSelectedScene}
-                    pipelines={pipelines}
-                    pipeline={pipeline}
-                    setPipeline={setPipeline}
-                    startJob={startJob}
-                    getInputFile={getInputFile}
-                    runningJobs={runningJobs}
-                    gatewayOnline={gatewayOnline}
-                    elapsed={elapsed}
-                    jobs={jobs}
-                    setActiveJobId={setActiveJobId}
-                    setTerminalOpen={setTerminalOpen}
-                    setViewingResult={setViewingResult}
-                />
-            )}
+                {/* ── PROFILE: SAR SCIENCE ── */}
+                {profile === 'sar_science' && (
+                    <SarSciencePanel
+                        dataMode={dataMode}
+                        setDataMode={setDataMode}
+                        localFilePath={localFilePath}
+                        setLocalFilePath={setLocalFilePath}
+                        metadata={metadata}
+                        startDate={startDate}
+                        setStartDate={setStartDate}
+                        endDate={endDate}
+                        setEndDate={setEndDate}
+                        handleSearch={handleSearch}
+                        isSearching={isSearching}
+                        searchResults={searchResults}
+                        selectedScene={selectedScene}
+                        setSelectedScene={setSelectedScene}
+                        pipelines={pipelines}
+                        pipeline={pipeline}
+                        setPipeline={setPipeline}
+                        startJob={startJob}
+                        getInputFile={getInputFile}
+                        runningJobs={runningJobs}
+                        gatewayOnline={gatewayOnline}
+                        elapsed={elapsed}
+                        jobs={jobs}
+                        setActiveJobId={setActiveJobId}
+                        setTerminalOpen={setTerminalOpen}
+                        setViewingResult={setViewingResult}
+                    />
+                )}
 
-            {/* ── PROFILE 3: MARITIME INTEL ── */}
-            {profile === 'maritime' && (
-                <MaritimePanel
-                    startDate={startDate}
-                    setStartDate={setStartDate}
-                    endDate={endDate}
-                    setEndDate={setEndDate}
-                    handleSearch={handleSearch}
-                    isSearching={isSearching}
-                    searchResults={searchResults}
-                    selectedScene={selectedScene}
-                    setSelectedScene={setSelectedScene}
-                    dataMode={dataMode}
-                    handleAcquireAndProcess={handleAcquireAndProcess}
-                    runningJobs={runningJobs}
-                    gatewayOnline={gatewayOnline}
-                    downloadProgress={downloadProgress}
-                    startJob={startJob}
-                    getInputFile={getInputFile}
-                    elapsed={elapsed}
-                    viewingResult={viewingResult}
-                />
-            )}
-        </div>
+                {/* ── PROFILE 3: MARITIME INTEL ── */}
+                {profile === 'maritime' && (
+                    <MaritimePanel
+                        startDate={startDate}
+                        setStartDate={setStartDate}
+                        endDate={endDate}
+                        setEndDate={setEndDate}
+                        handleSearch={handleSearch}
+                        isSearching={isSearching}
+                        searchResults={searchResults}
+                        selectedScene={selectedScene}
+                        setSelectedScene={setSelectedScene}
+                        dataMode={dataMode}
+                        handleAcquireAndProcess={handleAcquireAndProcess}
+                        runningJobs={runningJobs}
+                        gatewayOnline={gatewayOnline}
+                        downloadProgress={downloadProgress}
+                        startJob={startJob}
+                        getInputFile={getInputFile}
+                        elapsed={elapsed}
+                        viewingResult={viewingResult}
+                    />
+                )}
+            </div>
         // Continued in part 5...
             {/* ═══ GATEWAY OFFLINE BANNER ═══ */}
             {!gatewayOnline && (
