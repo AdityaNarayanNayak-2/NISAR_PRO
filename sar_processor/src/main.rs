@@ -165,7 +165,7 @@ async fn main() -> Result<()> {
                     };
 
                     info!("[1/5] Parsing GUNW product...");
-                    let gunw = gunw_parser::parse_gunw(input, &cli.polarization, crop.as_ref())?;
+                    let mut gunw = gunw_parser::parse_gunw(input, &cli.polarization, crop.as_ref())?;
 
                     let base = cli.output.replace(".tif", "").replace(".png", "");
                     let bbox_opt = Some([gunw.bbox.west, gunw.bbox.south, gunw.bbox.east, gunw.bbox.north]);
@@ -174,10 +174,36 @@ async fn main() -> Result<()> {
                     println!("{{\"event\":\"georef\",\"bbox\":{{\"south\":{},\"north\":{},\"west\":{},\"east\":{}}}}}",
                         gunw.bbox.south, gunw.bbox.north, gunw.bbox.west, gunw.bbox.east);
 
+                    // ── Water body masking (GUNW path) ────────────────────────
+                    // GUNW products don't carry raw SLC amplitude, so intensity-
+                    // based masking is impossible.  Only the external SWBD mask
+                    // can be applied here (the low-coherence proxy is already
+                    // handled inside gunw_parser.rs at coh < 0.3).
+                    if let Some(ref wbd_path) = cli.water_mask {
+                        info!("[GUNW] Applying external SWBD water body mask from {:?}", wbd_path);
+                        match sar_processor::water_mask::read_swbd_wbd(wbd_path) {
+                            Ok(mask) => {
+                                sar_processor::water_mask::apply_external_water_mask(
+                                    &mut gunw.coherence, &mask);
+                            }
+                            Err(e) => {
+                                warn!("[GUNW] Failed to read external water mask: {:?}. Skipping.", e);
+                            }
+                        }
+                    }
+
+                    // Deramp the phase to remove orbital/atmospheric ramps and reference it
+                    info!("  Removing spatial orbital/atmospheric phase ramp via 2D linear deramp...");
+                    let defo_phase = sar_processor::deramp::deramp_phase(
+                        &gunw.unwrapped_phase,
+                        &gunw.coherence,
+                        cli.insar_coherence_threshold,
+                    );
+
                     // [2/5] Save displacement GeoTIFF (same filename the dashboard expects)
                     info!("[2/5] Saving displacement GeoTIFF...");
                     let defo_path = format!("{}_defo_phase.tif", base);
-                    save_geotiff_f32(gunw.displacement.view(), &defo_path, bbox_opt)?;
+                    save_geotiff_f32(defo_phase.view(), &defo_path, bbox_opt)?;
                     info!("  ✓ Displacement: {}", defo_path);
 
                     // [3/5] Save coherence GeoTIFF
@@ -196,7 +222,7 @@ async fn main() -> Result<()> {
                         max_points: 2000,
                     };
                     let report = sar_processor::infra_health::analyze_infrastructure_unwrapped(
-                        &gunw.displacement,
+                        &defo_phase,
                         &gunw.coherence,
                         &options,
                     );

@@ -552,8 +552,8 @@ function AppDashboard() {
                                 <div style={{ fontSize: '0.7rem', fontFamily: MONO }}>
                                     <strong style={{ color: '#0f172a' }}>PS Point #{idx}</strong><br />
                                     Severity: {point.severity}<br />
-                                    Displacement: {point.displacement_mm.toFixed(2)} mm<br />
-                                    Coherence: {point.coherence.toFixed(2)}
+                                    Displacement: {point.displacement_mm?.toFixed(2) ?? '0.00'} mm<br />
+                                    Coherence: {point.coherence?.toFixed(2) ?? '0.00'}
                                 </div>
                             </Popup>
                         </CircleMarker>

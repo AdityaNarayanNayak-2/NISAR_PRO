@@ -40,6 +40,7 @@ async fn main() {
         .route("/context", get(handlers::context_handler))
         .route("/jobs", post(handlers::start_job_handler))
         .route("/upload", post(handlers::upload_handler))
+        .route("/jobs/health-ping", get(|| async { axum::Json(serde_json::json!({ "status": "ok" })) }))
         .route("/jobs/:id", get(handlers::get_job_handler))
         .route("/jobs/:id/cancel", post(handlers::cancel_job_handler))
         .route("/jobs/:id/logs", get(handlers::stream_logs_handler))

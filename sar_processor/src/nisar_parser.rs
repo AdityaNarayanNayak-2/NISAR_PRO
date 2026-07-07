@@ -624,7 +624,7 @@ fn extract_bbox_from_grids(file: &File, product_type: &str) -> Option<GeoBoundin
 /// or individual corner attributes:
 ///   /science/LSAR/identification/zeroDopplerStartTime etc.
 /// Some products store explicit lat/lon bounding attributes.
-fn extract_bbox_from_identification(file: &File) -> Option<GeoBoundingBox> {
+pub(crate) fn extract_bbox_from_identification(file: &File) -> Option<GeoBoundingBox> {
     let base = "/science/LSAR/identification";
 
     // Try explicit bounding box attributes first
