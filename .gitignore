@@ -34,3 +34,4 @@ sar-gateway/results/
 **/*.env
 .env
 *.secret.yaml
+.png

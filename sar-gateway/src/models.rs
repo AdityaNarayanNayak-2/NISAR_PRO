@@ -44,6 +44,7 @@ pub struct ContextResponse {
     // Live WRIS data
     pub current_level_m: Option<f64>,
     pub full_reservoir_level_m: Option<f64>,
+    pub mddl_level_m: Option<f64>,
     pub storage_pct: Option<f64>,
     pub inflow_cumecs: Option<f64>,
     pub outflow_cumecs: Option<f64>,

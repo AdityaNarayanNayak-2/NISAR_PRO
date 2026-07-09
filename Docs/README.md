@@ -7,6 +7,7 @@ Welcome to the SAR Analyzer documentation. This platform processes Synthetic Ape
 | Document | Description |
 |----------|-------------|
 | [Getting Started](./getting-started.md) | Setup your development environment |
+| [InSAR Analyst Guide](./Guides/insar_analyst_guide.md) | Windows user manual for GCOV & GUNW monitoring |
 | [Architecture](./architecture.md) | System design and component overview |
 | [API Reference](./api-reference.md) | Gateway API endpoints |
 | [Deployment Guide](./deployment.md) | Deploy to Kubernetes |

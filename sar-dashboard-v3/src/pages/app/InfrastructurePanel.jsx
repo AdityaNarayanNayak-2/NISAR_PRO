@@ -33,7 +33,8 @@ export default function InfrastructurePanel({
     slaveFilePath,
     setSlaveFilePath,
     activeLayer,
-    setActiveLayer,
+    visibleLayers,
+    setVisibleLayers,
     startJob,
     getInputFile,
     runningJobs,
@@ -43,33 +44,107 @@ export default function InfrastructurePanel({
 }) {
     const [editingMaster, setEditingMaster] = useState(false);
     const [editingSlave, setEditingSlave] = useState(false);
-    const [activeView, setActiveView] = useState('STRUCTURAL');
     const [uploading, setUploading] = useState(false);
+    const [selectedPoint, setSelectedPoint] = useState(null);
 
-    const showResults = viewingResult?.insarReport?.summary;
+    const s = viewingResult?.insarReport?.summary;
     const masterFilename = localFilePath ? localFilePath.split('/').pop() : '';
     const slaveFilename = slaveFilePath ? slaveFilePath.split('/').pop() : '';
-
     const isGunw = !localFilePath || localFilePath.toLowerCase().includes('_gunw') || localFilePath.toLowerCase().endsWith('.h5') || localFilePath.toLowerCase().endsWith('.he5');
+
+    // ── PARSED METADATA ──
+    const parsedMeta = parseNisarFilename(localFilePath) || parseNisarFilename(viewingResult?.url) || parseNisarFilename(viewingResult?.input_file);
+
+    // ── DATE PARSING FOR TIMELINE ──
+    const dateMatches = (localFilePath || '').match(/(\d{8})/g) || [];
+    const fmtDate = (d) => {
+        if (!d || d.length !== 8) return null;
+        const dt = new Date(d.slice(0, 4), parseInt(d.slice(4, 6)) - 1, d.slice(6, 8));
+        if (isNaN(dt)) return null;
+        return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    };
+    const masterDateStr = dateMatches[0] ? fmtDate(dateMatches[0]) : null;
+    const slaveDateStr = dateMatches[1] ? fmtDate(dateMatches[1]) : (parsedMeta?.acquisitionDate ? fmtDate(parsedMeta.acquisitionDate.replace(/-/g, '')) : null);
+    const baselineDays = (masterDateStr && slaveDateStr && dateMatches[0] && dateMatches[1])
+        ? Math.round((new Date(dateMatches[1].slice(0, 4), parseInt(dateMatches[1].slice(4, 6)) - 1, dateMatches[1].slice(6, 8)) - new Date(dateMatches[0].slice(0, 4), parseInt(dateMatches[0].slice(4, 6)) - 1, dateMatches[0].slice(6, 8))) / 86400000)
+        : null;
+
+    // ── STATUS ──
+    let statusText = 'NO DATA';
+    let statusColor = '#555555';
+    if (s) {
+        if (s.critical_count > 0) { statusText = 'CRITICAL'; statusColor = '#C0392B'; }
+        else if (s.alert_count > 0) { statusText = 'ALERT'; statusColor = '#D4822A'; }
+        else if (s.caution_count > 0) { statusText = 'CAUTION'; statusColor = '#E6A817'; }
+        else { statusText = 'NORMAL'; statusColor = '#4CAF50'; }
+    }
+
+    // ── SATELLITE PASS ──
+    const satellitePassRows = [
+        { label: 'SATELLITE', value: 'NISAR (NASA/ISRO)', dotColor: '#4CAF50' },
+        { label: 'PASS', value: parsedMeta?.direction || 'Descending', dotColor: '#333333' },
+        { label: 'DATE', value: parsedMeta?.acquisitionDate || viewingResult?.date || '—', dotColor: (parsedMeta?.acquisitionDate || viewingResult?.date) ? '#4CAF50' : '#333333' },
+    ];
+
+    // ── ENVIRONMENTAL CONTEXT ROWS ──
+    const envRows = [];
+    envRows.push(
+        { label: 'RAINFALL', value: envContext?.rainfall || '—', status: envContext?.rainfall && envContext.rainfall !== 'UNAVAILABLE' ? (envContext.rainfall.includes('mm') ? 'data' : 'ok') : 'off' },
+        { label: 'SOIL', value: envContext?.soil_moisture || '—', status: envContext?.soil_moisture && envContext.soil_moisture !== 'UNAVAILABLE' ? (envContext.soil_moisture.toLowerCase().includes('anomaly') || envContext.soil_moisture.includes('saturated') ? 'warn' : 'ok') : 'off' },
+        { label: 'SEISMIC', value: envContext?.seismic || '—', status: envContext?.seismic && envContext.seismic !== 'UNAVAILABLE' ? (envContext.seismic.toLowerCase().includes('no activity') || envContext.seismic.toLowerCase().includes('no events') ? 'ok' : 'warn') : 'off' },
+        { label: 'SEASON', value: envContext?.season || '—', status: envContext?.season && envContext.season !== 'UNAVAILABLE' ? 'accent' : 'off' },
+    );
+
+    // ── ALERTS ──
+    const SEV_ORDER = { CRITICAL: 0, ALERT: 1, CAUTION: 2, STABLE: 3 };
+    const alerts = [];
+    if (s) {
+        if (s.critical_count > 0) alerts.push({ severity: 'CRITICAL', message: `${s.critical_count} PS points exceed critical displacement threshold` });
+        if (s.alert_count > 50) alerts.push({ severity: 'ALERT', message: `${s.alert_count} points showing significant deformation` });
+        if (Math.abs(s.max_displacement_mm) > 10) alerts.push({ severity: 'ALERT', message: `Max displacement ${s.max_displacement_mm.toFixed(1)}mm exceeds 10mm threshold` });
+        if (s.max_displacement_mm < -5) alerts.push({ severity: 'CAUTION', message: `Subsidence detected: ${Math.abs(s.max_displacement_mm).toFixed(1)}mm` });
+        if (envContext?.storage_pct > 90 && s.caution_count > 0) alerts.push({ severity: 'CAUTION', message: 'Reservoir at high capacity — monitor embankment' });
+        if (alerts.length === 0) alerts.push({ severity: 'STABLE', message: 'Baseline monitoring active — no anomalies' });
+    }
+    alerts.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
+
+    // ── RIGHT PANEL DATA ──
+    const topScatterers = s ? (viewingResult?.insarReport?.scatterers || [])
+        .sort((a, b) => Math.abs(b.displacement_mm) - Math.abs(a.displacement_mm))
+        .slice(0, 10) : [];
+
+
+    const filename = (viewingResult?.url || localFilePath || '').toUpperCase();
+    const productVal = filename.includes('_GUNW_') ? 'GUNW — Pre-computed InSAR'
+        : filename.includes('_GCOV_') ? 'GCOV — Geocoded Covariance'
+            : filename.includes('_RSLC_') ? 'RSLC — Range SLC'
+                : 'NISAR Product';
+
+    const acquisitionRows = [
+        { label: 'SATELLITE', value: 'NISAR (NASA/ISRO)' },
+        { label: 'PIPELINE', value: (viewingResult?.pipeline || 'insar') === 'insar' ? 'InSAR Analysis' : 'SAR Focus' },
+        { label: 'PRODUCT', value: productVal },
+        { label: 'BAND', value: 'L-Band (1.26 GHz)' },
+        { label: 'ORBIT', value: 'Descending' },
+    ];
+
+    const layerOptions = [
+        { key: 'amplitude', label: 'AMPLITUDE' },
+        { key: 'deformation', label: 'DEFORMATION' },
+        { key: 'coherence', label: 'COHERENCE' },
+    ];
 
     const handleUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         setUploading(true);
         const formData = new FormData();
         formData.append('file', file);
-
         try {
-            const res = await fetch(api('/upload'), {
-                method: 'POST',
-                body: formData,
-            });
+            const res = await fetch(api('/upload'), { method: 'POST', body: formData });
             if (!res.ok) throw new Error('Upload failed');
             const data = await res.json();
-            if (data.path) {
-                setLocalFilePath(data.path);
-            }
+            if (data.path) setLocalFilePath(data.path);
         } catch (err) {
             console.error('File upload error:', err);
             alert('Upload failed: ' + err.message);
@@ -79,66 +154,29 @@ export default function InfrastructurePanel({
         }
     };
 
-    // ── 6-METRIC SCORECARD MATHEMATICAL CALCULATIONS ──
-    const insarSummary = viewingResult?.insarReport?.summary;
+    const dotColorForStatus = (status) => {
+        if (status === 'ok') return C.stable;
+        if (status === 'warn') return C.caution;
+        if (status === 'data') return C.data;
+        if (status === 'accent') return C.accent.infra;
+        return '#333333';
+    };
 
-    // B. Deformation Score (0-100)
-    let deformationScore = 0;
-    if (insarSummary) {
-        const crit = insarSummary.critical_count || 0;
-        const alrt = insarSummary.alert_count || 0;
-        const maxDisp = Math.abs(insarSummary.max_displacement_mm || 0);
-        deformationScore = Math.min(100, Math.max(0, Math.round(
-            (crit * 15) + (alrt * 1.5) + (maxDisp * 3.5)
-        )));
-    }
+    const pillStyle = (sev) => {
+        const base = { fontFamily: MONO, fontSize: '8px', fontWeight: 600, padding: '2px 6px', borderRadius: '1px', letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0 };
+        if (sev === 'CRITICAL') return { ...base, background: C.critical, color: '#F0F0F0' };
+        if (sev === 'ALERT') return { ...base, background: C.alert, color: '#F0F0F0' };
+        if (sev === 'CAUTION') return { ...base, background: C.caution, color: '#0A0A0A' };
+        return { ...base, background: 'transparent', color: C.stable, border: `1px solid ${C.stable}` };
+    };
 
-    // C. Water Spread / Reservoir Expansion Score (0-100)
-    const storagePct = envContext?.storage_pct != null ? envContext.storage_pct : null;
-    const waterSpreadScore = storagePct !== null ? Math.min(100, Math.max(0, Math.round(storagePct))) : 0;
-
-    // D. External Stress Score (0-100)
-    const rainfall = parseFloat(envContext?.rainfall) || 0;
-    const rainContrib = Math.min(40, rainfall * 0.5);
-
-    const soilText = envContext?.soil_moisture?.toLowerCase() || '';
-    const soilContrib = soilText.includes('saturated') ? 30 :
-        (soilText.includes('high') || soilText.includes('anomaly')) ? 18 :
-            (soilText.includes('moist') || soilText.includes('moisture')) ? 10 : 0;
-
-    const seismicText = envContext?.seismic?.toLowerCase() || '';
-    const seismicContrib = seismicText.includes('events') ? 30 : 0;
-
-    const externalStressScore = Math.min(100, Math.max(0, Math.round(
-        rainContrib + soilContrib + seismicContrib
-    )));
-
-    // F. Trend Score (0-100)
-    let trendScore = 0;
-    if (deformationScore > 0) {
-        trendScore = Math.min(100, Math.max(0, Math.round(deformationScore * 0.8 + 10)));
-    }
-
-    // E. Confidence Score (0-100)
-    let confidenceScore = 15; // default low baseline
-    if (insarSummary && envContext) {
-        confidenceScore = 95;
-    } else if (envContext) {
-        confidenceScore = 70;
-    } else if (insarSummary) {
-        confidenceScore = 60;
-    }
-    if (insarSummary && insarSummary.mean_coherence != null) {
-        confidenceScore = Math.max(20, Math.round(confidenceScore * (insarSummary.mean_coherence / 0.8)));
-    }
-
-    // A. Overall Dam Risk Score (0-100)
-    const overallRiskScore = Math.min(100, Math.max(0, Math.round(
-        (deformationScore * 0.40) +
-        (waterSpreadScore * 0.20) +
-        (externalStressScore * 0.20) +
-        (trendScore * 0.20)
-    )));
+    const telemetryRow = ({ label, value, dotColor }) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid #161616' }}>
+            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: dotColor, flexShrink: 0, boxShadow: dotColor !== '#333333' ? `0 0 4px ${dotColor}40` : 'none' }} />
+            <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', width: '68px', flexShrink: 0 }}>{label}</span>
+            <span style={{ fontFamily: MONO, fontSize: '10px', color: value === '—' ? '#333333' : '#CCCCCC', lineHeight: 1.4, wordBreak: 'break-word', flex: 1 }}>{value}</span>
+        </div>
+    );
 
     return (
         <>
@@ -147,398 +185,423 @@ export default function InfrastructurePanel({
                 ════════════════════════════════════════════════════ */}
             <div style={{
                 position: 'absolute', top: '42px', left: 0, bottom: 0,
-                width: '240px', background: C.bg0,
+                width: '260px', background: C.bg0,
                 borderRight: `1px solid ${C.bg3}`, zIndex: 100,
-                overflowY: 'auto',
-                boxSizing: 'border-box',
+                overflowY: 'auto', boxSizing: 'border-box',
             }}>
-                {/* ── PANEL 1: ASSET ── */}
-                <div style={{ background: C.bg1, borderBottom: `2px solid ${C.accent.infra}`, padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Asset</span>
+                {/* ═══════ ASSET SECTION (REDESIGNED) ═══════ */}
+                <div style={{
+                    background: 'linear-gradient(180deg, #0c0c0e 0%, #070708 100%)',
+                    borderBottom: '1px solid #1a1a1f', padding: '16px', position: 'relative',
+                }}>
+                    {/* Top gold accent line */}
+                    <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
+                        background: 'linear-gradient(90deg, #c8a96e, transparent 60%)',
+                    }} />
+
+                    {/* Section Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <div style={{
+                            width: '24px', height: '24px', borderRadius: '6px', background: '#111114',
+                            border: '1px solid #1a1a1f', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#c8a96e', fontSize: '11px', fontFamily: MONO,
+                        }}>◎</div>
+                        <div style={{
+                            fontFamily: MONO, fontSize: '9px', fontWeight: 600,
+                            letterSpacing: '0.2em', textTransform: 'uppercase', color: '#555560',
+                        }}>ASSET</div>
+                        <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, #25252b, transparent)' }} />
                     </div>
-                    <div style={{ position: 'relative', marginBottom: assetSearchOpen ? '0px' : '0px' }}>
+
+                    {/* Search Input */}
+                    <div style={{ position: 'relative', marginBottom: '12px' }}>
+                        <span style={{
+                            position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
+                            color: '#3a3a44', fontSize: '12px', fontFamily: MONO, pointerEvents: 'none',
+                        }}>⌕</span>
                         <input
                             type="text"
                             value={assetSearch}
                             onChange={(e) => { setAssetSearch(e.target.value); searchAssets(e.target.value); }}
                             placeholder="Search dam or bridge..."
-                            style={{ width: '100%', padding: '7px 10px', background: C.bg0, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '11px', boxSizing: 'border-box', outline: 'none', borderRadius: 0 }}
-                            onFocus={(e) => e.target.style.borderColor = C.bg4}
-                            onBlur={(e) => { setTimeout(() => { e.target.style.borderColor = C.bg3; setAssetSearchOpen(false); }, 200); }}
+                            style={{
+                                width: '100%', padding: '10px 12px 10px 36px', background: '#0e0e11',
+                                border: '1px solid #1a1a1f', borderRadius: '8px', color: '#e8e8ec',
+                                fontFamily: MONO, fontSize: '11px', outline: 'none', boxSizing: 'border-box',
+                                transition: 'all 0.2s ease',
+                            }}
+                            onFocus={(e) => { e.target.style.borderColor = '#c8a96e'; e.target.style.boxShadow = '0 0 0 3px rgba(200,169,110,0.15)'; }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = '#1a1a1f'; e.target.style.boxShadow = 'none';
+                                setTimeout(() => setAssetSearchOpen(false), 200);
+                            }}
                         />
                         {assetSearchOpen && assetResults.length > 0 && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.bg0, border: `1px solid ${C.bg3}`, borderTop: 'none', zIndex: 200, maxHeight: '200px', overflowY: 'auto' }}>
+                            <div style={{
+                                position: 'absolute', top: '100%', left: 0, right: 0, background: '#0c0c0e',
+                                border: '1px solid #25252b', borderTop: 'none', borderRadius: '0 0 8px 8px',
+                                zIndex: 200, maxHeight: '200px', overflowY: 'auto', marginTop: '4px',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                            }}>
                                 {assetResults.map((asset, i) => (
                                     <div
                                         key={asset.id || i}
                                         onMouseDown={() => {
-                                            setAssetSearch(asset.name);
-                                            setAssetName(asset.name);
+                                            setAssetSearch(asset.name); setAssetName(asset.name);
                                             setAssetType(asset.asset_type);
-                                            setAssetLat(asset.lat.toString());
-                                            setAssetLon(asset.lon.toString());
+                                            setAssetLat(asset.lat.toString()); setAssetLon(asset.lon.toString());
                                             setAssetState(asset.state || asset.country || '');
-                                            setAssetResults([]);
-                                            setAssetSearchOpen(false);
+                                            setAssetResults([]); setAssetSearchOpen(false);
                                             setFlyToCenter([asset.lat, asset.lon]);
                                         }}
-                                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: `1px solid ${C.bg3}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                        onMouseEnter={(e) => e.currentTarget.style.background = C.bg2}
+                                        style={{
+                                            padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #1a1a1f',
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            transition: 'background 0.15s ease',
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.background = '#18181c'}
                                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                     >
-                                        <span style={{ fontFamily: MONO, fontSize: '11px', color: C.text }}>{asset.name}</span>
-                                        <span style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim }}>{asset.state || asset.country}</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '11px', color: '#e8e8ec' }}>{asset.name}</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555560' }}>{asset.state || asset.country}</span>
                                     </div>
                                 ))}
                             </div>
                         )}
                     </div>
 
-                    {/* Asset details when selected */}
+                    {/* Asset Info Card */}
                     {assetLat && assetLon && assetName && (
-                        <>
-                            <div style={{ fontFamily: MONO, fontSize: '13px', color: C.text, fontWeight: 600, marginTop: '10px' }}>{assetName}</div>
-                            <div style={{ display: 'flex', gap: '16px', marginTop: '6px' }}>
-                                <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim }}>TYPE</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: C.accent.infra }}>{assetType}</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim }}>STATE</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: C.textMid }}>{assetState || '—'}</div>
-                                </div>
-                            </div>
-                            <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginTop: '6px' }}>{assetLat}°N  {assetLon}°E</div>
+                        <div style={{
+                            background: '#111114', border: '1px solid #1a1a1f', borderRadius: '10px',
+                            padding: '14px', position: 'relative', overflow: 'hidden',
+                        }}>
+                            {/* Decorative gold glow */}
+                            <div style={{
+                                position: 'absolute', top: 0, right: 0, width: '60px', height: '60px',
+                                background: 'radial-gradient(circle, rgba(200,169,110,0.08), transparent 70%)',
+                                pointerEvents: 'none',
+                            }} />
 
-                            {/* STRUCTURAL / FLOOD RISK toggle */}
-                            <div style={{ display: 'flex', marginTop: '10px' }}>
-                                <button
-                                    onClick={() => setActiveView('STRUCTURAL')}
-                                    style={{
-                                        flex: 1, fontFamily: MONO, fontSize: '10px', padding: '6px 0', cursor: 'pointer',
-                                        background: activeView === 'STRUCTURAL' ? C.bg2 : 'transparent',
-                                        color: activeView === 'STRUCTURAL' ? C.text : C.textDim,
-                                        border: 'none',
-                                        borderBottom: activeView === 'STRUCTURAL' ? `2px solid ${C.accent.infra}` : '2px solid transparent',
-                                    }}
-                                >
-                                    STRUCTURAL
-                                </button>
-                                <button
-                                    onClick={() => setActiveView('FLOOD RISK')}
-                                    style={{
-                                        flex: 1, fontFamily: MONO, fontSize: '10px', padding: '6px 0', cursor: 'pointer',
-                                        background: activeView === 'FLOOD RISK' ? C.bg2 : 'transparent',
-                                        color: activeView === 'FLOOD RISK' ? C.text : C.textDim,
-                                        border: 'none',
-                                        borderBottom: activeView === 'FLOOD RISK' ? `2px solid ${C.accent.infra}` : '2px solid transparent',
-                                    }}
-                                >
-                                    FLOOD RISK
-                                </button>
+                            <div style={{
+                                fontFamily: MONO, fontSize: '14px', fontWeight: 600, color: '#e8e8ec',
+                                marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px',
+                            }}>
+                                <span style={{
+                                    width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80',
+                                    boxShadow: '0 0 6px rgba(74,222,128,0.12)', flexShrink: 0,
+                                }} />
+                                {assetName}
                             </div>
-                        </>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                                <div>
+                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#3a3a44', letterSpacing: '0.1em', textTransform: 'uppercase' }}>TYPE</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#c8a96e', fontWeight: 500 }}>{assetType}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#3a3a44', letterSpacing: '0.1em', textTransform: 'uppercase' }}>STATE</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#8a8a95' }}>{assetState || '—'}</div>
+                                </div>
+                            </div>
+
+                            <div style={{
+                                fontFamily: MONO, fontSize: '9px', color: '#555560', display: 'flex',
+                                alignItems: 'center', gap: '6px', paddingTop: '8px',
+                                borderTop: '1px solid #1a1a1f',
+                            }}>
+                                <span> Location:</span>
+                                <span>{assetLat}°N  {assetLon}°E</span>
+                            </div>
+
+                            {/* Status Badge */}
+                            <div style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                padding: '4px 10px', borderRadius: '20px', fontFamily: MONO,
+                                fontSize: '9px', fontWeight: 600, letterSpacing: '0.08em', marginTop: '10px',
+                                ...(statusText === 'CRITICAL' ? {
+                                    background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                                    border: '1px solid rgba(239,68,68,0.2)',
+                                } : statusText === 'ALERT' ? {
+                                    background: 'rgba(245,158,11,0.1)', color: '#f59e0b',
+                                    border: '1px solid rgba(245,158,11,0.2)',
+                                } : statusText === 'CAUTION' ? {
+                                    background: 'rgba(230,168,23,0.1)', color: '#e6a817',
+                                    border: '1px solid rgba(230,168,23,0.2)',
+                                } : {
+                                    background: 'rgba(74,222,128,0.1)', color: '#4ade80',
+                                    border: '1px solid rgba(74,222,128,0.2)',
+                                }),
+                            }}>
+                                <span style={{
+                                    width: '5px', height: '5px', borderRadius: '50%',
+                                    ...(statusText === 'CRITICAL' ? {
+                                        background: '#ef4444', boxShadow: '0 0 6px rgba(239,68,68,0.15)',
+                                        animation: 'pulse-red 2s infinite',
+                                    } : statusText === 'ALERT' ? {
+                                        background: '#f59e0b', boxShadow: '0 0 6px rgba(245,158,11,0.12)',
+                                    } : statusText === 'CAUTION' ? {
+                                        background: '#e6a817', boxShadow: '0 0 6px rgba(230,168,23,0.12)',
+                                    } : {
+                                        background: '#4ade80', boxShadow: '0 0 6px rgba(74,222,128,0.12)',
+                                    }),
+                                }} />
+                                {statusText}
+                            </div>
+                        </div>
                     )}
                 </div>
 
-                {activeView === 'STRUCTURAL' && (
-                    <>
-                        {/* ── PANEL 2: FIELD TELEMETRY ── */}
-                        <div style={{ padding: '12px 14px', borderBottom: '1px solid #1A1A1A' }}>
-                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>FIELD TELEMETRY</div>
-                            {[
-                                {
-                                    label: 'RESERVOIR',
-                                    value: envContext?.reservoir || '—',
-                                    status: envContext?.reservoir && envContext.reservoir !== 'UNAVAILABLE' && envContext.reservoir.includes('%')
-                                        ? (parseFloat(envContext.reservoir) > 90 ? 'warn' : 'ok')
-                                        : 'off',
-                                },
-                                {
-                                    label: 'RAINFALL',
-                                    value: envContext?.rainfall || '—',
-                                    status: envContext?.rainfall && envContext.rainfall !== 'UNAVAILABLE'
-                                        ? (envContext.rainfall.includes('mm') ? 'data' : 'ok')
-                                        : 'off',
-                                },
-                                {
-                                    label: 'SOIL',
-                                    value: envContext?.soil_moisture || '—',
-                                    status: envContext?.soil_moisture && envContext.soil_moisture !== 'UNAVAILABLE'
-                                        ? (envContext.soil_moisture.toLowerCase().includes('anomaly') || envContext.soil_moisture.includes('saturated') ? 'warn' : 'ok')
-                                        : 'off',
-                                },
-                                {
-                                    label: 'SEISMIC',
-                                    value: envContext?.seismic || '—',
-                                    status: envContext?.seismic && envContext.seismic !== 'UNAVAILABLE'
-                                        ? (envContext.seismic.toLowerCase().includes('no activity') || envContext.seismic.toLowerCase().includes('no events') ? 'ok' : 'warn')
-                                        : 'off',
-                                },
-                                {
-                                    label: 'SEASON',
-                                    value: envContext?.season || '—',
-                                    status: envContext?.season && envContext.season !== 'UNAVAILABLE' ? 'accent' : 'off',
-                                },
-                            ].map(({ label, value, status }) => {
-                                const dotColor = status === 'ok' ? C.stable
-                                    : status === 'warn' ? C.caution
-                                        : status === 'data' ? C.data
-                                            : status === 'accent' ? C.accent.infra
-                                                : '#333333';
-                                return (
-                                    <div key={label} style={{
-                                        display: 'flex', alignItems: 'center', gap: '8px',
-                                        padding: '6px 0',
-                                        borderBottom: '1px solid #161616',
-                                    }}>
-                                        <div style={{
-                                            width: '5px', height: '5px', borderRadius: '50%',
-                                            background: dotColor, flexShrink: 0,
-                                            boxShadow: status !== 'off' ? `0 0 4px ${dotColor}40` : 'none',
-                                        }} />
-                                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', width: '68px', flexShrink: 0 }}>{label}</span>
-                                        <span style={{
-                                            fontFamily: MONO, fontSize: '10px',
-                                            color: value === '—' ? '#333333' : '#CCCCCC',
-                                            lineHeight: 1.4, wordBreak: 'break-word', flex: 1,
-                                        }}>{value}</span>
-                                    </div>
-                                );
-                            })}
+                {/* ── SYSTEM STATUS OVERVIEW ── */}
+                {assetLat && assetLon && assetName && (
+                    <div style={{ padding: '16px', borderBottom: '1px solid #1a1a1f' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            <div style={{
+                                width: '24px', height: '24px', borderRadius: '6px', background: '#111114',
+                                border: '1px solid #1a1a1f', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: statusColor, fontSize: '11px', fontFamily: MONO,
+                            }}>⚡</div>
+                            <div style={{
+                                fontFamily: MONO, fontSize: '9px', fontWeight: 600,
+                                letterSpacing: '0.2em', textTransform: 'uppercase', color: '#555560',
+                            }}>SYSTEM STATUS</div>
+                            <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, #25252b, transparent)' }} />
                         </div>
 
-                        {/* ── PANEL 3: ASSESSMENT ── */}
-                        <div style={{ padding: '12px 14px', borderBottom: '1px solid #1A1A1A' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                <span style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase' }}>ASSESSMENT</span>
-                                {(() => {
-                                    const conf = envContext?.confidence;
-                                    const pillColor = conf === 'HIGH' ? C.critical
-                                        : conf === 'MODERATE' ? C.caution
-                                            : conf === 'LOW' ? C.stable
-                                                : '#333333';
-                                    return (
-                                        <span style={{
-                                            fontFamily: MONO, fontSize: '8px', fontWeight: 600,
-                                            padding: '2px 8px', borderRadius: '1px',
-                                            background: conf ? `${pillColor}20` : '#1A1A1A',
-                                            color: conf ? pillColor : '#555555',
-                                            border: `1px solid ${conf ? `${pillColor}40` : '#2A2A2A'}`,
-                                            letterSpacing: '0.08em',
-                                        }}>
-                                            {conf || 'NO DATA'}
-                                        </span>
-                                    );
-                                })()}
-                            </div>
-                            <div style={{
-                                fontFamily: SANS, fontSize: '11px', color: '#CCCCCC',
-                                lineHeight: 1.5, marginBottom: '10px',
-                            }}>
-                                {envContext?.assessment || 'Environmental assessment context unavailable.'}
-                            </div>
-                            <div style={{
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                fontFamily: MONO, fontSize: '8px', color: '#444444',
-                                paddingTop: '8px', borderTop: '1px solid #1A1A1A',
-                            }}>
-                                <span>{envContext?.source || 'NO SOURCE'}</span>
-                                {contextFetchedAt && (
-                                    <span>{contextFetchedAt.toISOString().slice(0, 16).replace('T', ' ')}</span>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Fetch button when no context loaded */}
-                        {assetLat && assetLon && !envContext && (
-                            <div style={{ padding: '0 14px' }}>
-                                <button
-                                    onClick={fetchContext}
-                                    style={{
-                                        width: '100%', background: 'transparent',
-                                        border: `1px solid #2A2A2A`, color: '#666666',
-                                        fontFamily: MONO, fontSize: '10px', letterSpacing: '0.08em',
-                                        padding: '8px 0', borderRadius: '1px',
-                                        cursor: 'pointer', marginTop: '12px',
-                                        transition: 'all 150ms ease',
-                                    }}
-                                    onMouseEnter={(e) => { e.target.style.borderColor = '#C8A96E'; e.target.style.color = '#C8A96E'; }}
-                                    onMouseLeave={(e) => { e.target.style.borderColor = '#2A2A2A'; e.target.style.color = '#666666'; }}
-                                >
-                                    {fetchingContext ? 'FETCHING...' : 'FETCH TELEMETRY'}
-                                </button>
-                            </div>
-                        )}
-
-                        {/* ── PANEL 4: ALERTS ── */}
-                        {viewingResult?.insarReport?.summary && (() => {
-                            const s = viewingResult.insarReport.summary;
-                            const SEV_ORDER = { CRITICAL: 0, ALERT: 1, CAUTION: 2, STABLE: 3 };
-                            const alerts = [];
-
-                            if (s.critical_count > 0)
-                                alerts.push({ severity: 'CRITICAL', message: `${s.critical_count} PS points exceed critical displacement threshold` });
-                            if (s.alert_count > 50)
-                                alerts.push({ severity: 'ALERT', message: `${s.alert_count} points showing significant deformation` });
-                            if (Math.abs(s.max_displacement_mm) > 10)
-                                alerts.push({ severity: 'ALERT', message: `Max displacement ${s.max_displacement_mm.toFixed(1)}mm exceeds 10mm threshold` });
-                            if (s.max_displacement_mm < -5)
-                                alerts.push({ severity: 'CAUTION', message: `Subsidence detected: ${Math.abs(s.max_displacement_mm).toFixed(1)}mm` });
-                            if (envContext?.storage_pct > 90 && s.caution_count > 0)
-                                alerts.push({ severity: 'CAUTION', message: 'Reservoir at high capacity — monitor embankment' });
-                            if (alerts.length === 0)
-                                alerts.push({ severity: 'STABLE', message: 'Baseline monitoring active — no anomalies' });
-
-                            alerts.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
-                            const visible = alerts.slice(0, 3);
-
-                            const pillStyle = (sev) => {
-                                const base = {
-                                    fontFamily: MONO, fontSize: '8px', fontWeight: 600,
-                                    padding: '2px 6px', borderRadius: '1px',
-                                    letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
-                                };
-                                if (sev === 'CRITICAL') return { ...base, background: C.critical, color: '#F0F0F0' };
-                                if (sev === 'ALERT') return { ...base, background: C.alert, color: '#F0F0F0' };
-                                if (sev === 'CAUTION') return { ...base, background: C.caution, color: '#0A0A0A' };
-                                return { ...base, background: 'transparent', color: C.stable, border: `1px solid ${C.stable}` };
-                            };
-
-                            return (
-                                <div style={{ padding: '12px 14px' }}>
-                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>ALERTS</div>
-                                    {visible.map((a, i) => (
-                                        <div key={i} style={{
-                                            display: 'flex', gap: '8px', alignItems: 'flex-start',
-                                            padding: '7px 0',
-                                            borderBottom: i < visible.length - 1 ? '1px solid #161616' : 'none',
-                                        }}>
-                                            <span style={pillStyle(a.severity)}>{a.severity}</span>
-                                            <span style={{ fontFamily: MONO, fontSize: '10px', color: '#888888', lineHeight: 1.5, flex: 1 }}>{a.message}</span>
-                                        </div>
-                                    ))}
+                        <div style={{
+                            background: 'linear-gradient(135deg, #111114 0%, rgba(255,255,255,0.01) 100%)',
+                            border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
+                            position: 'relative', overflow: 'hidden',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                {/* Pulse Indicator */}
+                                <div style={{ position: 'relative', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div style={{
+                                        position: 'absolute', width: '24px', height: '24px', borderRadius: '50%',
+                                        background: statusColor, opacity: 0.15,
+                                        animation: statusText === 'CRITICAL' ? 'pulse-red 1s infinite' : 'pulse-red 2s infinite'
+                                    }} />
+                                    <div style={{
+                                        width: '10px', height: '10px', borderRadius: '50%',
+                                        background: statusColor, boxShadow: `0 0 10px ${statusColor}, 0 0 20px ${statusColor}`
+                                    }} />
                                 </div>
-                            );
-                        })()}
-                    </>
+
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', letterSpacing: '0.08em', textTransform: 'uppercase' }}>INTEGRITY STATE</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '13px', fontWeight: 700, color: statusColor, letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {statusText}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 )}
 
-                {activeView === 'FLOOD RISK' && (() => {
-                    const insarSummary = viewingResult?.insarReport?.summary;
 
-                    // ── Compute factor scores from real data ──
-                    let reservoirScore = 0;
-                    const storagePct = envContext?.storage_pct;
-                    if (storagePct > 95) reservoirScore = 30;
-                    else if (storagePct > 85) reservoirScore = 20;
-                    else if (storagePct > 70) reservoirScore = 10;
+                {/* ═══════ ENVIRONMENTAL CONTEXT (REDESIGNED) ═══════ */}
+                <div style={{ padding: '16px', borderBottom: '1px solid #1a1a1f' }}>
 
-                    let rainfallScore = 0;
-                    const rainfall = parseFloat(envContext?.rainfall);
-                    if (!isNaN(rainfall)) {
-                        if (rainfall > 200) rainfallScore = 30;
-                        else if (rainfall > 100) rainfallScore = 20;
-                        else if (rainfall > 50) rainfallScore = 10;
-                    }
+                    {/* Section Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <div style={{
+                            width: '24px', height: '24px', borderRadius: '6px', background: '#111114',
+                            border: '1px solid #1a1a1f', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#c8a96e', fontSize: '11px', fontFamily: MONO,
+                        }}>🌡</div>
+                        <div style={{
+                            fontFamily: MONO, fontSize: '9px', fontWeight: 600,
+                            letterSpacing: '0.2em', textTransform: 'uppercase', color: '#555560',
+                        }}>ENVIRONMENTAL CONTEXT</div>
+                        <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, #25252b, transparent)' }} />
+                    </div>
 
-                    let soilScore = 0;
-                    const soilText = envContext?.soil_moisture?.toLowerCase() || '';
-                    if (soilText.includes('saturated')) soilScore = 20;
-                    else if (soilText.includes('high') || soilText.includes('anomaly')) soilScore = 12;
-                    else if (soilText.includes('moist')) soilScore = 6;
+                    {/* Reservoir Card */}
+                    {envContext?.reservoir && envContext.reservoir !== 'UNAVAILABLE' && (
+                        <div style={{
+                            background: 'linear-gradient(135deg, #111114 0%, rgba(200,169,110,0.03) 100%)',
+                            border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
+                            marginBottom: '14px', position: 'relative', overflow: 'hidden',
+                        }}>
+                            {/* Gold accent bar on left */}
+                            <div style={{
+                                position: 'absolute', top: 0, left: 0, width: '3px', height: '100%',
+                                background: 'linear-gradient(180deg, #c8a96e, transparent)',
+                            }} />
 
-                    let seismicScore = 0;
-                    if (envContext?.seismic?.toLowerCase().includes('events')) seismicScore = 10;
+                            <div style={{
+                                fontFamily: MONO, fontSize: '10px', color: '#c8a96e', fontWeight: 600,
+                                letterSpacing: '0.08em', marginBottom: '10px', paddingLeft: '8px',
+                            }}>{envContext.reservoir.toUpperCase()}</div>
 
-                    let insarScore = 0;
-                    if (insarSummary?.critical_count > 0) insarScore = 10;
-                    else if (insarSummary?.alert_count > 0) insarScore = 5;
-
-                    const score = reservoirScore + rainfallScore + soilScore + seismicScore + insarScore;
-
-                    const level = score >= 70 ? 'CRITICAL' :
-                        score >= 50 ? 'HIGH' :
-                            score >= 30 ? 'MODERATE' : 'LOW';
-
-                    const color = score >= 70 ? C.critical :
-                        score >= 50 ? C.alert :
-                            score >= 30 ? C.caution : C.stable;
-
-                    const factors = [
-                        { label: 'RESERVOIR', scored: reservoirScore, max: 30, color: '#D4822A' },
-                        { label: 'RAINFALL', scored: rainfallScore, max: 30, color: C.data },
-                        { label: 'SOIL', scored: soilScore, max: 20, color: C.caution },
-                        { label: 'SEISMIC', scored: seismicScore, max: 10, color: '#9B8EC4' },
-                        { label: 'INSAR', scored: insarScore, max: 10, color: C.accent.infra },
-                    ];
-
-                    return (
-                        <>
-                            {/* ── PANEL 2: FLOOD RISK INDEX ── */}
-                            <div style={{ padding: '14px 14px 12px', borderBottom: '1px solid #1A1A1A' }}>
-                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '12px' }}>FLOOD RISK INDEX</div>
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '8px' }}>
-                                    <span style={{ fontFamily: MONO, fontSize: '42px', fontWeight: 600, color, lineHeight: 1 }}>{score}</span>
-                                    <span style={{ fontFamily: MONO, fontSize: '16px', color: '#444444' }}>/100</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px', paddingLeft: '8px' }}>
+                                <div>
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3a3a44', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CURRENT LEVEL</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '12px', color: '#e8e8ec', fontWeight: 600 }}>
+                                        {envContext.current_level_m != null ? `${envContext.current_level_m.toFixed(2)} m` : '—'}
+                                    </div>
                                 </div>
-                                <div style={{
-                                    display: 'inline-block', fontFamily: MONO, fontSize: '9px', fontWeight: 600,
-                                    color, padding: '2px 8px', borderRadius: '1px',
-                                    background: `${color}20`, border: `1px solid ${color}40`,
-                                    letterSpacing: '0.08em', marginBottom: '8px',
-                                }}>{level} RISK</div>
-                                <div style={{ fontFamily: MONO, fontSize: '8px', color: '#444444' }}>NISAR · WRIS · IMD · USGS</div>
-
-                                {/* Contributors breakdown */}
-                                <div style={{ marginTop: '12px' }}>
-                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '6px' }}>CONTRIBUTORS</div>
-                                    {(() => {
-                                        const active = factors.filter(f => f.scored > 0).sort((a, b) => b.scored - a.scored);
-                                        if (active.length === 0) {
-                                            return <div style={{ fontFamily: MONO, fontSize: '10px', color: '#888888' }}>No active risk contributors</div>;
-                                        }
-                                        return (
-                                            <>
-                                                {active.map(f => (
-                                                    <div key={f.label} style={{ fontFamily: MONO, fontSize: '10px', color: '#888888', lineHeight: 1.6 }}>
-                                                        + {f.label} {'·'.repeat(Math.max(1, 18 - f.label.length))} {f.scored}
-                                                    </div>
-                                                ))}
-                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#C8A96E', marginTop: '6px' }}>
-                                                    Highest: {active[0].label} at {active[0].scored}/{active[0].max}
-                                                </div>
-                                            </>
-                                        );
-                                    })()}
+                                <div>
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3a3a44', letterSpacing: '0.08em', textTransform: 'uppercase' }}>USABLE STORAGE</div>
+                                    <div style={{
+                                        fontFamily: MONO, fontSize: '12px', fontWeight: 600,
+                                        color: envContext.storage_pct > 90 ? '#ef4444' : '#4ade80',
+                                    }}>
+                                        {envContext.storage_pct != null ? `${envContext.storage_pct.toFixed(2)}%` : '—'}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3a3a44', letterSpacing: '0.08em', textTransform: 'uppercase' }}>FRL (FULL LIMIT)</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#888888' }}>
+                                        {envContext.full_reservoir_level_m != null ? `${envContext.full_reservoir_level_m.toFixed(2)} m` : '—'}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3a3a44', letterSpacing: '0.08em', textTransform: 'uppercase' }}>MDDL (MIN LIMIT)</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#888888' }}>
+                                        {envContext.mddl_level_m != null ? `${envContext.mddl_level_m.toFixed(2)} m` : '—'}
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* ── PANEL 3: FACTOR BREAKDOWN (bars) ── */}
-                            <div style={{ padding: '12px 14px' }}>
-                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>FACTOR BREAKDOWN</div>
-                                {factors.map(f => (
-                                    <div key={f.label} style={{ marginBottom: '8px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                                            <span style={{ fontFamily: MONO, fontSize: '9px', color: '#666666' }}>{f.label}</span>
-                                            <span style={{ fontFamily: MONO, fontSize: '9px', color: f.scored > 0 ? '#CCCCCC' : '#333333' }}>{f.scored}/{f.max}</span>
-                                        </div>
-                                        <div style={{ height: '4px', background: '#1A1A1A', borderRadius: '1px', overflow: 'hidden' }}>
+                            <div style={{
+                                display: 'flex', justifyContent: 'space-between', fontFamily: MONO,
+                                fontSize: '7px', color: '#3a3a44', borderTop: '1px solid #1a1a1f',
+                                paddingTop: '8px', paddingLeft: '8px', letterSpacing: '0.05em',
+                            }}>
+                                <span>SOURCE: {envContext.source?.includes("OHPC") ? "OHPC" : "—"}</span>
+                                <span>UPDATED: TODAY</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Environmental Data Rows — ALIVE */}
+                    {envRows.map((r, i) => {
+                        // Determine colors based on status
+                        const isOff = r.value === '—' || r.status === 'off';
+                        const isWarn = r.status === 'warn';
+                        const isData = r.status === 'data';
+                        const isOk = r.status === 'ok';
+                        const isAccent = r.status === 'accent';
+
+                        const dotColor = isOff ? '#3a3a44'
+                            : isWarn ? '#f59e0b'
+                                : isData ? '#60a5fa'
+                                    : isOk ? '#4ade80'
+                                        : '#c8a96e';
+
+                        const glowColor = isOff ? 'transparent'
+                            : isWarn ? 'rgba(245,158,11,0.2)'
+                                : isData ? 'rgba(96,165,250,0.2)'
+                                    : isOk ? 'rgba(74,222,128,0.2)'
+                                        : 'rgba(200,169,110,0.15)';
+
+                        const valueColor = isOff ? '#3a3a44'
+                            : isWarn ? '#f59e0b'
+                                : isData ? '#60a5fa'
+                                    : isOk ? '#4ade80'
+                                        : '#c8a96e';
+
+                        const barFill = isOff ? 0
+                            : isWarn ? 75
+                                : isData ? 60
+                                    : isOk ? 100
+                                        : 50;
+
+                        return (
+                            <div key={r.label} style={{
+                                padding: '10px 12px',
+                                marginBottom: i < envRows.length - 1 ? '6px' : '0',
+                                borderRadius: '8px',
+                                background: isOff ? 'transparent' : 'rgba(255,255,255,0.015)',
+                                border: `1px solid ${isOff ? '#1a1a1f' : 'rgba(255,255,255,0.04)'}`,
+                                transition: 'all 0.2s ease',
+                            }}
+                                onMouseEnter={(e) => { if (!isOff) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; } }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = isOff ? 'transparent' : 'rgba(255,255,255,0.015)'; e.currentTarget.style.borderColor = isOff ? '#1a1a1f' : 'rgba(255,255,255,0.04)'; }}>
+
+                                {/* Top row: dot + label + value */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                    {/* Animated status dot */}
+                                    <div style={{
+                                        width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+                                        background: dotColor,
+                                        boxShadow: `0 0 8px ${glowColor}, 0 0 16px ${glowColor}`,
+                                        ...(isWarn ? { animation: 'pulse-red 2s infinite' } : {}),
+                                    }} />
+
+                                    {/* Label */}
+                                    <span style={{
+                                        fontFamily: MONO, fontSize: '9px', color: isOff ? '#3a3a44' : '#555560',
+                                        width: '70px', flexShrink: 0, letterSpacing: '0.08em', fontWeight: 500
+                                    }}>{r.label}</span>
+
+                                    {/* Value — big and colored */}
+                                    <span style={{
+                                        fontFamily: MONO, fontSize: '11px', fontWeight: 600,
+                                        flex: 1, textAlign: 'right', color: valueColor,
+                                        lineHeight: 1.4,
+                                    }}>{r.value}</span>
+                                </div>
+
+                                {/* Mini progress bar — shows "health" of this parameter */}
+                                {!isOff && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ flex: 1, height: '3px', background: '#1a1a1f', borderRadius: '2px', overflow: 'hidden' }}>
                                             <div style={{
-                                                height: '100%', borderRadius: '1px',
-                                                width: `${(f.scored / f.max) * 100}%`,
-                                                background: f.scored > 0 ? f.color : 'transparent',
-                                                transition: 'width 300ms ease',
+                                                height: '100%',
+                                                width: `${barFill}%`,
+                                                background: `linear-gradient(90deg, ${dotColor}80, ${dotColor})`,
+                                                borderRadius: '2px',
+                                                transition: 'width 0.8s ease',
                                             }} />
                                         </div>
+                                        <span style={{
+                                            fontFamily: MONO, fontSize: '7px', color: '#3a3a44',
+                                            letterSpacing: '0.05em', flexShrink: 0
+                                        }}>
+                                            {isWarn ? 'ELEVATED' : isData ? 'ACTIVE' : isOk ? 'NORMAL' : 'MONITORING'}
+                                        </span>
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        </>
-                    );
-                })()}
+                        );
+                    })}
 
+
+                    {/* Footer */}
+                    <div style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        fontFamily: MONO, fontSize: '8px', color: '#3a3a44',
+                        paddingTop: '10px', marginTop: '8px', borderTop: '1px solid #1a1a1f', letterSpacing: '0.03em',
+                    }}>
+                        <span>Source: {envContext?.source || 'Pending'}</span>
+                        {contextFetchedAt && <span>{contextFetchedAt.toISOString().slice(0, 16).replace('T', ' ')}</span>}
+                    </div>
+                </div>
+
+                {/* ═══════ FETCH BUTTON (REDESIGNED) ═══════ */}
+                {assetLat && assetLon && !envContext && (
+                    <div style={{ padding: '0 16px 16px' }}>
+                        <button
+                            onClick={fetchContext}
+                            disabled={fetchingContext}
+                            style={{
+                                width: '100%', padding: '10px', background: 'transparent',
+                                border: '1px solid #25252b', borderRadius: '8px', color: '#555560',
+                                fontFamily: MONO, fontSize: '10px', letterSpacing: '0.1em',
+                                cursor: fetchingContext ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.25s ease', position: 'relative', overflow: 'hidden',
+                                opacity: fetchingContext ? 0.5 : 1,
+                            }}
+                            onMouseEnter={(e) => { if (!fetchingContext) { e.target.style.borderColor = '#c8a96e'; e.target.style.color = '#c8a96e'; } }}
+                            onMouseLeave={(e) => { e.target.style.borderColor = '#25252b'; e.target.style.color = '#555560'; }}
+                        >
+                            {fetchingContext ? 'FETCHING...' : 'FETCH CONTEXT'}
+                        </button>
+                    </div>
+                )}
 
             </div>
 
@@ -550,137 +613,69 @@ export default function InfrastructurePanel({
                 height: '80px', background: '#111111',
                 borderTop: '1px solid #2A2A2A', zIndex: 100,
                 display: 'flex', alignItems: 'center',
-                padding: '0 20px', gap: '24px',
-                boxSizing: 'border-box',
+                padding: '0 20px', gap: '24px', boxSizing: 'border-box',
             }}>
-                {/* LEFT GROUP: Master + Slave + Pipeline */}
+                {/* LEFT: File + Pipeline */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
-                    {/* MASTER / GNUW FILE */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', flexShrink: 0 }}>
-                            {isGunw ? 'GNUW FILE' : 'MASTER'}
-                        </span>
+                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', flexShrink: 0 }}>{isGunw ? 'GUNW FILE' : 'MASTER'}</span>
                         {editingMaster ? (
-                            <input
-                                autoFocus
-                                type="text"
-                                value={localFilePath}
-                                onChange={e => setLocalFilePath(e.target.value)}
-                                onBlur={() => setEditingMaster(false)}
-                                onKeyDown={e => { if (e.key === 'Enter') setEditingMaster(false); }}
+                            <input autoFocus type="text" value={localFilePath} onChange={e => setLocalFilePath(e.target.value)} onBlur={() => setEditingMaster(false)} onKeyDown={e => { if (e.key === 'Enter') setEditingMaster(false); }}
                                 style={{ width: '220px', padding: '4px 8px', background: C.bg2, border: `1px solid ${C.bg3}`, color: '#F0F0F0', fontFamily: MONO, fontSize: '11px', outline: 'none', borderRadius: '2px', boxSizing: 'border-box' }}
                             />
                         ) : (
-                            <span
-                                style={{ fontFamily: MONO, fontSize: '11px', color: '#F0F0F0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}
-                                title={localFilePath}
-                            >
-                                {masterFilename || '—'}
-                            </span>
+                            <span style={{ fontFamily: MONO, fontSize: '11px', color: '#F0F0F0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }} title={localFilePath}>{masterFilename || '—'}</span>
                         )}
-                        <button
-                            onClick={() => setEditingMaster(true)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#555555', display: 'flex', alignItems: 'center' }}
-                            onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#555555'}
-                            title="Edit file path"
-                        >
-                            <FolderOpen size={14} />
-                        </button>
-                        <label
-                            style={{ display: 'flex', alignItems: 'center', cursor: uploading ? 'not-allowed' : 'pointer', padding: '2px', color: '#555555' }}
-                            onMouseEnter={e => !uploading && (e.currentTarget.style.color = '#F0F0F0')}
-                            onMouseLeave={e => !uploading && (e.currentTarget.style.color = '#555555')}
-                            title="Upload local HDF5 product"
-                        >
+                        <button onClick={() => setEditingMaster(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#555555', display: 'flex', alignItems: 'center' }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'} onMouseLeave={e => e.currentTarget.style.color = '#555555'} title="Edit file path"><FolderOpen size={14} /></button>
+                        <label style={{ display: 'flex', alignItems: 'center', cursor: uploading ? 'not-allowed' : 'pointer', padding: '2px', color: '#555555' }}
+                            onMouseEnter={e => !uploading && (e.currentTarget.style.color = '#F0F0F0')} onMouseLeave={e => !uploading && (e.currentTarget.style.color = '#555555')} title="Upload local HDF5 product">
                             <Upload size={14} />
-                            <input
-                                type="file"
-                                accept=".h5,.he5"
-                                onChange={handleUpload}
-                                disabled={uploading}
-                                style={{ display: 'none' }}
-                            />
+                            <input type="file" accept=".h5,.he5" onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
                         </label>
-                        {uploading && (
-                            <span style={{ fontFamily: MONO, fontSize: '9px', color: '#E6A817', marginLeft: '4px' }}>
-                                UPLOADING...
-                            </span>
-                        )}
+                        {uploading && <span style={{ fontFamily: MONO, fontSize: '9px', color: '#E6A817', marginLeft: '4px' }}>UPLOADING...</span>}
                     </div>
 
                     {!isGunw && (
                         <>
-                            {/* Separator */}
                             <div style={{ width: '1px', height: '32px', background: '#2A2A2A', flexShrink: 0 }} />
-
-                            {/* SLAVE */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                                 <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', flexShrink: 0 }}>SLAVE</span>
                                 {editingSlave ? (
-                                    <input
-                                        autoFocus
-                                        type="text"
-                                        value={slaveFilePath}
-                                        onChange={e => setSlaveFilePath(e.target.value)}
-                                        onBlur={() => setEditingSlave(false)}
-                                        onKeyDown={e => { if (e.key === 'Enter') setEditingSlave(false); }}
+                                    <input autoFocus type="text" value={slaveFilePath} onChange={e => setSlaveFilePath(e.target.value)} onBlur={() => setEditingSlave(false)} onKeyDown={e => { if (e.key === 'Enter') setEditingSlave(false); }}
                                         style={{ width: '220px', padding: '4px 8px', background: C.bg2, border: `1px solid ${C.bg3}`, color: '#F0F0F0', fontFamily: MONO, fontSize: '11px', outline: 'none', borderRadius: '2px', boxSizing: 'border-box' }}
                                     />
                                 ) : (
-                                    <span
-                                        style={{ fontFamily: MONO, fontSize: '11px', color: slaveFilename ? '#888888' : '#555555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}
-                                        title={slaveFilePath}
-                                    >
-                                        {slaveFilename || 'SYNTHETIC'}
-                                    </span>
+                                    <span style={{ fontFamily: MONO, fontSize: '11px', color: slaveFilename ? '#888888' : '#555555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }} title={slaveFilePath}>{slaveFilename || 'SYNTHETIC'}</span>
                                 )}
-                                <button
-                                    onClick={() => setEditingSlave(true)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#555555', display: 'flex', alignItems: 'center' }}
-                                    onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'}
-                                    onMouseLeave={e => e.currentTarget.style.color = '#555555'}
-                                    title="Edit slave file path"
-                                >
-                                    <FolderOpen size={14} />
-                                </button>
+                                <button onClick={() => setEditingSlave(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#555555', display: 'flex', alignItems: 'center' }}
+                                    onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'} onMouseLeave={e => e.currentTarget.style.color = '#555555'} title="Edit slave file path"><FolderOpen size={14} /></button>
                             </div>
                         </>
                     )}
 
-                    {/* Separator */}
                     <div style={{ width: '1px', height: '32px', background: '#2A2A2A', flexShrink: 0 }} />
-
-                    {/* PIPELINE */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', flexShrink: 0 }}>PIPELINE</span>
                         <span style={{ fontFamily: MONO, fontSize: '11px', color: '#C8A96E' }}>InSAR Analysis</span>
                     </div>
                 </div>
 
-                {/* CENTER GROUP: Layer tabs */}
-                <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '16px' }}>
-                    {['amplitude', 'deformation', 'coherence'].map((layer) => {
-                        const isActive = activeLayer === layer;
+                {/* CENTER: Layer checkboxes */}
+                <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '20px' }}>
+                    {layerOptions.map(({ key, label }) => {
+                        const checked = visibleLayers[key];
                         return (
-                            <button
-                                key={layer}
-                                onClick={() => setActiveLayer(layer)}
-                                style={{
-                                    fontFamily: MONO, fontSize: '11px',
-                                    background: 'none', border: 'none',
-                                    padding: '4px 0', cursor: 'pointer',
-                                    color: isActive ? '#F0F0F0' : '#555555',
-                                    borderBottom: isActive ? '2px solid #C8A96E' : '2px solid transparent',
-                                }}
-                            >
-                                {layer.toUpperCase()}
-                            </button>
+                            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', opacity: checked ? 1 : 0.7 }}>
+                                <div style={{ width: '10px', height: '10px', border: `1px solid ${checked ? '#C8A96E' : '#404040'}`, background: checked ? '#C8A96E' : 'transparent', flexShrink: 0 }} />
+                                <span style={{ fontFamily: MONO, fontSize: '10px', color: checked ? '#F0F0F0' : '#555555' }}>{label}</span>
+                                <input type="checkbox" checked={checked} onChange={() => setVisibleLayers(prev => ({ ...prev, [key]: !prev[key] }))} style={{ display: 'none' }} />
+                            </label>
                         );
                     })}
                 </div>
 
-                {/* RIGHT GROUP: Start / Processing */}
+                {/* RIGHT: Start button */}
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
                     {runningJobs.length > 0 ? (
                         <>
@@ -688,102 +683,294 @@ export default function InfrastructurePanel({
                             <span style={{ fontFamily: MONO, fontSize: '11px', color: '#555555' }}>{formatElapsed(elapsed[runningJobs[0]?.id])}</span>
                         </>
                     ) : (
-                        <button
-                            onClick={startJob}
-                            disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline}
-                            style={{
-                                background: '#C8A96E', color: '#0A0A0A',
-                                fontFamily: MONO, fontSize: '12px', fontWeight: 600,
-                                padding: '10px 24px', border: 'none', borderRadius: '2px',
-                                cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 'not-allowed' : 'pointer',
-                                opacity: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 0.3 : 1,
-                            }}
-                        >
+                        <button onClick={startJob} disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline}
+                            style={{ background: '#C8A96E', color: '#0A0A0A', fontFamily: MONO, fontSize: '12px', fontWeight: 600, padding: '10px 24px', border: 'none', borderRadius: '2px', cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 'not-allowed' : 'pointer', opacity: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 0.3 : 1 }}>
                             START PROCESSING
                         </button>
                     )}
                 </div>
             </div>
 
-            {(() => {
-                const showStructural = (showResults || localFilePath) && activeView === 'STRUCTURAL';
-                const showFloodRight = activeView === 'FLOOD RISK' && !!envContext;
-                const panelVisible = showStructural || showFloodRight;
+            {/* ════════════════════════════════════════════════════
+                ZONE 2: RIGHT PANEL (320px)
+                ════════════════════════════════════════════════════ */}
+            {(s || localFilePath || (assetLat && assetLon)) && (
+                <div style={{
+                    position: 'absolute', top: '42px', right: 0, bottom: '80px',
+                    width: '320px', background: '#111111',
+                    borderLeft: '1px solid #2A2A2A', zIndex: 100,
+                    overflowY: 'auto', padding: '16px', boxSizing: 'border-box',
+                }}>
+                    {selectedPoint ? (
+                        <>
+                            <div
+                                onClick={() => setSelectedPoint(null)}
+                                style={{ fontFamily: MONO, fontSize: '10px', color: '#C8A96E', cursor: 'pointer', marginBottom: '16px', display: 'inline-block' }}
+                                onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'}
+                                onMouseLeave={e => e.currentTarget.style.color = '#C8A96E'}
+                            >
+                                ← BACK TO OVERVIEW
+                            </div>
 
-                return (
-                    <div style={{
-                        position: 'absolute', top: '42px', right: 0, bottom: '80px',
-                        width: '320px', background: '#111111',
-                        borderLeft: '1px solid #2A2A2A', zIndex: 100,
-                        transform: panelVisible ? 'translateX(0)' : 'translateX(100%)',
-                        transition: 'transform 200ms ease',
-                        overflowY: 'auto', padding: '16px',
-                        boxSizing: 'border-box',
-                    }}>
-                        {/* ── STRUCTURAL ANALYSIS (existing) ── */}
-                        {showStructural && (() => {
-                            const s = viewingResult?.insarReport?.summary;
-                            const topScatterers = s ? (viewingResult?.insarReport?.scatterers || [])
-                                .sort((a, b) => Math.abs(b.displacement_mm) - Math.abs(a.displacement_mm))
-                                .slice(0, 10) : [];
-                            const dispMagnitude = s ? Math.abs(s.max_displacement_mm || 0) : 0;
-                            const dispColorVal = dispMagnitude < 5 ? C.stable : dispMagnitude < 10 ? C.caution : dispMagnitude < 20 ? C.alert : C.critical;
+                            <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', letterSpacing: '0.1em', marginBottom: '12px' }}>PERSISTENT SCATTERER</div>
 
-                            return (
+                            {/* POINT METRICS */}
+                            <div style={{ marginBottom: '16px' }}>
+                                {[
+                                    { label: 'DISPLACEMENT', value: `${selectedPoint.displacement_mm?.toFixed(2) ?? '—'} mm`, color: sevColor(selectedPoint.severity) },
+                                    { label: 'COHERENCE', value: `${selectedPoint.coherence?.toFixed(2) ?? '—'}`, color: '#F0F0F0' },
+                                    { label: 'UNWRAPPED PHASE', value: `${selectedPoint.unwrapped_phase_rad?.toFixed(2) ?? '—'} rad`, color: '#F0F0F0' },
+                                    { label: 'CLASSIFICATION', value: selectedPoint.severity || '—', color: sevColor(selectedPoint.severity) },
+                                ].map(row => (
+                                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
+                                        <span style={{ color: '#555555' }}>{row.label}</span>
+                                        <span style={{ color: row.color }}>{row.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
+
+                            {/* PROCESSING PIPELINE */}
+                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>PROCESSING PIPELINE</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                                {[
+                                    'Raw Phase',
+                                    'Water Masking',
+                                    'Connected Components',
+                                    'Quadratic Deramp (3 iter, 289 rejected)',
+                                    'Median Reference',
+                                    'LOS Conversion (λ = 23.8 cm)',
+                                    'MAD Classification (σ = 2.5)',
+                                ].map((step, i) => (
+                                    <div key={step} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{
+                                            width: '5px', height: '5px', borderRadius: '50%',
+                                            background: i < 6 ? '#4CAF50' : sevColor(selectedPoint.severity),
+                                            flexShrink: 0,
+                                            boxShadow: i < 6 ? '0 0 4px #4CAF5040' : `0 0 4px ${sevColor(selectedPoint.severity)}40`,
+                                        }} />
+                                        <span style={{ fontFamily: MONO, fontSize: '10px', color: i < 6 ? '#888888' : '#CCCCCC' }}>{step}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
+
+                            {/* COORDINATES */}
+                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>COORDINATES</div>
+                            <div style={{ marginBottom: '16px' }}>
+                                {[
+                                    { label: 'LAT', value: `${selectedPoint.lat?.toFixed(4) ?? '—'}°N` },
+                                    { label: 'LON', value: `${selectedPoint.lon?.toFixed(4) ?? '—'}°E` },
+                                    { label: 'PIXEL X', value: `${selectedPoint.x ?? '—'}` },
+                                    { label: 'PIXEL Y', value: `${selectedPoint.y ?? '—'}` },
+                                ].map(row => (
+                                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
+                                        <span style={{ color: '#555555' }}>{row.label}</span>
+                                        <span style={{ color: '#CCCCCC' }}>{row.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* ── SATELLITE PASS ── */}
+                            {assetLat && assetLon && assetName && (
+                                <div style={{
+                                    background: 'linear-gradient(180deg, #111114 0%, rgba(200,169,110,0.01) 100%)',
+                                    border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
+                                    marginBottom: '14px', position: 'relative'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                        <span style={{ fontSize: '11px', color: '#c8a96e' }}>🛰</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#555560' }}>ORBITAL DATA / PASS</span>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        {telemetryRow({ label: 'SATELLITE', value: 'NISAR (NASA/ISRO)', dotColor: '#4CAF50' })}
+                                        {telemetryRow({ label: 'PASS DIRECTION', value: parsedMeta?.direction || 'Descending', dotColor: '#c8a96e' })}
+                                    </div>
+
+                                    {/* Timeline */}
+                                    {masterDateStr && slaveDateStr ? (
+                                        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #1a1a1f' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', padding: '0 8px' }}>
+                                                {/* Master Point */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
+                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#c8a96e', border: '2px solid #0a0a0a', boxShadow: '0 0 8px rgba(200,169,110,0.4)' }} />
+                                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#e8e8ec', marginTop: '4px', fontWeight: 600 }}>{masterDateStr}</div>
+                                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', letterSpacing: '0.05em' }}>MASTER</div>
+                                                </div>
+
+                                                {/* Animated Flow Track */}
+                                                <div style={{
+                                                    flex: 1, height: '2px', background: '#1a1a1f', margin: '0 8px',
+                                                    position: 'relative', top: '-10px', overflow: 'hidden', borderRadius: '2px'
+                                                }}>
+                                                    <div style={{
+                                                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                                        background: 'linear-gradient(90deg, transparent, #c8a96e, transparent)',
+                                                        animation: 'timeline-flow 2s infinite linear'
+                                                    }} />
+                                                </div>
+
+                                                {/* Slave Point */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
+                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4CAF50', border: '2px solid #0a0a0a', boxShadow: '0 0 8px rgba(76,175,80,0.4)' }} />
+                                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#e8e8ec', marginTop: '4px', fontWeight: 600 }}>{slaveDateStr}</div>
+                                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', letterSpacing: '0.05em' }}>SLAVE</div>
+                                                </div>
+                                            </div>
+
+                                            {baselineDays != null && (
+                                                <div style={{ textAlign: 'center', marginTop: '10px', fontFamily: MONO, fontSize: '9px' }}>
+                                                    <span style={{ color: '#555560' }}>TEMPORAL BASELINE: </span>
+                                                    <span style={{ color: '#c8a96e', fontWeight: 600 }}>{baselineDays} DAYS</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #1a1a1f' }}>
+                                            {telemetryRow({
+                                                label: 'ACQ DATE',
+                                                value: slaveDateStr || parsedMeta?.acquisitionDate || '—',
+                                                dotColor: (slaveDateStr || parsedMeta?.acquisitionDate) ? '#4CAF50' : '#333333',
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ── STRUCTURAL HEALTH ── */}
+                            {s ? (
+                                <div style={{
+                                    background: 'linear-gradient(180deg, #111114 0%, rgba(255,255,255,0.01) 100%)',
+                                    border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
+                                    marginBottom: '14px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                        <span style={{ fontSize: '11px', color: '#c8a96e' }}>📈</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#555560' }}>STRUCTURAL DISPLACEMENT</span>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555560' }}>MEDIAN LOS</span>
+                                            <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 600, color: '#e8e8ec' }}>{s.median_displacement_mm?.toFixed(1) ?? '—'} mm</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555560' }}>MAX DEFORMATION</span>
+                                            <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 600, color: (s.max_displacement_mm || 0) > 30 ? '#ef4444' : '#e8e8ec' }}>{s.max_displacement_mm?.toFixed(1) ?? '—'} mm</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555560' }}>SCATTERERS (PS)</span>
+                                            <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 600, color: '#7eb8d4' }}>{s.total_ps_points ?? '—'}</span>
+                                        </div>
+
+                                        <div style={{ height: '1px', background: '#1a1a1f', margin: '4px 0' }} />
+
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555560' }}>MEAN COHERENCE</span>
+                                                <span style={{ fontFamily: MONO, fontSize: '10px', fontWeight: 600, color: '#e8e8ec' }}>{s.mean_coherence?.toFixed(2) ?? '—'}</span>
+                                            </div>
+                                            {s.mean_coherence != null && (
+                                                <div style={{ height: '3px', background: '#1a1a1f', borderRadius: '2px', overflow: 'hidden' }}>
+                                                    <div style={{
+                                                        height: '100%',
+                                                        width: `${s.mean_coherence * 100}%`,
+                                                        background: s.mean_coherence > 0.6 ? '#4ade80' : s.mean_coherence > 0.4 ? '#f59e0b' : '#ef4444',
+                                                        borderRadius: '2px'
+                                                    }} />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555560' }}>RELIABLE PIXELS</span>
+                                                <span style={{ fontFamily: MONO, fontSize: '10px', fontWeight: 600, color: '#e8e8ec' }}>{s.reliable_pct != null ? `${s.reliable_pct.toFixed(0)}%` : '—'}</span>
+                                            </div>
+                                            {s.reliable_pct != null && (
+                                                <div style={{ height: '3px', background: '#1a1a1f', borderRadius: '2px', overflow: 'hidden' }}>
+                                                    <div style={{
+                                                        height: '100%',
+                                                        width: `${s.reliable_pct}%`,
+                                                        background: s.reliable_pct > 80 ? '#4ade80' : s.reliable_pct > 50 ? '#f59e0b' : '#ef4444',
+                                                        borderRadius: '2px'
+                                                    }} />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (assetLat && assetLon && assetName) && (
+                                <div style={{
+                                    background: 'linear-gradient(180deg, #111114 0%, rgba(255,255,255,0.01) 100%)',
+                                    border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
+                                    marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '8px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '11px', color: '#3a3a44' }}>📈</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#3a3a44' }}>STRUCTURAL DISPLACEMENT</span>
+                                    </div>
+                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555560', marginTop: '4px' }}>
+                                        No InSAR acquisition processed yet. Run processing to generate displacement metrics.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ── ALERTS ── */}
+                            {s && (
+                                <div style={{ marginBottom: '14px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                        <span style={{ fontSize: '11px', color: '#c8a96e' }}>⚠️</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#555560' }}>ACTIVE ALERTS</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        {alerts.slice(0, 3).map((a, i) => (
+                                            <div key={i} style={{
+                                                display: 'flex', gap: '10px', alignItems: 'flex-start',
+                                                padding: '10px 12px', background: '#111114',
+                                                border: '1px solid #1a1a1f', borderRadius: '8px',
+                                                borderLeft: `3px solid ${a.severity === 'CRITICAL' ? C.critical : a.severity === 'ALERT' ? C.alert : a.severity === 'CAUTION' ? C.caution : C.stable}`
+                                            }}>
+                                                <span style={pillStyle(a.severity)}>{a.severity}</span>
+                                                <span style={{ fontFamily: MONO, fontSize: '10px', color: '#a8a8b2', lineHeight: 1.4, flex: 1 }}>{a.message}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Divider line before analysis sections */}
+                            {s && <div style={{ height: '1px', background: '#1a1a1f', margin: '18px 0' }} />}
+
+                            {s && (
                                 <>
                                     <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', letterSpacing: '0.1em', marginBottom: '12px' }}>STRUCTURAL ANALYSIS</div>
 
                                     {/* HEALTH MATRIX */}
-                                    {s && (
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#2A2A2A', border: '1px solid #2A2A2A', marginBottom: '16px' }}>
-                                            <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>STABLE</div>
-                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.stable }}>{s.stable_count}</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#2A2A2A', border: '1px solid #2A2A2A', marginBottom: '16px' }}>
+                                        {[
+                                            { label: 'STABLE', value: s.stable_count, color: C.stable },
+                                            { label: 'CAUTION', value: s.caution_count, color: C.caution },
+                                            { label: 'ALERT', value: s.alert_count, color: C.alert },
+                                            { label: 'CRITICAL', value: s.critical_count, color: C.critical, highlight: s.critical_count > 0 },
+                                        ].map(cell => (
+                                            <div key={cell.label} style={{ background: cell.highlight ? C.bg1 : '#111111', padding: '8px', textAlign: 'center', border: cell.highlight ? `1px solid ${C.critical}` : 'none' }}>
+                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>{cell.label}</div>
+                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: cell.color }}>{cell.value}</div>
                                             </div>
-                                            <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>CAUTION</div>
-                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.caution }}>{s.caution_count}</div>
-                                            </div>
-                                            <div style={{ background: '#111111', padding: '8px', textAlign: 'center' }}>
-                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>ALERT</div>
-                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.alert }}>{s.alert_count}</div>
-                                            </div>
-                                            <div style={{ background: C.bg1, padding: '8px', textAlign: 'center', border: s.critical_count > 0 ? `1px solid ${C.critical}` : 'none' }}>
-                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>CRITICAL</div>
-                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: C.critical }}>{s.critical_count}</div>
-                                            </div>
-                                        </div>
-                                    )}
+                                        ))}
+                                    </div>
 
-                                    {/* DIVIDER */}
-                                    {s && <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />}
-
-                                    {/* Displacement stats */}
-                                    {s && (
-                                        <div style={{ marginBottom: '16px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                                <span style={{ color: '#555555' }}>MAX DISPLACEMENT</span>
-                                                <span>
-                                                    <span style={{ color: dispColorVal }}>{s.max_displacement_mm?.toFixed(2)} mm</span>
-                                                    {(s.max_displacement_mm || 0) < 0 && <span style={{ color: '#E6A817', marginLeft: '4px' }}>(SUBSIDENCE)</span>}
-                                                </span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                                <span style={{ color: '#555555' }}>MEDIAN</span>
-                                                <span style={{ color: C.text }}>{s.median_displacement_mm?.toFixed(2)} mm</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1A1A1A', fontFamily: MONO, fontSize: '11px' }}>
-                                                <span style={{ color: C.textDim }}>TOTAL PS POINTS</span>
-                                                <span style={{ color: C.text }}>{s.total_ps_points}</span>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* DIVIDER */}
-                                    {s && <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />}
+                                    {/* Divider */}
+                                    <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
 
                                     {/* TOP 10 SCATTERERS */}
-                                    {s && topScatterers.length > 0 && (
+                                    {topScatterers.length > 0 && (
                                         <div style={{ marginBottom: '16px' }}>
                                             <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', display: 'flex', paddingBottom: '4px', borderBottom: '1px solid #1A1A1A' }}>
                                                 <div style={{ width: '20px' }}>#</div>
@@ -792,7 +979,13 @@ export default function InfrastructurePanel({
                                                 <div style={{ width: '60px' }}>SEV</div>
                                             </div>
                                             {topScatterers.map((pt, idx) => (
-                                                <div key={idx} style={{ fontFamily: MONO, fontSize: '10px', display: 'flex', padding: '4px 0', borderBottom: '1px solid #1A1A1A' }}>
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => setSelectedPoint(pt)}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#1A1A1A'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                    style={{ fontFamily: MONO, fontSize: '10px', display: 'flex', padding: '4px 0', borderBottom: '1px solid #1A1A1A', cursor: 'pointer' }}
+                                                >
                                                     <div style={{ width: '20px', color: '#888888' }}>{idx + 1}</div>
                                                     <div style={{ flex: 1, color: sevColor(pt.severity) }}>{pt.displacement_mm?.toFixed(2)}</div>
                                                     <div style={{ width: '40px', color: C.text }}>{pt.coherence?.toFixed(2)}</div>
@@ -802,215 +995,27 @@ export default function InfrastructurePanel({
                                         </div>
                                     )}
 
-                                    {/* DIVIDER */}
-                                    {s && <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />}
-
-                                    {/* ACQUISITION METADATA */}
-                                    {localFilePath && (() => {
-                                        const filename = (viewingResult?.url || localFilePath || '').toUpperCase();
-                                        let productVal = 'NISAR Product';
-                                        if (filename.includes('_GUNW_')) productVal = 'GUNW — Pre-computed InSAR';
-                                        else if (filename.includes('_GCOV_')) productVal = 'GCOV — Geocoded Covariance';
-                                        else if (filename.includes('_RSLC_')) productVal = 'RSLC — Range SLC';
-
-                                        return (
-                                            <div>
-                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>ACQUISITION METADATA</div>
-                                                {[
-                                                    { label: 'SATELLITE', value: 'NISAR (NASA/ISRO)' },
-                                                    { label: 'PIPELINE', value: (viewingResult?.pipeline || 'insar') === 'insar' ? 'InSAR Analysis' : 'SAR Focus' },
-                                                    { label: 'PRODUCT', value: productVal },
-                                                    { label: 'BAND', value: 'L-Band (1.26 GHz)' },
-                                                    { label: 'ORBIT', value: 'Descending' },
-                                                ].map(({ label, value }) => (
-                                                    <div key={label} style={{
-                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                        padding: '6px 0',
-                                                        borderBottom: '1px solid #161616',
-                                                    }}>
-                                                        <span style={{ fontFamily: MONO, fontSize: '11px', color: '#555555' }}>{label}</span>
-                                                        <span style={{ fontFamily: MONO, fontSize: '11px', color: '#F0F0F0', textAlign: 'right' }}>{value || '—'}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        );
-                                    })()}
+                                    {/* Divider */}
+                                    <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
                                 </>
-                            );
-                        })()}
+                            )}
 
-                        {/* ── FLOOD RISK FACTOR ANALYSIS ── */}
-                        {showFloodRight && (() => {
-                            const insarSummary = viewingResult?.insarReport?.summary;
-
-                            // Recompute factor scores (same logic as left panel)
-                            const storagePct = envContext?.storage_pct;
-                            let reservoirScore = 0;
-                            if (storagePct > 95) reservoirScore = 30;
-                            else if (storagePct > 85) reservoirScore = 20;
-                            else if (storagePct > 70) reservoirScore = 10;
-
-                            let rainfallScore = 0;
-                            const rainfall = parseFloat(envContext?.rainfall);
-                            if (!isNaN(rainfall)) {
-                                if (rainfall > 200) rainfallScore = 30;
-                                else if (rainfall > 100) rainfallScore = 20;
-                                else if (rainfall > 50) rainfallScore = 10;
-                            }
-
-                            let soilScore = 0;
-                            const soilText = envContext?.soil_moisture?.toLowerCase() || '';
-                            if (soilText.includes('saturated')) soilScore = 20;
-                            else if (soilText.includes('high') || soilText.includes('anomaly')) soilScore = 12;
-                            else if (soilText.includes('moist')) soilScore = 6;
-
-                            let seismicScore = 0;
-                            if (envContext?.seismic?.toLowerCase().includes('events')) seismicScore = 10;
-
-                            let insarScore = 0;
-                            if (insarSummary?.critical_count > 0) insarScore = 10;
-                            else if (insarSummary?.alert_count > 0) insarScore = 5;
-
-                            const score = reservoirScore + rainfallScore + soilScore + seismicScore + insarScore;
-
-                            const factors = [
-                                { label: 'RESERVOIR', scored: reservoirScore, max: 30, color: '#7EB8D4', raw: envContext?.reservoir || '—' },
-                                { label: 'RAINFALL', scored: rainfallScore, max: 30, color: '#4A8FA8', raw: envContext?.rainfall || '—' },
-                                { label: 'SOIL', scored: soilScore, max: 20, color: '#C8A96E', raw: envContext?.soil_moisture || '—' },
-                                { label: 'SEISMIC', scored: seismicScore, max: 10, color: '#9B8EC4', raw: envContext?.seismic || '—' },
-                                { label: 'INSAR', scored: insarScore, max: 10, color: '#4CAF50', raw: insarSummary ? `${insarSummary.total_ps_points} PS pts` : '—' },
-                            ];
-
-                            const totalMax = 100;
-
-                            return (
-                                <>
-                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '14px' }}>FACTOR ANALYSIS</div>
-
-                                    {/* ── DONUT/RING CHART ── */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '16px' }}>
-                                        <svg width="120" height="120" viewBox="0 0 120 120">
-                                            {/* Background circle */}
-                                            <circle cx="60" cy="60" r="45" fill="none" stroke="#1A1A1A" strokeWidth="12" />
-                                            {/* Segments */}
-                                            {(() => {
-                                                let accumulatedLength = 0;
-                                                const circumference = 282.7;
-                                                return factors.map(f => {
-                                                    const segmentLength = (f.scored / 100) * circumference;
-                                                    const dashOffset = -accumulatedLength;
-                                                    accumulatedLength += segmentLength;
-
-                                                    if (f.scored === 0) return null;
-
-                                                    return (
-                                                        <circle
-                                                            key={f.label}
-                                                            cx="60"
-                                                            cy="60"
-                                                            r="45"
-                                                            fill="none"
-                                                            stroke={f.color}
-                                                            strokeWidth="12"
-                                                            strokeDasharray={`${segmentLength} ${circumference}`}
-                                                            strokeDashoffset={dashOffset}
-                                                            transform="rotate(-90 60 60)"
-                                                            style={{ transition: 'stroke-dashoffset 300ms ease' }}
-                                                        />
-                                                    );
-                                                });
-                                            })()}
-                                            {/* Center text */}
-                                            <text x="60" y="56" textAnchor="middle" dominantBaseline="middle" style={{ fontFamily: MONO, fill: '#F0F0F0', fontSize: '18px', fontWeight: 600 }}>
-                                                {score}
-                                            </text>
-                                            <text x="60" y="74" textAnchor="middle" dominantBaseline="middle" style={{ fontFamily: MONO, fill: '#555555', fontSize: '11px' }}>
-                                                /100
-                                            </text>
-                                        </svg>
-
-                                        {/* Legend below chart */}
-                                        <div style={{ width: '100%', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                            {factors.map(f => (
-                                                <div key={f.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: MONO, fontSize: '10px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: f.color }} />
-                                                        <span style={{ color: '#888888' }}>{f.label}</span>
-                                                    </div>
-                                                    <span style={{ color: f.scored > 0 ? '#F0F0F0' : '#333333', fontWeight: f.scored > 0 ? 600 : 400 }}>{f.scored}/{f.max}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
-
-                                    {/* ── SENSOR STATUS GRID ── */}
-                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>SENSOR STATUS</div>
-                                    {factors.map(f => {
-                                        const isActive = f.raw !== '—';
-                                        return (
-                                            <div key={f.label} style={{
-                                                display: 'flex', alignItems: 'center',
-                                                padding: '8px 0',
-                                                borderBottom: '1px solid #161616',
-                                            }}>
-                                                <div style={{
-                                                    width: '5px', height: '5px', borderRadius: '50%',
-                                                    background: isActive ? f.color : '#333333',
-                                                    flexShrink: 0, marginRight: '8px',
-                                                    boxShadow: isActive ? `0 0 4px ${f.color}40` : 'none',
-                                                }} />
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#666666', marginBottom: '2px' }}>{f.label}</div>
-                                                    <div style={{
-                                                        fontFamily: MONO, fontSize: '10px',
-                                                        color: isActive ? '#CCCCCC' : '#333333',
-                                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                    }}>{f.raw}</div>
-                                                </div>
-                                                <div style={{
-                                                    fontFamily: MONO, fontSize: '11px', fontWeight: 600,
-                                                    color: f.scored > 0 ? f.color : '#333333',
-                                                    marginLeft: '8px', flexShrink: 0,
-                                                }}>
-                                                    +{f.scored}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-
-                                    <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
-
-                                    {/* ── WEIGHT DISTRIBUTION ── */}
-                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>WEIGHT DISTRIBUTION</div>
-                                    {factors.map(f => (
-                                        <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                                            <span style={{ fontFamily: MONO, fontSize: '8px', color: '#555555', width: '56px', flexShrink: 0 }}>{f.label}</span>
-                                            <div style={{ flex: 1, height: '3px', background: '#1A1A1A', borderRadius: '1px', overflow: 'hidden' }}>
-                                                <div style={{
-                                                    height: '100%', borderRadius: '1px',
-                                                    width: `${(f.max / totalMax) * 100}%`,
-                                                    background: `${f.color}60`,
-                                                    position: 'relative',
-                                                }}>
-                                                    <div style={{
-                                                        position: 'absolute', left: 0, top: 0, height: '100%',
-                                                        width: f.max > 0 ? `${(f.scored / f.max) * 100}%` : '0%',
-                                                        background: f.color, borderRadius: '1px',
-                                                        transition: 'width 300ms ease',
-                                                    }} />
-                                                </div>
-                                            </div>
-                                            <span style={{ fontFamily: MONO, fontSize: '8px', color: '#666666', width: '28px', textAlign: 'right', flexShrink: 0 }}>{f.max}pt</span>
+                            {/* ACQUISITION METADATA */}
+                            {localFilePath && (
+                                <div>
+                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>ACQUISITION METADATA</div>
+                                    {acquisitionRows.map(({ label, value }) => (
+                                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #161616' }}>
+                                            <span style={{ fontFamily: MONO, fontSize: '11px', color: '#555555' }}>{label}</span>
+                                            <span style={{ fontFamily: MONO, fontSize: '11px', color: '#F0F0F0', textAlign: 'right' }}>{value || '—'}</span>
                                         </div>
                                     ))}
-                                </>
-                            );
-                        })()}
-                    </div>
-                );
-            })()}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
         </>
     );
 }

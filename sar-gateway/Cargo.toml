@@ -23,4 +23,6 @@ k8s-openapi = { version = "0.21", features = ["latest"] }
 schemars = "0.8"
 tokio-util = { version = "0.7", features = ["io", "io-util"] }
 urlencoding = "2.1"
+regex = "1.10"
+
 

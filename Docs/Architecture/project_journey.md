@@ -180,18 +180,20 @@ We implemented a **Cloud Optimized GeoTIFF (COG) workflow** to enable deep-zoom 
 
 ---
 
-## Phase 9: Milestone 3 — InSAR Pipeline Overhaul (In Progress)
+## Phase 9: Milestone 3 — InSAR Pipeline Overhaul (Completed)
 
 ### The Problem
-The original InSAR processing implementation lacked the robustness needed for true production workloads. Coherence estimation was $O(n^2 \cdot w^2)$, coregistration was rudimentary, and there was no noise filtering or phase unwrapping implemented.
+The original InSAR processing implementation lacked the robustness needed for true production workloads. Coherence estimation was $O(n^2 \cdot w^2)$, coregistration was rudimentary, and raw unwrapped phase from external sources (such as NASA's GUNW products) was heavily distorted by phase unwrapping errors, low-coherence water noise, and regional orbital/topographic ramps.
 
-### What We Are Building
-We are doing a massive 12-task overhaul of the InSAR pipeline in pure Rust:
+### What We Built
+We executed a complete overhaul of the InSAR and GUNW processing engine:
 1. **O(n²) Coherence Estimation**: Rewrote coherence using Summed-Area Tables (integral images) for lightning-fast performance independent of window size.
 2. **Rayon Multi-looking**: Implemented parallelized block-averaging to reduce dimensions and speckle.
 3. **Sub-pixel Coregistration**: Implemented global FFT cross-correlation with parabolic peak refinement and sinc-interpolation resampling.
 4. **Goldstein Phase Filter**: Added an adaptive spectral filter using overlap-add block processing to reduce phase noise in low-coherence regions.
-*(Tasks 5-12 including Phase Unwrapping, DEM removal, and GeoTIFF outputs are currently underway).*
+5. **Connected Components Masking**: Automatically detects the `connectedComponents` dataset in GUNW HDF5 files and masks pixels where `CC == 0` to `NaN`, effectively eliminating discrete $2\pi$ phase unwrapping jumps.
+6. **Low-Coherence Proxy Masking**: Masks out low-coherence regions ($\gamma < 0.3$), preventing decorrelation noise from open water bodies and dense vegetation from creating false displacement anomalies.
+7. **Iterative Robust Quadratic Deramping**: Implemented an iterative least-squares quadratic phase ramp fit. By utilizing a 3-iteration robust outlier rejection loop with Median Absolute Deviation (MAD) dispersion calculations ($2.5\sigma$ threshold), we successfully isolate local deformations (like reservoirs and structural movements) from the regional orbital and topographic phase ramp background.
 
 ---
 

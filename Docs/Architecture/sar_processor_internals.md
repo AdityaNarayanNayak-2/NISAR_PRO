@@ -9,18 +9,23 @@ The `sar_processor` is a stateless CLI binary. It ingests a raw SAR file (NISAR 
 ```
 lib.rs                  → Public module re-exports
 ├── io.rs               → Image encoding, GeoTIFF writer, XYZ tile generation, CLAHE + Lee filters
-├── nisar_parser.rs     → NASA NISAR HDF5 reader (RSLC/GSLC/GCOV/GUNW)
+├── nisar_parser.rs     → NASA NISAR HDF5 reader (RSLC/GSLC/GCOV/GUNW metadata extraction)
+├── gunw_parser.rs      → Geocoded Unwrapped Interferogram HDF5 parser with CC & coherence masking
 ├── safe_parser.rs      → ESA Sentinel-1 SAFE/GeoTIFF reader
 ├── rda.rs              → Range-Doppler Algorithm (Range + Azimuth compression)
 ├── rcmc.rs             → Range Cell Migration Correction (Sinc interpolation)
 ├── radar_utils.rs      → LFM chirp generation + FFTProcessor wrapper
 ├── insar.rs            → Interferogram + Coherence estimation
-├── infra_health.rs     → Persistent Scatterer analysis + displacement classification
+├── infra_health.rs     → Persistent Scatterer analysis + displacement classification + alerts
 ├── ship_detection.rs   → CA-CFAR with integral image acceleration
 ├── polsar.rs           → Pauli decomposition (HH/VV/HV → RGB)
 ├── algorithm.rs        → AMTAD multi-scale anomaly detection
 ├── smart_downloader.rs → HTTP Range-Request downloader for partial reads
 ├── isce3_ffi.rs        → Optional ISCE3 C++ FFI bridge (experimental)
+├── deramp.rs           → Iterative robust quadratic surface fitting & phase ramp removal
+├── water_mask.rs       → External SWBD and coherence-based water masking
+├── unwrap.rs           → Phase unwrapping algorithms (SNAPHU interface / minimum cost flow)
+├── topo_phase.rs       → Topographic phase correction using DEMs
 └── errors.rs           → Custom error types
 ```
 
@@ -61,12 +66,23 @@ CLI Args (clap)
 
 ## Key File Details
 
-### `nisar_parser.rs` (28 KB — largest file)
-The most complex module. Traverses NASA's deeply nested HDF5 group hierarchy to extract:
+### `nisar_parser.rs` (38 KB — largest file)
+Traverses NASA's deeply nested HDF5 group hierarchy to extract:
 - **RSLC:** `/science/LSAR/RSLC/swaths/frequency{A,B}/{HH,VV,HV,VH}` → Complex SLC arrays from compound `{r: f32, i: f32}` datatypes.
 - **GCOV:** `/science/LSAR/GCOV/grids/frequency{A,B}/` → Real-valued covariance matrices.
-- **GUNW:** `/science/LSAR/GUNW/grids/` → Pre-computed interferograms.
 - **Geolocation:** Extracts bounding boxes from `/science/LSAR/*/metadata/processingInformation/parameters/` or coordinate arrays.
+- **Metadata Extraction:** Extracts bounding polygons, temporal baselines, orbits, polarizations, track, and frame index from identification datasets.
+
+### `gunw_parser.rs` (33 KB)
+Loads and processes NASA's Geocoded Unwrapped Interferogram (GUNW) HDF5 products:
+- **Connected Components Masking**: Detects and reads the `connectedComponents` dataset. Unwrapped phase values where `connectedComponents == 0` are masked to `NaN` to filter out SNAPHU phase unwrapping failures.
+- **Low-Coherence Proxy Masking**: Masks pixels with coherence $< 0.3$ to `NaN` to exclude open water bodies and dense vegetation, eliminating massive phase unwrapping anomalies before analysis.
+- **Ionospheric Correction**: Dynamically loads and subtracts the ionosphere phase screen from the unwrapped phase.
+
+### `deramp.rs` (10 KB)
+Removes regional orbital and topographic phase ramps from unwrapped phase arrays:
+- **Least-Squares Fit**: Fits a 2D quadratic phase surface: $\phi(x,y) = a_0 + a_1 x + a_2 y + a_3 x^2 + a_4 y^2 + a_5 xy$.
+- **Iterative Robust Estimation**: Employs a 3-iteration robust loop. In each iteration, it computes residuals, calculates the robust standard deviation ($\sigma_{\text{MAD}} = 1.4826 \times \text{MAD}$), and rejects pixels with residuals $> 2.5\sigma$. This protects the fit from being biased by localized ground deformation or atmospheric turbulence.
 
 ### `rda.rs` — The Core Algorithm
 Implements the full Range-Doppler Algorithm using `rustfft`:

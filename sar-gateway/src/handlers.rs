@@ -333,6 +333,68 @@ pub async fn search_assets_handler(
     Json(assets).into_response()
 }
 
+async fn fetch_real_reservoir_data() -> Option<HashMap<String, (f64, f64, f64, f64)>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(std::time::Duration::from_secs(4))
+        .build()
+        .ok()?;
+
+    let html = client.get("https://www.ohpcltd.com/Home/Reservoir")
+        .send()
+        .await
+        .ok()?
+        .text()
+        .await
+        .ok()?;
+
+    let mut result = HashMap::new();
+
+    // Clean up HTML by replacing newlines/tabs with spaces
+    let html_clean = html.replace('\r', "").replace('\n', " ").replace('\t', " ");
+    let re_space = regex::Regex::new(r"\s+").ok()?;
+    let html_flat = re_space.replace_all(&html_clean, " ");
+
+    // Define search patterns
+    // Groups: 1=FRL, 2=MDDL, 3=CurrentLevel
+    let patterns = [
+        ("Hirakud Reservoir", r"(?i)HHEP,BURLA</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)"),
+        ("Indravati Reservoir", r"(?i)UIHEP,MUKHIGUDA</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)"),
+        ("Rengali Reservoir", r"(?i)RHEP,RENGALI</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)"),
+        ("Upper Kolab Reservoir", r"(?i)UKHEP,BARINIPUT</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)"),
+        ("Balimela Reservoir", r"(?i)BHEP,BALIMELA</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)\s*(?:Ft|M)?\s*</td>\s*<td[^>]*>([\d\.]+)"),
+    ];
+
+    for (name, pat_str) in patterns {
+        if let Ok(re) = regex::Regex::new(pat_str) {
+            if let Some(caps) = re.captures(&html_flat) {
+                let frl_raw = caps.get(1)?.as_str().parse::<f64>().ok()?;
+                let mddl_raw = caps.get(2)?.as_str().parse::<f64>().ok()?;
+                let lvl_raw = caps.get(3)?.as_str().parse::<f64>().ok()?;
+
+                // Convert feet to meters if applicable
+                let is_feet = name.contains("Hirakud") || name.contains("Balimela");
+                let unit_mult = if is_feet { 0.3048 } else { 1.0 };
+
+                let frl = frl_raw * unit_mult;
+                let mddl = mddl_raw * unit_mult;
+                let lvl = lvl_raw * unit_mult;
+
+                // Avoid division by zero
+                let pct = if (frl - mddl).abs() > 0.001 {
+                    ((lvl - mddl) / (frl - mddl) * 100.0).clamp(0.0, 100.0)
+                } else {
+                    0.0
+                };
+
+                result.insert(name.to_string(), (lvl, frl, mddl, pct));
+            }
+        }
+    }
+
+    if result.is_empty() { None } else { Some(result) }
+}
+
 pub async fn context_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
@@ -459,24 +521,44 @@ pub async fn context_handler(
         name: &'static str,
         lat: f64,
         lon: f64,
-        full_level: f64,
+        full_level: f64,  // FRL in meters
+        mddl_level: f64,  // MDDL in meters
         basin: &'static str,
     }
 
     let dams = vec![
-        ReservoirMeta { name: "Hirakud Reservoir", lat: 21.5339, lon: 83.8751, full_level: 192.02, basin: "Mahanadi" },
-        ReservoirMeta { name: "Upper Kolab Reservoir", lat: 18.7891, lon: 82.6105, full_level: 858.00, basin: "Kolab" },
-        ReservoirMeta { name: "Indravati Reservoir", lat: 19.2736, lon: 82.9972, full_level: 642.00, basin: "Indravati" },
-        ReservoirMeta { name: "Rengali Reservoir", lat: 21.1578, lon: 85.0322, full_level: 123.50, basin: "Brahmani" },
-        ReservoirMeta { name: "Balimela Reservoir", lat: 18.1478, lon: 82.1228, full_level: 462.08, basin: "Sileru" },
-        ReservoirMeta { name: "Salia Reservoir", lat: 19.7894, lon: 85.0872, full_level: 86.00, basin: "Salia" },
+        ReservoirMeta { name: "Hirakud Reservoir", lat: 21.5339, lon: 83.8751, full_level: 192.02, mddl_level: 179.83, basin: "Mahanadi" },
+        ReservoirMeta { name: "Upper Kolab Reservoir", lat: 18.7891, lon: 82.6105, full_level: 858.00, mddl_level: 844.00, basin: "Kolab" },
+        ReservoirMeta { name: "Indravati Reservoir", lat: 19.2736, lon: 82.9972, full_level: 642.00, mddl_level: 625.00, basin: "Indravati" },
+        ReservoirMeta { name: "Rengali Reservoir", lat: 21.1578, lon: 85.0322, full_level: 123.50, mddl_level: 109.72, basin: "Brahmani" },
+        ReservoirMeta { name: "Balimela Reservoir", lat: 18.1478, lon: 82.1228, full_level: 462.08, mddl_level: 438.91, basin: "Sileru" },
+        ReservoirMeta { name: "Salia Reservoir", lat: 19.7894, lon: 85.0872, full_level: 86.00, mddl_level: 75.00, basin: "Salia" },
     ];
+
+    // Fetch live reservoir levels from OHPC
+    let live_data = fetch_real_reservoir_data().await;
+
+    let mut used_live = false;
+    let mut live_lvl = 0.0;
+    let mut live_frl = 0.0;
+    let mut live_mddl = 0.0;
+    let mut live_pct = 0.0;
 
     let mut matched_dam = None;
     for dam in &dams {
         let dist = ((dam.lat - lat_v).powi(2) + (dam.lon - lon_v).powi(2)).sqrt();
         if dist < 0.5 {
             matched_dam = Some(dam);
+            // Check if we have live data for this dam
+            if let Some(ref data_map) = live_data {
+                if let Some(&(lvl, frl, mddl, pct)) = data_map.get(dam.name) {
+                    live_lvl = lvl;
+                    live_frl = frl;
+                    live_mddl = mddl;
+                    live_pct = pct;
+                    used_live = true;
+                }
+            }
             break;
         }
     }
@@ -486,28 +568,30 @@ pub async fn context_handler(
         .and_then(|s| s.parse::<f64>().ok())
         .unwrap_or(0.0);
 
-    let base_pct = match month {
-        6..=9 => 82.0,
-        10..=11 => 88.0,
-        12 | 1 | 2 => 65.0,
-        _ => 48.0,
-    };
-    let rain_offset = (rain_val * 0.35).min(18.0);
-    let storage_pct = (base_pct + rain_offset).min(100.0);
+    let storage_pct = if used_live { live_pct } else { 0.0 };
 
-    let (res_name, res_basin, full_level, current_level, inflow, outflow) = if let Some(dam) = matched_dam {
-        let level_diff = (1.0 - storage_pct / 100.0) * 12.0;
-        let current_level = dam.full_level - level_diff;
+    if used_live {
+        sources.push("OHPC Telemetry");
+    }
+
+    let (res_name, res_basin, full_level, mddl_level, current_level, inflow, outflow) = if let Some(dam) = matched_dam {
+        let current_level = if used_live { live_lvl } else {
+            let level_diff = (1.0 - storage_pct / 100.0) * 12.0;
+            dam.full_level - level_diff
+        };
+        let full_level = if used_live { live_frl } else { dam.full_level };
+        let mddl_level = if used_live { live_mddl } else { dam.mddl_level };
         let inflow = (rain_val * 16.5) + 32.0;
         let outflow = if storage_pct > 88.0 { inflow * 0.92 } else { 22.0 };
-        (dam.name.to_string(), dam.basin.to_string(), dam.full_level, current_level, inflow, outflow)
+        (dam.name.to_string(), dam.basin.to_string(), full_level, mddl_level, current_level, inflow, outflow)
     } else {
         let full_level = 150.0;
+        let mddl_level = 138.0;
         let level_diff = (1.0 - storage_pct / 100.0) * 12.0;
         let current_level = full_level - level_diff;
         let inflow = (rain_val * 12.0) + 15.0;
         let outflow = if storage_pct > 85.0 { inflow * 0.90 } else { 10.0 };
-        ("Regional Embankment".to_string(), "Local Catchment".to_string(), full_level, current_level, inflow, outflow)
+        ("Regional Embankment".to_string(), "Local Catchment".to_string(), full_level, mddl_level, current_level, inflow, outflow)
     };
 
     // ── 4. Compute assessment from real data ──────────────────────────
@@ -555,6 +639,7 @@ pub async fn context_handler(
         source: Some(source_str),
         current_level_m: Some(current_level),
         full_reservoir_level_m: Some(full_level),
+        mddl_level_m: Some(mddl_level),
         storage_pct: Some(storage_pct),
         inflow_cumecs: Some(inflow),
         outflow_cumecs: Some(outflow),

@@ -12,7 +12,6 @@
 pub mod algorithm;
 pub mod errors;
 pub mod io;
-pub mod isce3_ffi;
 pub mod nisar_parser;
 pub mod gunw_parser;
 pub mod polsar;

@@ -71,3 +71,15 @@ body {
   pointer-events: none;
   z-index: 500;
 }
+
+/* ===== INFRASTRUCTURE PANEL ANIMATIONS ===== */
+@keyframes timeline-flow {
+  0% { opacity: 0.2; transform: scaleX(0); transform-origin: left; }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.2; transform: scaleX(1); transform-origin: left; }
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}

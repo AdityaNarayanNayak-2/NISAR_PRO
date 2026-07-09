@@ -49,7 +49,9 @@ function AppDashboard() {
     const [assetLon, setAssetLon] = useState('');
     const [envContext, setEnvContext] = useState(null);
     const [fetchingContext, setFetchingContext] = useState(false);
-    const [activeLayer, setActiveLayer] = useState('amplitude');
+    const [visibleLayers, setVisibleLayers] = useState({ deformation: true, coherence: false, amplitude: false });
+    // Derive activeLayer for TileLayer: deformation takes priority
+    const activeLayer = visibleLayers.deformation ? 'deformation' : visibleLayers.coherence ? 'coherence' : 'amplitude';
     const [slaveFilePath, setSlaveFilePath] = useState('');
     const [assetSearch, setAssetSearch] = useState('');
     const [assetResults, setAssetResults] = useState([]);
@@ -251,7 +253,7 @@ function AppDashboard() {
                     if (data.status === 'completed' && currentJobs[id].status !== 'completed') {
                         const jobBounds = currentJobs[id].bounds || (data.bbox ? [[data.bbox.south, data.bbox.west], [data.bbox.north, data.bbox.east]] : null);
                         setTimeout(() => { setViewingResult({ url: api(data.output_path), bounds: jobBounds, insarReport: jobsRef.current[id]?.insarReport || null, ships: jobsRef.current[id]?.ships || null, pipeline: jobsRef.current[id]?.pipeline || 'standard_rda', elapsed: elapsedRef.current[id] || null, bbox: jobsRef.current[id]?.bbox || data.bbox || null }); }, 800);
-                        setActiveLayer('amplitude');
+                        setVisibleLayers({ deformation: true, coherence: false, amplitude: false });
                     }
                     setJobs(prev => ({ ...prev, [id]: { ...prev[id], status: data.status, output_path: data.output_path } }));
                 } catch (e) { }
@@ -268,11 +270,26 @@ function AppDashboard() {
         if (!assetLat || !assetLon) return;
         setFetchingContext(true);
         try {
-            const res = await fetch(api(`/context?lat=${assetLat}&lon=${assetLon}&asset_type=${assetType}`));
-            const data = await res.json(); setEnvContext(data); setContextFetchedAt(new Date());
-        } catch { setEnvContext(null); }
-        finally { setFetchingContext(false); }
+            const url = api(`/context?lat=${assetLat}&lon=${assetLon}&asset_type=${assetType}`);
+            console.log("Fetching environmental context from:", url);
+            const res = await fetch(url);
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            const data = await res.json();
+            console.log("Fetched environmental context successfully:", data);
+            setEnvContext(data);
+            setContextFetchedAt(new Date());
+        } catch (err) {
+            console.error("Failed to fetch environmental context:", err);
+            showError(`Failed to fetch environmental context: ${err.message}`);
+            setEnvContext(null);
+        }
+        finally {
+            setFetchingContext(false);
+        }
     };
+
 
     // ── Search infrastructure assets via Nominatim ──
     const searchAssets = async (query) => {
@@ -315,7 +332,7 @@ function AppDashboard() {
             setDataMode('local');
         }
         if (profile === 'maritime') setPipeline('cfar');
-        setActiveLayer('amplitude');
+        setVisibleLayers({ deformation: true, coherence: false, amplitude: false });
     }, [profile]);
 
     // ══════════════════════ RENDER ══════════════════════
@@ -606,6 +623,50 @@ function AppDashboard() {
                 )}
             </MapContainer>
 
+            {/* ── MAP LEGEND ── */}
+            {profile === 'infrastructure' && viewingResult && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '94px',
+                    left: '252px',
+                    zIndex: 1000,
+                    background: 'rgba(10, 10, 10, 0.92)',
+                    border: '1px solid #2A2A2A',
+                    padding: '10px 12px 8px',
+                    pointerEvents: 'none',
+                }}>
+                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#888888', letterSpacing: '0.12em', marginBottom: '6px' }}>
+                        {activeLayer === 'coherence' ? 'COHERENCE' : 'LOS DISPLACEMENT'}
+                    </div>
+
+                    {activeLayer === 'coherence' ? (
+                        <>
+                            <div style={{ width: '140px', height: '8px', background: 'linear-gradient(to right, #000000, #444444, #888888, #CCCCCC, #FFFFFF)', borderRadius: '1px' }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                                <span style={{ fontFamily: MONO, fontSize: '8px', color: '#666666' }}>0.0</span>
+                                <span style={{ fontFamily: MONO, fontSize: '8px', color: '#666666' }}>0.5</span>
+                                <span style={{ fontFamily: MONO, fontSize: '8px', color: '#666666' }}>1.0</span>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div style={{ width: '140px', height: '8px', background: 'linear-gradient(to right, #D7191C, #FDAE61, #FFFFBF, #A6D96A, #1A9641)', borderRadius: '1px' }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                                <span style={{ fontFamily: MONO, fontSize: '8px', color: '#666666' }}>-30</span>
+                                <span style={{ fontFamily: MONO, fontSize: '8px', color: '#666666' }}>0</span>
+                                <span style={{ fontFamily: MONO, fontSize: '8px', color: '#666666' }}>+30</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+                                <span style={{ fontFamily: MONO, fontSize: '7px', color: '#555555' }}>Subsidence</span>
+                                <span style={{ fontFamily: MONO, fontSize: '7px', color: '#555555' }}>Uplift</span>
+                            </div>
+                        </>
+                    )}
+
+                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3A3A3A', marginTop: '6px' }}>mm</div>
+                </div>
+            )}
+
             {/* ═══ MAP CROSSHAIR (Phase D) ═══ */}
             <div className="map-crosshair" />
             <div className="map-crosshair-box" />
@@ -642,7 +703,8 @@ function AppDashboard() {
                     slaveFilePath={slaveFilePath}
                     setSlaveFilePath={setSlaveFilePath}
                     activeLayer={activeLayer}
-                    setActiveLayer={setActiveLayer}
+                    visibleLayers={visibleLayers}
+                    setVisibleLayers={setVisibleLayers}
                     startJob={startJob}
                     getInputFile={getInputFile}
                     runningJobs={runningJobs}
@@ -831,89 +893,7 @@ function AppDashboard() {
                 </button>
             )}
 
-            {/* ═══ MAP LEGEND OVERLAY ═══ */}
-            {profile === 'infrastructure' && viewingResult && (activeLayer === 'deformation' || activeLayer === 'coherence') && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: '96px',
-                    left: '256px',
-                    zIndex: 900,
-                    background: 'rgba(17, 17, 17, 0.92)',
-                    border: '1px solid #2A2A2A',
-                    padding: '12px',
-                    width: '120px',
-                    boxSizing: 'border-box',
-                    borderRadius: '2px',
-                }}>
-                    {activeLayer === 'deformation' ? (
-                        <>
-                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
-                                InSAR DISPLACEMENT
-                            </div>
-                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#888888', marginBottom: '8px' }}>
-                                LOS mm
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
-                                <div style={{
-                                    height: '120px',
-                                    width: '16px',
-                                    borderRadius: '1px',
-                                    background: 'linear-gradient(to bottom, #C0392B, #D4822A, #E6A817, #F0F0F0, #4A8FA8, #2E6B8A, #1A3A5C)'
-                                }} />
-                                <div style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between',
-                                    height: '120px',
-                                }}>
-                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#C0392B', lineHeight: '9px' }}>+20</span>
-                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#D4822A', lineHeight: '9px' }}>+10</span>
-                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#888888', lineHeight: '9px' }}>0</span>
-                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#2E6B8A', lineHeight: '9px' }}>-10</span>
-                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#1A3A5C', lineHeight: '9px' }}>-20</span>
-                                </div>
-                            </div>
-                            <div style={{ height: '1px', background: '#2A2A2A', margin: '8px 0' }} />
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#C0392B', textAlign: 'left' }}>UPLIFT</div>
-                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#1A3A5C', textAlign: 'left' }}>SUBSIDENCE</div>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
-                                COHERENCE
-                            </div>
-                            <div style={{ fontFamily: MONO, fontSize: '9px', color: '#888888', marginBottom: '8px' }}>
-                                0 — 1
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
-                                <div style={{
-                                    height: '120px',
-                                    width: '16px',
-                                    borderRadius: '1px',
-                                    background: 'linear-gradient(to bottom, #F0F0F0, #888888, #1A1A1A)'
-                                }} />
-                                <div style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between',
-                                    height: '120px',
-                                }}>
-                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#F0F0F0', lineHeight: '9px' }}>1.0</span>
-                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#888888', lineHeight: '9px' }}>0.5</span>
-                                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', lineHeight: '9px' }}>0.0</span>
-                                </div>
-                            </div>
-                            <div style={{ height: '1px', background: '#2A2A2A', margin: '8px 0' }} />
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#F0F0F0', textAlign: 'left' }}>HIGH COHERENCE</div>
-                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', textAlign: 'left' }}>LOW COHERENCE</div>
-                            </div>
-                        </>
-                    )}
-                </div>
-            )}
+
 
         </div>
     );
