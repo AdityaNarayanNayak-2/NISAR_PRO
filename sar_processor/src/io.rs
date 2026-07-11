@@ -71,7 +71,11 @@ pub fn save_sar_image(
     }
 
     // ── 3. Percentile stretch (2nd–98th) ─────────────────────────────────
-    let mut sorted: Vec<f32> = log_intensity.iter().copied().filter(|v| v.is_finite()).collect();
+    let mut sorted: Vec<f32> = log_intensity
+        .iter()
+        .copied()
+        .filter(|v| v.is_finite())
+        .collect();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     let (p2, p98) = if sorted.is_empty() {
@@ -85,7 +89,10 @@ pub fn save_sar_image(
     };
     let stretch_range = (p98 - p2).max(1e-6);
 
-    info!("Contrast stretch: [{:.2}, {:.2}] dB (based on {} valid blocks)", p2, p98, num_finite);
+    info!(
+        "Contrast stretch: [{:.2}, {:.2}] dB (based on {} valid blocks)",
+        p2, p98, num_finite
+    );
 
     // ── 4. Gamma + quantize to u8 ─────────────────────────────────────────
     let pixels: Vec<u8> = log_intensity
@@ -120,7 +127,8 @@ fn frost_filter(intensity: &Array2<f32>, window_size: usize, damp_factor: f32) -
     let mut filtered = Array2::zeros((rows, cols));
 
     // Simple multi-threading iteration over rows
-    filtered.axis_iter_mut(ndarray::Axis(0))
+    filtered
+        .axis_iter_mut(ndarray::Axis(0))
         .into_par_iter()
         .enumerate()
         .for_each(|(r, mut row_out)| {
@@ -178,18 +186,35 @@ fn lee_filter(intensity: &Array2<f32>, window_size: usize) -> Array2<f32> {
     let mut filtered = Array2::zeros((rows, cols));
 
     // Estimate the number of looks from the global coefficient of variation
-    let global_mean = intensity.iter().filter(|v| v.is_finite() && **v > 0.0).sum::<f32>()
-        / intensity.iter().filter(|v| v.is_finite() && **v > 0.0).count().max(1) as f32;
-    let global_var = intensity.iter()
+    let global_mean = intensity
+        .iter()
+        .filter(|v| v.is_finite() && **v > 0.0)
+        .sum::<f32>()
+        / intensity
+            .iter()
+            .filter(|v| v.is_finite() && **v > 0.0)
+            .count()
+            .max(1) as f32;
+    let global_var = intensity
+        .iter()
         .filter(|v| v.is_finite() && **v > 0.0)
         .map(|v| (v - global_mean).powi(2))
         .sum::<f32>()
-        / intensity.iter().filter(|v| v.is_finite() && **v > 0.0).count().max(1) as f32;
+        / intensity
+            .iter()
+            .filter(|v| v.is_finite() && **v > 0.0)
+            .count()
+            .max(1) as f32;
     // Noise variance for L-look data: sigma_n^2 = mean^2 / L
     // Approximate L from global stats: L ≈ mean^2 / var
-    let noise_var = if global_mean > 0.0 { global_mean.powi(2) / (global_var / global_mean.powi(2)).max(1.0) } else { 1.0 };
+    let noise_var = if global_mean > 0.0 {
+        global_mean.powi(2) / (global_var / global_mean.powi(2)).max(1.0)
+    } else {
+        1.0
+    };
 
-    filtered.axis_iter_mut(ndarray::Axis(0))
+    filtered
+        .axis_iter_mut(ndarray::Axis(0))
         .into_par_iter()
         .enumerate()
         .for_each(|(r, mut row_out)| {
@@ -271,8 +296,16 @@ fn clahe(image: &Array2<u8>, grid_x: usize, grid_y: usize, clip_limit: f32) -> A
         for tx in 0..grid_x {
             let r_start = ty * tile_h;
             let c_start = tx * tile_w;
-            let r_end = if ty == grid_y - 1 { rows } else { r_start + tile_h };
-            let c_end = if tx == grid_x - 1 { cols } else { c_start + tile_w };
+            let r_end = if ty == grid_y - 1 {
+                rows
+            } else {
+                r_start + tile_h
+            };
+            let c_end = if tx == grid_x - 1 {
+                cols
+            } else {
+                c_start + tile_w
+            };
 
             // 1. Build histogram
             let mut hist = [0u32; 256];
@@ -325,7 +358,8 @@ fn clahe(image: &Array2<u8>, grid_x: usize, grid_y: usize, clip_limit: f32) -> A
 
     // Bilinear interpolation between tile mappings
     let mut output = Array2::zeros((rows, cols));
-    output.axis_iter_mut(ndarray::Axis(0))
+    output
+        .axis_iter_mut(ndarray::Axis(0))
         .into_par_iter()
         .enumerate()
         .for_each(|(r, mut row_out)| {
@@ -368,13 +402,17 @@ pub fn generate_xyz_tiles(
 ) -> Result<()> {
     let raw_rows = complex_image.nrows();
     let raw_cols = complex_image.ncols();
-    
-    info!("Starting Phase 6 XYZ Tile Generation ({}x{} Native Array)", raw_rows, raw_cols);
+
+    info!(
+        "Starting Phase 6 XYZ Tile Generation ({}x{} Native Array)",
+        raw_rows, raw_cols
+    );
     fs::create_dir_all(output_dir)?;
 
     // 1. Calculate base intensity array using Rayon for heavy math
     let mut native_intensity = Array2::zeros((raw_rows, raw_cols));
-    native_intensity.axis_iter_mut(ndarray::Axis(0))
+    native_intensity
+        .axis_iter_mut(ndarray::Axis(0))
         .into_par_iter()
         .enumerate()
         .for_each(|(r, mut row_view)| {
@@ -391,17 +429,24 @@ pub fn generate_xyz_tiles(
 
     // 3. Log stretch & convert entire native array to 8-bit
     info!("Mapping dynamic range into 8-bit visual bands...");
-    let mut finite_vals: Vec<f32> = smoothed_intensity.iter().filter(|&&v| v > 0.0 && v.is_finite()).map(|&v| (v + 1e-10).log10()).collect();
-    if finite_vals.is_empty() { return Ok(()); }
-    
+    let mut finite_vals: Vec<f32> = smoothed_intensity
+        .iter()
+        .filter(|&&v| v > 0.0 && v.is_finite())
+        .map(|&v| (v + 1e-10).log10())
+        .collect();
+    if finite_vals.is_empty() {
+        return Ok(());
+    }
+
     finite_vals.par_sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let len = finite_vals.len();
     let p2 = finite_vals[((len as f32 * 0.02) as usize).min(len.saturating_sub(1))];
     let p98 = finite_vals[((len as f32 * 0.98) as usize).min(len.saturating_sub(1))];
     let stretch_range = (p98 - p2).max(1e-6);
-    
+
     let mut native_pixels = Array2::<u8>::zeros((raw_rows, raw_cols));
-    native_pixels.axis_iter_mut(ndarray::Axis(0))
+    native_pixels
+        .axis_iter_mut(ndarray::Axis(0))
         .into_par_iter()
         .enumerate()
         .for_each(|(r, mut row_view)| {
@@ -423,7 +468,7 @@ pub fn generate_xyz_tiles(
     // 5. XYZ Tile Pyramid Generation
     let tile_size = 256;
     let min_zoom = 0;
-    
+
     // Z0 is the highest zoom where 1 tile = 1 array. Meaning the image length must match 256 * 2^z.
     let dimension = raw_rows.max(raw_cols);
     let mut optimal_z = 0;
@@ -431,15 +476,18 @@ pub fn generate_xyz_tiles(
         optimal_z += 1;
     }
     let system_max_z = optimal_z;
-    
-    info!("SAR dimensions require an XYZ local pyramid of depth Z={}", system_max_z);
+
+    info!(
+        "SAR dimensions require an XYZ local pyramid of depth Z={}",
+        system_max_z
+    );
 
     // Generate down sampled tiles iteratively
     for z in min_zoom..=system_max_z {
         let zoom_dim = tile_size << z;
         let scale = dimension as f32 / zoom_dim as f32;
         let tiles_1d = 1 << z;
-        
+
         fs::create_dir_all(format!("{}/{}", output_dir, z))?;
 
         (0..tiles_1d).into_par_iter().for_each(|tx| {
@@ -447,7 +495,8 @@ pub fn generate_xyz_tiles(
             fs::create_dir_all(&z_x_dir).ok();
 
             for ty in 0..tiles_1d {
-                let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(tile_size as u32, tile_size as u32);
+                let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+                    ImageBuffer::new(tile_size as u32, tile_size as u32);
                 let mut has_data = false;
 
                 for py in 0..tile_size {
@@ -462,7 +511,8 @@ pub fn generate_xyz_tiles(
                             }
                             img.put_pixel(px as u32, py as u32, Rgb([val, val, val]));
                         } else {
-                            img.put_pixel(px as u32, py as u32, Rgb([0, 0, 0])); // Transparent/Black void
+                            img.put_pixel(px as u32, py as u32, Rgb([0, 0, 0]));
+                            // Transparent/Black void
                         }
                     }
                 }
@@ -475,8 +525,11 @@ pub fn generate_xyz_tiles(
         });
         info!("Generated zoom tier Z={}", z);
     }
-    
-    info!("Successfully exported deep-zoom spatial pyramids at {}", output_dir);
+
+    info!(
+        "Successfully exported deep-zoom spatial pyramids at {}",
+        output_dir
+    );
     Ok(())
 }
 
@@ -630,9 +683,9 @@ pub fn save_sar_geotiff(
     let off_tile_offsets = overflow_base;
     let off_tile_bytecounts = off_tile_offsets + (n_tiles as u32 * 4);
     let off_pixel_scale = off_tile_bytecounts + (n_tiles as u32 * 4);
-    let off_tiepoint = off_pixel_scale + 24;   // 3 × f64 = 24 bytes
-    let off_geokeys = off_tiepoint + 48;       // 6 × f64 = 48 bytes
-    // geokeys: 16 × u16 = 32 bytes
+    let off_tiepoint = off_pixel_scale + 24; // 3 × f64 = 24 bytes
+    let off_geokeys = off_tiepoint + 48; // 6 × f64 = 48 bytes
+                                         // geokeys: 16 × u16 = 32 bytes
 
     // Pre-compute per-tile offsets within the file
     let tile_offsets: Vec<u32> = (0..n_tiles)
@@ -644,9 +697,9 @@ pub fn save_sar_geotiff(
     let mut buf: Vec<u8> = Vec::with_capacity(total_file_size);
 
     // ─── TIFF Header ─────────────────────────────────────────────────────
-    buf.extend_from_slice(b"II");                       // Byte order: little-endian
-    buf.extend_from_slice(&42u16.to_le_bytes());        // TIFF magic number
-    buf.extend_from_slice(&ifd_offset.to_le_bytes());   // Offset to first IFD
+    buf.extend_from_slice(b"II"); // Byte order: little-endian
+    buf.extend_from_slice(&42u16.to_le_bytes()); // TIFF magic number
+    buf.extend_from_slice(&ifd_offset.to_le_bytes()); // Offset to first IFD
 
     // ─── Tile Data ───────────────────────────────────────────────────────
     buf.extend_from_slice(&tile_data);
@@ -657,22 +710,22 @@ pub fn save_sar_geotiff(
 
     //  Tag   | Type   | Count | Value/Offset
     // -------|--------|-------|------------------
-    geotiff_ifd_short(&mut buf, 256, 1, cols as u16);       // ImageWidth (as SHORT if ≤65535)
-    geotiff_ifd_short(&mut buf, 257, 1, rows as u16);       // ImageLength
-    geotiff_ifd_short(&mut buf, 258, 1, 8);                 // BitsPerSample = 8
-    geotiff_ifd_short(&mut buf, 259, 1, 1);                 // Compression = None
-    geotiff_ifd_short(&mut buf, 262, 1, 1);                 // PhotometricInterpretation = MinIsBlack
-    geotiff_ifd_short(&mut buf, 277, 1, 1);                 // SamplesPerPixel = 1
-    geotiff_ifd_short(&mut buf, 322, 1, tile_size as u16);  // TileWidth = 256
-    geotiff_ifd_short(&mut buf, 323, 1, tile_size as u16);  // TileLength = 256
-    geotiff_ifd_long_arr(&mut buf, 324, n_tiles as u32, off_tile_offsets);   // TileOffsets → overflow
-    geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts);// TileByteCounts → overflow
-    geotiff_ifd_short(&mut buf, 339, 1, 1);                 // SampleFormat = UnsignedInteger
+    geotiff_ifd_short(&mut buf, 256, 1, cols as u16); // ImageWidth (as SHORT if ≤65535)
+    geotiff_ifd_short(&mut buf, 257, 1, rows as u16); // ImageLength
+    geotiff_ifd_short(&mut buf, 258, 1, 8); // BitsPerSample = 8
+    geotiff_ifd_short(&mut buf, 259, 1, 1); // Compression = None
+    geotiff_ifd_short(&mut buf, 262, 1, 1); // PhotometricInterpretation = MinIsBlack
+    geotiff_ifd_short(&mut buf, 277, 1, 1); // SamplesPerPixel = 1
+    geotiff_ifd_short(&mut buf, 322, 1, tile_size as u16); // TileWidth = 256
+    geotiff_ifd_short(&mut buf, 323, 1, tile_size as u16); // TileLength = 256
+    geotiff_ifd_long_arr(&mut buf, 324, n_tiles as u32, off_tile_offsets); // TileOffsets → overflow
+    geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts); // TileByteCounts → overflow
+    geotiff_ifd_short(&mut buf, 339, 1, 1); // SampleFormat = UnsignedInteger
 
     // GeoTIFF tags (ascending tag order: 33550 < 33922 < 34735)
-    geotiff_ifd_double_arr(&mut buf, 33550, 3, off_pixel_scale);   // ModelPixelScaleTag
-    geotiff_ifd_double_arr(&mut buf, 33922, 6, off_tiepoint);      // ModelTiepointTag
-    geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys);       // GeoKeyDirectoryTag
+    geotiff_ifd_double_arr(&mut buf, 33550, 3, off_pixel_scale); // ModelPixelScaleTag
+    geotiff_ifd_double_arr(&mut buf, 33922, 6, off_tiepoint); // ModelTiepointTag
+    geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys); // GeoKeyDirectoryTag
 
     buf.extend_from_slice(&0u32.to_le_bytes()); // Next IFD offset = 0 (single image)
 
@@ -706,9 +759,9 @@ pub fn save_sar_geotiff(
     // GeoKeyDirectoryTag (34735): EPSG:4326 declaration
     // Format: [version, revision, minor, numKeys, ...key entries...]
     let geokeys: [u16; 16] = [
-        1, 1, 0, 3,       // Header: v1.1.0, 3 keys follow
-        1024, 0, 1, 2,    // GTModelTypeGeoKey       = 2 (ModelTypeGeographic)
-        1025, 0, 1, 1,    // GTRasterTypeGeoKey      = 1 (RasterPixelIsArea)
+        1, 1, 0, 3, // Header: v1.1.0, 3 keys follow
+        1024, 0, 1, 2, // GTModelTypeGeoKey       = 2 (ModelTypeGeographic)
+        1025, 0, 1, 1, // GTRasterTypeGeoKey      = 1 (RasterPixelIsArea)
         2048, 0, 1, 4326, // GeographicTypeGeoKey    = 4326 (EPSG:4326 / WGS84)
     ];
     for &k in &geokeys {
@@ -735,16 +788,16 @@ pub fn save_sar_geotiff(
 /// Write an IFD entry for a single SHORT (type=3) value stored inline.
 fn geotiff_ifd_short(buf: &mut Vec<u8>, tag: u16, count: u32, value: u16) {
     buf.extend_from_slice(&tag.to_le_bytes());
-    buf.extend_from_slice(&3u16.to_le_bytes());     // type = SHORT
+    buf.extend_from_slice(&3u16.to_le_bytes()); // type = SHORT
     buf.extend_from_slice(&count.to_le_bytes());
     buf.extend_from_slice(&value.to_le_bytes());
-    buf.extend_from_slice(&0u16.to_le_bytes());     // pad to 4 bytes
+    buf.extend_from_slice(&0u16.to_le_bytes()); // pad to 4 bytes
 }
 
 /// Write an IFD entry for a SHORT array (type=3) stored at an overflow offset.
 fn geotiff_ifd_short_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) {
     buf.extend_from_slice(&tag.to_le_bytes());
-    buf.extend_from_slice(&3u16.to_le_bytes());     // type = SHORT
+    buf.extend_from_slice(&3u16.to_le_bytes()); // type = SHORT
     buf.extend_from_slice(&count.to_le_bytes());
     buf.extend_from_slice(&offset.to_le_bytes());
 }
@@ -752,7 +805,7 @@ fn geotiff_ifd_short_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) {
 /// Write an IFD entry for a LONG array (type=4) stored at an overflow offset.
 fn geotiff_ifd_long_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) {
     buf.extend_from_slice(&tag.to_le_bytes());
-    buf.extend_from_slice(&4u16.to_le_bytes());     // type = LONG
+    buf.extend_from_slice(&4u16.to_le_bytes()); // type = LONG
     buf.extend_from_slice(&count.to_le_bytes());
     buf.extend_from_slice(&offset.to_le_bytes());
 }
@@ -760,7 +813,7 @@ fn geotiff_ifd_long_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) {
 /// Write an IFD entry for a DOUBLE array (type=12) stored at an overflow offset.
 fn geotiff_ifd_double_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) {
     buf.extend_from_slice(&tag.to_le_bytes());
-    buf.extend_from_slice(&12u16.to_le_bytes());    // type = DOUBLE
+    buf.extend_from_slice(&12u16.to_le_bytes()); // type = DOUBLE
     buf.extend_from_slice(&count.to_le_bytes());
     buf.extend_from_slice(&offset.to_le_bytes());
 }
@@ -768,8 +821,8 @@ fn geotiff_ifd_double_arr(buf: &mut Vec<u8>, tag: u16, count: u32, offset: u32) 
 /// Write an IFD entry for a SHORT array of length 2 (type=3) stored inline.
 fn geotiff_ifd_short2(buf: &mut Vec<u8>, tag: u16, val1: u16, val2: u16) {
     buf.extend_from_slice(&tag.to_le_bytes());
-    buf.extend_from_slice(&3u16.to_le_bytes());     // type = SHORT
-    buf.extend_from_slice(&2u32.to_le_bytes());     // count = 2
+    buf.extend_from_slice(&3u16.to_le_bytes()); // type = SHORT
+    buf.extend_from_slice(&2u32.to_le_bytes()); // count = 2
     buf.extend_from_slice(&val1.to_le_bytes());
     buf.extend_from_slice(&val2.to_le_bytes());
 }
@@ -832,7 +885,7 @@ pub fn save_geotiff_f32(
     let off_tile_bytecounts = off_tile_offsets + (n_tiles as u32 * 4);
     let mut off_transform = 0;
     let mut off_geokeys = 0;
-    
+
     let mut total_file_size = (off_tile_bytecounts + (n_tiles as u32 * 4)) as usize;
     if bbox.is_some() {
         off_transform = total_file_size as u32;
@@ -853,15 +906,15 @@ pub fn save_geotiff_f32(
     buf.extend_from_slice(&num_ifd_entries.to_le_bytes());
     geotiff_ifd_short(&mut buf, 256, 1, cols as u16);
     geotiff_ifd_short(&mut buf, 257, 1, rows as u16);
-    geotiff_ifd_short(&mut buf, 258, 1, 32);                 // BitsPerSample = 32
-    geotiff_ifd_short(&mut buf, 259, 1, 1);                  // Compression = None
-    geotiff_ifd_short(&mut buf, 262, 1, 1);                  // PhotometricInterpretation = MinIsBlack
-    geotiff_ifd_short(&mut buf, 277, 1, 1);                  // SamplesPerPixel = 1
+    geotiff_ifd_short(&mut buf, 258, 1, 32); // BitsPerSample = 32
+    geotiff_ifd_short(&mut buf, 259, 1, 1); // Compression = None
+    geotiff_ifd_short(&mut buf, 262, 1, 1); // PhotometricInterpretation = MinIsBlack
+    geotiff_ifd_short(&mut buf, 277, 1, 1); // SamplesPerPixel = 1
     geotiff_ifd_short(&mut buf, 322, 1, tile_size as u16);
     geotiff_ifd_short(&mut buf, 323, 1, tile_size as u16);
     geotiff_ifd_long_arr(&mut buf, 324, n_tiles as u32, off_tile_offsets);
     geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts);
-    geotiff_ifd_short(&mut buf, 339, 1, 3);                  // SampleFormat = 3 (FLOAT)
+    geotiff_ifd_short(&mut buf, 339, 1, 3); // SampleFormat = 3 (FLOAT)
 
     if bbox.is_some() {
         geotiff_ifd_double_arr(&mut buf, 34264, 16, off_transform);
@@ -881,21 +934,14 @@ pub fn save_geotiff_f32(
         let scale_x = (east - west) / cols as f64;
         let scale_y = (north - south) / rows as f64;
         let transform: [f64; 16] = [
-            scale_x,  0.0,      0.0,  west,
-            0.0,     -scale_y,  0.0,  north,
-            0.0,      0.0,      0.0,  0.0,
-            0.0,      0.0,      0.0,  1.0,
+            scale_x, 0.0, 0.0, west, 0.0, -scale_y, 0.0, north, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            1.0,
         ];
         for &v in &transform {
             buf.extend_from_slice(&v.to_le_bytes());
         }
 
-        let geokeys: [u16; 16] = [
-            1, 1, 0, 3,
-            1024, 0, 1, 2,
-            1025, 0, 1, 1,
-            2048, 0, 1, 4326,
-        ];
+        let geokeys: [u16; 16] = [1, 1, 0, 3, 1024, 0, 1, 2, 1025, 0, 1, 1, 2048, 0, 1, 4326];
         for &k in &geokeys {
             buf.extend_from_slice(&k.to_le_bytes());
         }
@@ -971,7 +1017,7 @@ pub fn save_geotiff_complex(
     let off_tile_bytecounts = off_tile_offsets + (n_tiles as u32 * 4);
     let mut off_transform = 0;
     let mut off_geokeys = 0;
-    
+
     let mut total_file_size = (off_tile_bytecounts + (n_tiles as u32 * 4)) as usize;
     if bbox.is_some() {
         off_transform = total_file_size as u32;
@@ -992,15 +1038,15 @@ pub fn save_geotiff_complex(
     buf.extend_from_slice(&num_ifd_entries.to_le_bytes());
     geotiff_ifd_short(&mut buf, 256, 1, cols as u16);
     geotiff_ifd_short(&mut buf, 257, 1, rows as u16);
-    geotiff_ifd_short2(&mut buf, 258, 32, 32);               // BitsPerSample = [32, 32]
-    geotiff_ifd_short(&mut buf, 259, 1, 1);                  // Compression = None
-    geotiff_ifd_short(&mut buf, 262, 1, 1);                  // PhotometricInterpretation = MinIsBlack
-    geotiff_ifd_short(&mut buf, 277, 1, 2);                  // SamplesPerPixel = 2
+    geotiff_ifd_short2(&mut buf, 258, 32, 32); // BitsPerSample = [32, 32]
+    geotiff_ifd_short(&mut buf, 259, 1, 1); // Compression = None
+    geotiff_ifd_short(&mut buf, 262, 1, 1); // PhotometricInterpretation = MinIsBlack
+    geotiff_ifd_short(&mut buf, 277, 1, 2); // SamplesPerPixel = 2
     geotiff_ifd_short(&mut buf, 322, 1, tile_size as u16);
     geotiff_ifd_short(&mut buf, 323, 1, tile_size as u16);
     geotiff_ifd_long_arr(&mut buf, 324, n_tiles as u32, off_tile_offsets);
     geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts);
-    geotiff_ifd_short2(&mut buf, 339, 3, 3);                 // SampleFormat = [3, 3] (FLOAT, FLOAT)
+    geotiff_ifd_short2(&mut buf, 339, 3, 3); // SampleFormat = [3, 3] (FLOAT, FLOAT)
 
     if bbox.is_some() {
         geotiff_ifd_double_arr(&mut buf, 34264, 16, off_transform);
@@ -1020,21 +1066,14 @@ pub fn save_geotiff_complex(
         let scale_x = (east - west) / cols as f64;
         let scale_y = (north - south) / rows as f64;
         let transform: [f64; 16] = [
-            scale_x,  0.0,      0.0,  west,
-            0.0,     -scale_y,  0.0,  north,
-            0.0,      0.0,      0.0,  0.0,
-            0.0,      0.0,      0.0,  1.0,
+            scale_x, 0.0, 0.0, west, 0.0, -scale_y, 0.0, north, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            1.0,
         ];
         for &v in &transform {
             buf.extend_from_slice(&v.to_le_bytes());
         }
 
-        let geokeys: [u16; 16] = [
-            1, 1, 0, 3,
-            1024, 0, 1, 2,
-            1025, 0, 1, 1,
-            2048, 0, 1, 4326,
-        ];
+        let geokeys: [u16; 16] = [1, 1, 0, 3, 1024, 0, 1, 2, 1025, 0, 1, 1, 2048, 0, 1, 4326];
         for &k in &geokeys {
             buf.extend_from_slice(&k.to_le_bytes());
         }
@@ -1061,7 +1100,7 @@ mod tests {
         let path = "/tmp/test_f32.tif";
         let res = save_geotiff_f32(data.view(), path, None);
         assert!(res.is_ok());
-        
+
         // Verify TIFF magic bytes
         let bytes = fs::read(path).unwrap();
         assert_eq!(&bytes[0..4], b"II\x2A\x00");
@@ -1075,7 +1114,7 @@ mod tests {
         let path = "/tmp/test_complex.tif";
         let res = save_geotiff_complex(data.view(), path, Some([0.0, 0.0, 1.0, 1.0]));
         assert!(res.is_ok());
-        
+
         let bytes = fs::read(path).unwrap();
         assert_eq!(&bytes[0..4], b"II\x2A\x00");
     }
@@ -1090,14 +1129,15 @@ mod tests {
         let bbox = [-118.5f64, 33.5, -117.5, 34.5];
         save_sar_geotiff(data.view(), path, bbox).unwrap();
 
-        let out = Command::new("gdalinfo")
-            .arg(path)
-            .output();
+        let out = Command::new("gdalinfo").arg(path).output();
 
         if let Ok(o) = out {
             let stdout = String::from_utf8_lossy(&o.stdout);
-            assert!(stdout.contains("EPSG:4326") || stdout.contains("WGS 84"),
-                "gdalinfo output missing CRS: {}", stdout);
+            assert!(
+                stdout.contains("EPSG:4326") || stdout.contains("WGS 84"),
+                "gdalinfo output missing CRS: {}",
+                stdout
+            );
             assert!(o.status.success(), "gdalinfo failed");
         }
         // If gdalinfo not available, just verify file exists and has TIFF magic
@@ -1106,4 +1146,3 @@ mod tests {
         assert_eq!(u16::from_le_bytes([bytes[2], bytes[3]]), 42);
     }
 }
-
