@@ -827,6 +827,19 @@ fn geotiff_ifd_short2(buf: &mut Vec<u8>, tag: u16, val1: u16, val2: u16) {
     buf.extend_from_slice(&val2.to_le_bytes());
 }
 
+/// Write an IFD entry for an ASCII (type=2) value stored inline (must be <= 4 bytes).
+fn geotiff_ifd_ascii_inline(buf: &mut Vec<u8>, tag: u16, value: &[u8]) {
+    assert!(value.len() <= 4, "ASCII IFD value must be <= 4 bytes for inline storage, got {}", value.len());
+    buf.extend_from_slice(&tag.to_le_bytes());
+    buf.extend_from_slice(&2u16.to_le_bytes()); // type = ASCII
+    buf.extend_from_slice(&(value.len() as u32).to_le_bytes());
+    buf.extend_from_slice(value);
+    // pad to 4 bytes
+    for _ in 0..(4 - value.len()) {
+        buf.push(0);
+    }
+}
+
 /// Save an f32 array as a single-band GeoTIFF with optional georeference.
 pub fn save_geotiff_f32(
     data: ArrayView2<f32>,
@@ -877,7 +890,7 @@ pub fn save_geotiff_f32(
     let tile_data_total = (n_tiles * tile_bytes) as u32;
     let ifd_offset = header_size + tile_data_total;
 
-    let num_ifd_entries: u16 = if bbox.is_some() { 13 } else { 11 };
+    let num_ifd_entries: u16 = if bbox.is_some() { 14 } else { 12 };
     let ifd_size = 2 + (num_ifd_entries as u32 * 12) + 4;
     let overflow_base = ifd_offset + ifd_size;
 
@@ -920,6 +933,7 @@ pub fn save_geotiff_f32(
         geotiff_ifd_double_arr(&mut buf, 34264, 16, off_transform);
         geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys);
     }
+    geotiff_ifd_ascii_inline(&mut buf, 42113, b"nan\0");
 
     buf.extend_from_slice(&0u32.to_le_bytes());
 

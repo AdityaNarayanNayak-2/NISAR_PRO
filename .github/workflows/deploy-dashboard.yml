@@ -1,0 +1,73 @@
+# ══════════════════════════════════════════════════════════════
+# Deploy Dashboard to GitHub Pages (Free Hosting)
+# ══════════════════════════════════════════════════════════════
+# Builds the Vite React dashboard and deploys it to:
+#   https://adityanarayannayak-2.github.io/NISAR_PRO/
+#
+# The dashboard is a static SPA that connects to the user's
+# local SAR Gateway (localhost:3000) for processing. No backend
+# hosting is needed — users run the Rust services on their machines.
+# ══════════════════════════════════════════════════════════════
+
+name: Deploy Dashboard to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sar-dashboard-v3/**'
+      - '.github/workflows/deploy-dashboard.yml'
+  workflow_dispatch:   # Allow manual trigger from GitHub UI
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sar-dashboard-v3/package-lock.json
+
+      - name: Install dependencies
+        working-directory: sar-dashboard-v3
+        run: npm ci
+
+      - name: Build for GitHub Pages
+        working-directory: sar-dashboard-v3
+        env:
+          GITHUB_PAGES: "true"
+        run: npm run build
+
+      # SPA fallback: GitHub Pages serves 404.html for unknown routes
+      - name: Create SPA fallback
+        run: cp sar-dashboard-v3/dist/index.html sar-dashboard-v3/dist/404.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: sar-dashboard-v3/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

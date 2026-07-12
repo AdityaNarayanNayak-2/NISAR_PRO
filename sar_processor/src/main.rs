@@ -2,24 +2,20 @@ use anyhow::Result;
 use clap::Parser;
 use log::{info, warn};
 use ndarray::Array2;
-use num_complex::Complex32;
 use sar_processor::io::{save_sar_geotiff, save_sar_image, generate_xyz_tiles, save_geotiff_f32};
 use sar_processor::nisar_parser;
-use sar_processor::nisar_parser::NisarProductType;
 use sar_processor::gunw_parser;
-use sar_processor::rcmc::RcmcParams;
-use sar_processor::rda::SARProcessor;
 use std::path::PathBuf;
 
-/// NISAR SAR Processor — Range-Doppler Algorithm + InSAR pipeline
+/// NISAR SAR Processor — InSAR displacement pipeline
 #[derive(Parser, Debug)]
 #[command(
     name = "sar_processor",
-    version = "0.3.0",
-    about = "Process NISAR (or Sentinel-1) SAR data: RDA focusing, InSAR, displacement mapping"
+    version = "0.4.0",
+    about = "Process NISAR Level-1+ products (RSLC/GSLC/GCOV/GUNW): InSAR, displacement mapping, ship detection"
 )]
 struct Cli {
-    /// Input file: NISAR RSLC `.h5` or Sentinel-1 SAFE `.tiff`
+    /// Input file: NISAR HDF5 (.h5) — RSLC, GSLC, GCOV, or GUNW
     #[arg(short, long, value_name = "FILE")]
     input: Option<PathBuf>,
 
@@ -34,22 +30,6 @@ struct Cli {
     /// Polarisation channel to process (HH, VV, HV, VH)
     #[arg(short, long, default_value = "HH")]
     polarization: String,
-
-    /// Run with synthetic test data (no input file needed)
-    #[arg(long)]
-    synthetic: bool,
-
-    /// Disable Range Cell Migration Correction
-    #[arg(long)]
-    no_rcmc: bool,
-
-    /// Number of azimuth lines to process (0 = all)
-    #[arg(long, default_value = "0")]
-    limit_lines: usize,
-
-    /// Force full RDA processing even on already-focused products (RSLC/GSLC/GCOV/GUNW)
-    #[arg(long)]
-    process: bool,
     
     /// Target directory to output Deep Zoom XYZ Web Tiles
     #[arg(long)]
@@ -115,34 +95,25 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     info!("╔══════════════════════════════════════════════╗");
-    info!("║       NISAR SAR Processor  v0.3.0            ║");
-    info!("║   RDA + InSAR Displacement Pipeline          ║");
+    info!("║       NISAR SAR Processor  v0.4.0            ║");
+    info!("║   InSAR Displacement Pipeline                ║");
     info!("╚══════════════════════════════════════════════╝");
 
-    // ── Build processor + raw data ─────────────────────────────────────────
-    let (processor, raw_data, skip_rda, bbox) = if cli.synthetic {
-        info!("Mode: Synthetic test data (1024 × 1024 zeros + point target)");
-        let proc = build_synthetic_processor(cli.no_rcmc);
-        let data = generate_synthetic_point_target(1024, 1024, 512, 512);
-        let fake_bbox = sar_processor::nisar_parser::GeoBoundingBox {
-            south: 35.6895, north: 35.7000, west: 139.6917, east: 139.7000, // Tokyo
-        };
-        (proc, data, false, Some(fake_bbox))
-    } else {
-        let input = cli
-            .input
-            .as_ref()
-            .expect("--input <FILE> is required unless --synthetic is set");
+    // ── Parse input file ───────────────────────────────────────────────────
+    let input = cli
+        .input
+        .as_ref()
+        .expect("--input <FILE> is required");
 
-        let ext = input
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
+    let ext = input
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
 
-        match ext.as_str() {
-            "h5" | "hdf5" | "he5" => {
-                info!("Mode: NISAR HDF5  →  {:?}", input);
+    let (slc_data, bbox) = match ext.as_str() {
+        "h5" | "hdf5" | "he5" => {
+            info!("Mode: NISAR HDF5  →  {:?}", input);
 
                 // ══════════════════════════════════════════════════
                 //  GUNW Fast-Path: Skip entire RDA + InSAR pipeline
@@ -200,10 +171,18 @@ async fn main() -> Result<()> {
                         cli.insar_coherence_threshold,
                     );
 
+                    let displacement_mm_array = defo_phase.mapv(|phi| {
+                        if phi.is_finite() {
+                            phi * gunw.wavelength_m * 1000.0 / (4.0 * std::f32::consts::PI)
+                        } else {
+                            f32::NAN
+                        }
+                    });
+
                     // [2/5] Save displacement GeoTIFF (same filename the dashboard expects)
                     info!("[2/5] Saving displacement GeoTIFF...");
                     let defo_path = format!("{}_defo_phase.tif", base);
-                    save_geotiff_f32(defo_phase.view(), &defo_path, bbox_opt)?;
+                    save_geotiff_f32(displacement_mm_array.view(), &defo_path, bbox_opt)?;
                     info!("  ✓ Displacement: {}", defo_path);
 
                     // [3/5] Save coherence GeoTIFF
@@ -253,96 +232,38 @@ async fn main() -> Result<()> {
                     return Ok(());
                 }
 
-                let crop = if let (Some(lat), Some(lon)) = (cli.crop_lat, cli.crop_lon) {
-                    Some(nisar_parser::CropRegion {
-                        center_lat: lat,
-                        center_lon: lon,
-                        radius_km: cli.crop_radius_km,
-                    })
-                } else {
-                    None
-                };
-                let product = if let Some(ref crop_region) = crop {
-                    info!("Geographic crop enabled: ({:.4}°, {:.4}°) r={:.1}km",
-                        crop_region.center_lat, crop_region.center_lon, crop_region.radius_km);
-                    // Pre-load validation: check bbox intersection WITHOUT loading the full dataset
-                    nisar_parser::validate_crop_intersection(input, crop_region)?;
-                    nisar_parser::parse_nisar_cropped(input, &cli.polarization, crop_region)?
-                } else {
-                    nisar_parser::parse_nisar_auto(input, &cli.polarization)?
-                };
+            let crop = if let (Some(lat), Some(lon)) = (cli.crop_lat, cli.crop_lon) {
+                Some(nisar_parser::CropRegion {
+                    center_lat: lat,
+                    center_lon: lon,
+                    radius_km: cli.crop_radius_km,
+                })
+            } else {
+                None
+            };
+            let product = if let Some(ref crop_region) = crop {
+                info!("Geographic crop enabled: ({:.4}°, {:.4}°) r={:.1}km",
+                    crop_region.center_lat, crop_region.center_lon, crop_region.radius_km);
+                nisar_parser::validate_crop_intersection(input, crop_region)?;
+                nisar_parser::parse_nisar_cropped(input, &cli.polarization, crop_region)?
+            } else {
+                nisar_parser::parse_nisar_auto(input, &cli.polarization)?
+            };
 
-                info!("Product type: {:?}", product.product_type);
+            info!("Product type: {:?} ({}×{})", product.product_type, product.slc.nrows(), product.slc.ncols());
+            info!("Product is pre-focused Level-1+ data — no RDA required.");
 
-                // All NISAR Level-1+ products are already focused — skip RDA
-                let should_skip_rda = !cli.process && matches!(
-                    product.product_type,
-                    NisarProductType::RSLC | NisarProductType::GSLC
-                    | NisarProductType::GCOV | NisarProductType::GUNW
-                );
-
-                if should_skip_rda {
-                    info!("Product is already focused ({}), skipping RDA pipeline (use --process to override)",
-                        match product.product_type {
-                            NisarProductType::RSLC => "Range-compressed SLC",
-                            NisarProductType::GSLC => "Geocoded SLC",
-                            NisarProductType::GCOV => "Geocoded Covariance",
-                            NisarProductType::GUNW => "Unwrapped Interferogram",
-                        });
-                }
-
-                let bbox = product.bbox.clone();
-
-                let p = &product.params;
-                let mut proc = SARProcessor::new(
-                    p.center_frequency as f32,
-                    p.sample_rate as f32,
-                    p.pulse_duration as f32,
-                    p.range_bandwidth as f32,
-                    p.prf as f32,
-                );
-
-                if cli.no_rcmc {
-                    proc = proc.without_rcmc();
-                } else {
-                    let rcmc = RcmcParams::from_frequency(
-                        p.center_frequency as f32,
-                        7_500.0, // NISAR LEO orbital velocity
-                        800_000.0,
-                    );
-                    proc = proc.with_rcmc_params(rcmc);
-                }
-
-                let data = if cli.limit_lines > 0 {
-                    let limit = cli.limit_lines.min(product.slc.nrows());
-                    info!("Limiting to {} azimuth lines", limit);
-                    product
-                        .slc
-                        .slice(ndarray::s![..limit, ..])
-                        .to_owned()
-                } else {
-                    product.slc
-                };
-
-                (proc, data, should_skip_rda, bbox)
-            }
-            _ => {
-                anyhow::bail!(
-                    "Unsupported file format '{}'. Use .h5 for NISAR or --synthetic for test data.",
-                    ext
-                );
-            }
+            (product.slc, product.bbox)
+        }
+        _ => {
+            anyhow::bail!(
+                "Unsupported file format '{}'. Use .h5 for NISAR products.",
+                ext
+            );
         }
     };
 
-    // ── Run RDA Pipeline (or skip for pre-processed products) ──────────────
-    let focused = if skip_rda {
-        info!("Rendering pre-processed data directly ({}×{})", raw_data.nrows(), raw_data.ncols());
-        raw_data.clone()
-    } else {
-        info!("Starting RDA pipeline on {}×{} image...", raw_data.nrows(), raw_data.ncols());
-        processor.process_rda(&raw_data)
-    };
+    let focused = slc_data;
 
     // ── Save Output ────────────────────────────────────────────────────────
     let output_path = if let Some(tile_dir) = cli.tiles_dir {
@@ -390,7 +311,7 @@ async fn main() -> Result<()> {
         info!("✓ Done. GeoTIFF written to: {}", output_tif);
 
         // Keep generating the PNG to ensure the legacy Dashboard is not broken
-        if cli.output.ends_with(".png") && cli.process {
+        if cli.output.ends_with(".png") {
             info!("Saving SAR PNG (Dashboard fallback) → {}", cli.output);
             save_sar_image(focused.view(), &cli.output)?;
         }
@@ -418,25 +339,7 @@ async fn main() -> Result<()> {
         // ── Step 1: Load slave SLC ────────────────────────────────────────
         info!("[1/12] Loading slave SLC: {:?}", slave_path);
 
-        let slave_data = if cli.synthetic || slave_path.to_str() == Some("synthetic") {
-            // Synthetic mode: inject a Gaussian subsidence bowl into slave
-            info!("[1/12] Synthetic mode: creating slave with Gaussian subsidence bowl");
-            let (rows, cols) = focused.dim();
-            let center_r = rows / 2;
-            let center_c = cols / 2;
-            // 10mm subsidence ≈ phase shift of 10e-3 * 4π / λ
-            let wavelength = 0.2384_f32;
-            let max_disp_m = 0.010; // 10mm
-            let max_phase = max_disp_m * 4.0 * std::f32::consts::PI / wavelength;
-
-            Array2::from_shape_fn((rows, cols), |(r, c)| {
-                let dr = (r as f32 - center_r as f32) / (rows as f32 * 0.2);
-                let dc = (c as f32 - center_c as f32) / (cols as f32 * 0.2);
-                let gauss = (-0.5 * (dr * dr + dc * dc)).exp();
-                let defo_phase = max_phase * gauss;
-                focused[[r, c]] * Complex32::from_polar(1.0, defo_phase)
-            })
-        } else {
+        let slave_data = {
             let ext = slave_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
             match ext.as_str() {
                 "h5" | "hdf5" | "he5" => {
@@ -454,12 +357,7 @@ async fn main() -> Result<()> {
                     } else {
                         nisar_parser::parse_nisar_auto(&slave_path, &cli.polarization)?
                     };
-                    if cli.limit_lines > 0 {
-                        let limit = cli.limit_lines.min(product.slc.nrows());
-                        product.slc.slice(ndarray::s![..limit, ..]).to_owned()
-                    } else {
-                        product.slc
-                    }
+                    product.slc
                 }
                 _ => anyhow::bail!("Unsupported slave format. Use .h5 for NISAR."),
             }
@@ -627,7 +525,14 @@ async fn main() -> Result<()> {
 
         // Deformation phase GeoTIFF
         let defo_path = format!("{}_defo_phase.tif", base);
-        save_geotiff_f32(defo_phase.view(), &defo_path, bbox_opt)?;
+        let displacement_mm_array = defo_phase.mapv(|phi| {
+            if phi.is_finite() {
+                phi * options.wavelength_m * 1000.0 / (4.0 * std::f32::consts::PI)
+            } else {
+                f32::NAN
+            }
+        });
+        save_geotiff_f32(displacement_mm_array.view(), &defo_path, bbox_opt)?;
         info!("  ✓ Deformation phase: {}", defo_path);
 
         // Coherence GeoTIFF
@@ -714,67 +619,4 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-// ─── Helpers ───────────────────────────────────────────────────────────────
-
-fn build_synthetic_processor(no_rcmc: bool) -> SARProcessor {
-    // Sentinel-1 C-band parameters as default test case
-    let mut proc = SARProcessor::new(
-        5.405e9, // 5.405 GHz C-band carrier
-        25.0e6,  // 25 MHz sample rate
-        50.0e-6, // 50 µs pulse duration
-        20.0e6,  // 20 MHz bandwidth
-        1600.0,  // 1600 Hz PRF
-    );
-
-    if no_rcmc {
-        proc = proc.without_rcmc();
-    }
-
-    proc
-}
-
-/// Generate a synthetic raw SAR signal with a bright point target
-/// at (target_az, target_rg) to validate the focusing algorithm.
-fn generate_synthetic_point_target(
-    n_az: usize,
-    n_rg: usize,
-    target_az: usize,
-    target_rg: usize,
-) -> Array2<Complex32> {
-    use num_complex::Complex32;
-    use std::f32::consts::PI;
-
-    let mut data = Array2::<Complex32>::zeros((n_az, n_rg));
-
-    // A simple point target: a chirp in range × a slow-time modulation in azimuth
-    let bandwidth = 20.0e6_f32;
-    let sample_rate = 25.0e6_f32;
-    let prf = 1600.0_f32;
-    let chirp_rate = bandwidth / 50.0e-6_f32;
-
-    for az in 0..n_az {
-        for rg in 0..n_rg {
-            // Range offset from target
-            let t = (rg as f32 - target_rg as f32) / sample_rate;
-            // Azimuth offset from target
-            let eta = (az as f32 - target_az as f32) / prf;
-
-            // Point scatterer signal: chirp in range × Doppler in azimuth
-            let range_chirp = Complex32::from_polar(1.0, PI * chirp_rate * t * t);
-            let az_phase = Complex32::from_polar(1.0, -PI * 1000.0 * eta * eta);
-
-            let envelope_r  = (-(t.powi(2)) / (2.0 * (10.0 / sample_rate).powi(2))).exp();
-            let envelope_az = (-(eta.powi(2)) / (2.0 * (30.0 / prf).powi(2))).exp();
-
-            data[[az, rg]] = range_chirp * az_phase * envelope_r * envelope_az;
-        }
-    }
-
-    info!(
-        "Synthetic point target at [{}, {}] in {} × {} scene",
-        target_az, target_rg, n_az, n_rg
-    );
-    data
 }

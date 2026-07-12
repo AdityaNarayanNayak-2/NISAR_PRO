@@ -6,7 +6,7 @@ use uuid::Uuid;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use std::process::Stdio;
-use log::info;
+use log::{info, error};
 
 use kube::{
     api::{Api, PostParams, LogParams, ListParams},
@@ -170,8 +170,18 @@ async fn spawn_local_job(
     }
 
     let output_path = format!("results/{}.tif", job_id);
-    let is_synthetic = input_file.is_none()
-        || input_file.as_deref() == Some("internal://generate_test_pattern");
+
+    // Input file is required — processor no longer supports synthetic mode
+    let input = match input_file {
+        Some(f) if !f.is_empty() && f != "internal://generate_test_pattern" => f,
+        _ => {
+            error!("No input file provided for job {}. Processor requires --input.", job_id);
+            let mut m = metadata.write().await;
+            m.status = JobStatus::Failed("No input file provided. Select a NISAR product to process.".to_string());
+            let _ = m.tx.send("[ERROR] No input file provided.".to_string());
+            return;
+        }
+    };
 
     // Locate the sar_processor binary (try release first, then debug)
     let binary = find_processor_binary();
@@ -182,41 +192,36 @@ async fn spawn_local_job(
         .stderr(Stdio::piped())
         .env("RUST_LOG", "info");
 
-    if is_synthetic {
-        cmd.args(["--synthetic", "--output", &output_path]);
-    } else {
-        let input = input_file.unwrap_or_default();
-        cmd.args(["--input", &input, "--output", &output_path]);
+    cmd.args(["--input", &input, "--output", &output_path]);
+    
+    if pipeline.as_deref() == Some("insar") {
+        // GUNW files contain pre-computed InSAR
+        // No slave needed — processor handles it
+        let is_gunw = input.contains("_GUNW_") || 
+                      input.ends_with("_gunw.h5");
         
-        if pipeline.as_deref() == Some("insar") {
-            // GUNW files contain pre-computed InSAR
-            // No slave needed — processor handles it
-            let is_gunw = input.contains("_GUNW_") || 
-                          input.ends_with("_gunw.h5");
-            
-            if !is_gunw {
-                // Only add slave for non-GUNW files
-                if let Some(ref slave) = slave_file {
-                    cmd.args(["--insar-slave", slave]);
-                } else {
-                    // synthetic slave fallback
-                    cmd.args(["--insar-slave", &input]);
-                }
+        if !is_gunw {
+            // Only add slave for non-GUNW files
+            if let Some(ref slave) = slave_file {
+                cmd.args(["--insar-slave", slave]);
+            } else {
+                // self-interferometry fallback
+                cmd.args(["--insar-slave", &input]);
             }
-            // GUNW: processor auto-detects, no slave needed
-            
-            if let (Some(lat), Some(lon)) = (crop_lat, crop_lon) {
-                cmd.args([
-                    "--crop-lat", &lat.to_string(),
-                    "--crop-lon", &lon.to_string(),
-                ]);
-                if let Some(r) = crop_radius_km {
-                    cmd.args(["--crop-radius-km", &r.to_string()]);
-                }
-            }
-        } else if pipeline.as_deref() == Some("cfar") {
-            cmd.args(["--ship-detect"]);
         }
+        // GUNW: processor auto-detects, no slave needed
+        
+        if let (Some(lat), Some(lon)) = (crop_lat, crop_lon) {
+            cmd.args([
+                "--crop-lat", &lat.to_string(),
+                "--crop-lon", &lon.to_string(),
+            ]);
+            if let Some(r) = crop_radius_km {
+                cmd.args(["--crop-radius-km", &r.to_string()]);
+            }
+        }
+    } else if pipeline.as_deref() == Some("cfar") {
+        cmd.args(["--ship-detect"]);
     }
 
     {

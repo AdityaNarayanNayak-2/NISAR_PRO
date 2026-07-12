@@ -9,7 +9,71 @@ use ndarray::Array2;
 use num_complex::Complex32;
 use rustfft::FftPlanner;
 
-use crate::rcmc::sinc_interpolate_shift;
+use std::f32::consts::PI;
+
+// ── Sinc interpolation (extracted from archived rcmc.rs) ──────────────────
+
+/// Number of interpolation kernel points (typically 8-16 for SAR)
+const SINC_KERNEL_SIZE: usize = 8;
+
+/// Calculate sinc function: sin(πx)/(πx)
+#[inline]
+fn sinc(x: f32) -> f32 {
+    if x.abs() < 1e-10 {
+        1.0
+    } else {
+        let pi_x = PI * x;
+        pi_x.sin() / pi_x
+    }
+}
+
+/// Generate sinc interpolation kernel with Hamming window
+fn generate_sinc_kernel(shift: f32, kernel_size: usize) -> Vec<f32> {
+    let half = kernel_size as i32 / 2;
+    let mut kernel = Vec::with_capacity(kernel_size);
+
+    for i in 0..kernel_size as i32 {
+        let x = (i - half) as f32 - shift;
+        let sinc_val = sinc(x);
+        let n = (i as f32) / (kernel_size as f32 - 1.0);
+        let window = 0.54 - 0.46 * (2.0 * PI * n).cos();
+        kernel.push(sinc_val * window);
+    }
+
+    let sum: f32 = kernel.iter().sum();
+    if sum.abs() > 1e-10 {
+        for k in &mut kernel {
+            *k /= sum;
+        }
+    }
+
+    kernel
+}
+
+/// Apply sinc interpolation to shift a signal by a fractional amount
+fn sinc_interpolate_shift(signal: &[Complex32], shift: f32) -> Vec<Complex32> {
+    let n = signal.len();
+    let mut output = vec![Complex32::new(0.0, 0.0); n];
+
+    let int_shift = shift.floor() as i32;
+    let frac_shift = shift - shift.floor();
+
+    let kernel = generate_sinc_kernel(frac_shift, SINC_KERNEL_SIZE);
+    let half_kernel = SINC_KERNEL_SIZE as i32 / 2;
+
+    for i in 0..n as i32 {
+        let mut sum = Complex32::new(0.0, 0.0);
+        for (k_idx, &k_val) in kernel.iter().enumerate() {
+            let src_idx = i - int_shift - (k_idx as i32 - half_kernel);
+            if src_idx >= 0 && src_idx < n as i32 {
+                sum += signal[src_idx as usize] * k_val;
+            }
+        }
+        output[i as usize] = sum;
+    }
+
+    output
+}
 
 /// Coregister slave SLC to master SLC.
 ///

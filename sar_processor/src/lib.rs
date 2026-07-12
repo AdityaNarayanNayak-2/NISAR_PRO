@@ -1,12 +1,11 @@
 //! SAR Processor Library
 //!
-//! Core SAR processing algorithms including:
-//! - Range-Doppler Algorithm (RDA)
-//! - Range Cell Migration Correction (RCMC)
-//! - ISCE3 integration (optional)
+//! Core SAR processing algorithms for NISAR Level-1+ products:
+//! - NISAR HDF5 format parsing (RSLC/GSLC/GCOV/GUNW)
 //! - Sentinel-1 SAFE format parsing
-//! - NISAR HDF5 format parsing
-//! - Anomaly detection (AMTAD)
+//! - InSAR: coregistration, coherence, phase unwrapping, deramping
+//! - Infrastructure health / PS-InSAR analysis
+//! - Ship detection (CA-CFAR)
 //! - Polarimetric SAR decomposition (PolSAR)
 
 pub mod algorithm;
@@ -16,8 +15,6 @@ pub mod nisar_parser;
 pub mod gunw_parser;
 pub mod polsar;
 pub mod radar_utils;
-pub mod rcmc;
-pub mod rda;
 pub mod safe_parser;
 pub mod smart_downloader;
 pub mod insar;
