@@ -106,10 +106,6 @@ test_processor:
         - sar_processor/**/*
   script:
     - cd sar_processor && cargo test
-  artifacts:
-    reports:
-      junit: sar_processor/target/test-results.xml
-    when: always
 
 test_gateway:
   stage: test

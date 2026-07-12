@@ -800,6 +800,10 @@ mod tests {
     #[test]
     fn test_read_gunw_coordinates() {
         let path = std::path::Path::new("/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GUNW_009_127_A_011_010_4000_SH_20260105T235314_20260105T235347_20260117T235314_20260117T235347_X05010_N_F_J_001.h5");
+        if !path.exists() {
+            println!("Skipping test_read_gunw_coordinates: test data file not found locally");
+            return;
+        }
         let file = File::open(path).expect("Failed to open file");
         let x_path = "/science/LSAR/GUNW/grids/frequencyA/unwrappedInterferogram/xCoordinates";
         let ds = file.dataset(x_path);
@@ -813,6 +817,10 @@ mod tests {
     #[test]
     fn test_extract_gunw_bbox() {
         let path = std::path::Path::new("/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GUNW_009_127_A_011_010_4000_SH_20260105T235314_20260105T235347_20260117T235314_20260117T235347_X05010_N_F_J_001.h5");
+        if !path.exists() {
+            println!("Skipping test_extract_gunw_bbox: test data file not found locally");
+            return;
+        }
         let file = File::open(path).expect("Failed to open file");
         let bbox = extract_gunw_bbox(&file).expect("Failed to extract bbox");
         println!("Extracted bbox: {:?}", bbox);
