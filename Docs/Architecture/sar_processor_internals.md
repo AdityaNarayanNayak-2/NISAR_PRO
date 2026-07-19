@@ -1,124 +1,104 @@
-# SAR Processor Internals
+# SAR Processor Component Internals
 
-> Source: `sar_processor/src/` — Pure Rust SAR compute engine, zero Python dependencies.
+> Location: `sar_processor/src/` — High-performance, stateless Synthetic Aperture Radar (SAR) compute engine.
 
-## Overview
-The `sar_processor` is a stateless CLI binary. It ingests a raw SAR file (NISAR HDF5 or Sentinel-1 SAFE), runs the appropriate signal processing pipeline, and outputs PNG images + GeoJSON sidecar files. It is spawned as a child process by the `sar-gateway`.
+---
 
-## Module Map (`lib.rs`)
-```
-lib.rs                  → Public module re-exports
-├── io.rs               → Image encoding, GeoTIFF writer, XYZ tile generation, CLAHE + Lee filters
-├── nisar_parser.rs     → NASA NISAR HDF5 reader (RSLC/GSLC/GCOV/GUNW metadata extraction)
-├── gunw_parser.rs      → Geocoded Unwrapped Interferogram HDF5 parser with CC & coherence masking
-├── safe_parser.rs      → ESA Sentinel-1 SAFE/GeoTIFF reader
-├── rda.rs              → Range-Doppler Algorithm (Range + Azimuth compression)
-├── rcmc.rs             → Range Cell Migration Correction (Sinc interpolation)
-├── radar_utils.rs      → LFM chirp generation + FFTProcessor wrapper
-├── insar.rs            → Interferogram + Coherence estimation
-├── infra_health.rs     → Persistent Scatterer analysis + displacement classification + alerts
-├── ship_detection.rs   → CA-CFAR with integral image acceleration
-├── polsar.rs           → Pauli decomposition (HH/VV/HV → RGB)
-├── algorithm.rs        → AMTAD multi-scale anomaly detection
-├── smart_downloader.rs → HTTP Range-Request downloader for partial reads
-├── isce3_ffi.rs        → Optional ISCE3 C++ FFI bridge (experimental)
-├── deramp.rs           → Iterative robust quadratic surface fitting & phase ramp removal
-├── water_mask.rs       → External SWBD and coherence-based water masking
-├── unwrap.rs           → Phase unwrapping algorithms (SNAPHU interface / minimum cost flow)
-├── topo_phase.rs       → Topographic phase correction using DEMs
-└── errors.rs           → Custom error types
-```
+## 1. Component Overview
 
-## Execution Flow (`main.rs`)
+The `sar_processor` is a stateless, pure-Rust command-line tool responsible for the core signal processing, radar science telemetry extraction, and geospatial visualization output. It executes heavy mathematical operations on ND-arrays, parallelized across multiple CPU cores via `rayon`.
 
-```
-CLI Args (clap)
-    │
-    ├─ --synthetic → generate_synthetic_point_target(1024×1024)
-    │
-    └─ --input <FILE>
-         │
-         ├─ .h5/.hdf5 → nisar_parser::parse_nisar_auto()
-         │    │
-         │    └─ Detects product type (RSLC/GSLC/GCOV/GUNW)
-         │       If already focused → skip RDA (unless --process)
-         │       Extracts: Complex SLC array, GeoBoundingBox, radar params
-         │
-         └─ Returns (SARProcessor, Array2<Complex32>, skip_rda, bbox)
+Unlike traditional GIS/SAR pipelines that rely on Python wrapper scripts and native C++ binaries, the processor is a single compiled binary with **zero Python or C library runtime dependencies**.
 
-    ┌─ skip_rda=true → render directly (GCOV/GUNW pre-processed)
-    └─ skip_rda=false → processor.process_rda(&raw_data)
-         │
-         ├─ Range Compression (FFT → matched filter × → IFFT)
-         ├─ RCMC (Sinc interpolation, 8-point Hamming kernel)
-         └─ Azimuth Compression (FFT → azimuth ref × → IFFT)
-
-    Output Stage:
-    ├─ --tiles-dir → generate_xyz_tiles() + geo.json sidecar
-    ├─ --output *.tif → save_sar_geotiff() (Pure Rust, EPSG:4326)
-    └─ default → save_sar_image() as PNG + .geo.json sidecar
-         └─ Emits {"event":"georef","bbox":{...}} to stdout (Gateway captures via SSE)
-
-    Optional Pipelines (run after main output):
-    ├─ --insar-slave <FILE> → InSAR + infra_health analysis → _insar.json
-    └─ --ship-detect → CA-CFAR with 8x downsampling → _ships.json
+```mermaid
+graph TD
+    A[CLI Invocation] --> B[clap CLI Parser]
+    B --> C[parse_nisar_auto]
+    C --> D{Product Type}
+    
+    D -->|GUNW| E[gunw_parser.rs]
+    D -->|GCOV/GSLC| F[nisar_parser.rs]
+    
+    E --> G[deramp_phase]
+    G --> H[displacement_mm_array]
+    H --> I[infra_health::analyze_infrastructure_unwrapped]
+    I --> J[save_geotiff_f32]
+    
+    F --> K[Covariance Pauli Pauli RGB]
+    K --> L[save_geotiff_f32]
+    
+    J --> M[GDAL 42113 NoData Tag]
+    L --> M
 ```
 
-## Key File Details
+---
 
-### `nisar_parser.rs` (38 KB — largest file)
-Traverses NASA's deeply nested HDF5 group hierarchy to extract:
-- **RSLC:** `/science/LSAR/RSLC/swaths/frequency{A,B}/{HH,VV,HV,VH}` → Complex SLC arrays from compound `{r: f32, i: f32}` datatypes.
-- **GCOV:** `/science/LSAR/GCOV/grids/frequency{A,B}/` → Real-valued covariance matrices.
-- **Geolocation:** Extracts bounding boxes from `/science/LSAR/*/metadata/processingInformation/parameters/` or coordinate arrays.
-- **Metadata Extraction:** Extracts bounding polygons, temporal baselines, orbits, polarizations, track, and frame index from identification datasets.
+## 2. Updated Directory Mapping
 
-### `gunw_parser.rs` (33 KB)
-Loads and processes NASA's Geocoded Unwrapped Interferogram (GUNW) HDF5 products:
-- **Connected Components Masking**: Detects and reads the `connectedComponents` dataset. Unwrapped phase values where `connectedComponents == 0` are masked to `NaN` to filter out SNAPHU phase unwrapping failures.
-- **Low-Coherence Proxy Masking**: Masks pixels with coherence $< 0.3$ to `NaN` to exclude open water bodies and dense vegetation, eliminating massive phase unwrapping anomalies before analysis.
-- **Ionospheric Correction**: Dynamically loads and subtracts the ionosphere phase screen from the unwrapped phase.
+Following the recent architectural simplification, the codebase has been streamlined:
 
-### `deramp.rs` (10 KB)
-Removes regional orbital and topographic phase ramps from unwrapped phase arrays:
-- **Least-Squares Fit**: Fits a 2D quadratic phase surface: $\phi(x,y) = a_0 + a_1 x + a_2 y + a_3 x^2 + a_4 y^2 + a_5 xy$.
-- **Iterative Robust Estimation**: Employs a 3-iteration robust loop. In each iteration, it computes residuals, calculates the robust standard deviation ($\sigma_{\text{MAD}} = 1.4826 \times \text{MAD}$), and rejects pixels with residuals $> 2.5\sigma$. This protects the fit from being biased by localized ground deformation or atmospheric turbulence.
+```
+sar_processor/src/
+├── main.rs         → CLI dispatcher, execution controller & SSE stdout event emitter
+├── lib.rs          → Public module declarations
+├── io.rs           → Pure-Rust GeoTIFF writer with inline ASCII tags & NoData metadata
+├── nisar_parser.rs → Coordinate transformation and HDF5 covariance parser
+├── gunw_parser.rs  → Unwrapped interferogram (GUNW) parser with CC and coherence masking
+├── deramp.rs       → Iterative robust quadratic 2D surface fitting & orbit phase deramping
+├── infra_health.rs → PS-InSAR classification, structural risk metrics, & alert generator
+├── ship_detection.rs → O(1) Integral-image-accelerated CA-CFAR target classifier
+├── coregister.rs   → Sinc-interpolated sub-pixel image coregistrator
+├── water_mask.rs   → SWBD external mask loader & low-coherence proxy masking
+├── errors.rs       → Standardized anyhow/thiserror custom error variants
+└── archive/        → Legacy algorithms (RDA, RCMC, validation scripts) kept for reference
+```
 
-### `rda.rs` — The Core Algorithm
-Implements the full Range-Doppler Algorithm using `rustfft`:
-1. **Range Compression:** Row-wise FFT, multiply by conjugate of chirp reference, IFFT.
-2. **RCMC:** Corrects curved migration paths using sinc interpolation.
-3. **Azimuth Compression:** Column-wise FFT, multiply by azimuth matched filter, IFFT.
+---
 
-### `io.rs` — Output Pipeline
-- **GeoTIFF Writer:** A pure-Rust implementation (`save_sar_geotiff`) that writes 256×256 tiled GeoTIFFs. It manually injects the `ModelTransformationTag` (34264) for explicit EPSG:4326 georeferencing, ensuring correct orientation (north-up) in GIS tools without external dependencies like GDAL.
-- **Lee Sigma Filter:** Speckle noise reduction (adaptive, edge-preserving).
-- **CLAHE:** Contrast Limited Adaptive Histogram Equalization for visual enhancement.
-- **Spatial Multilook:** Averages N×N blocks to reduce speckle and control output resolution.
-- **XYZ Tiling:** Chops the output into 256×256 web tiles (Google Maps compatible).
+## 3. Key Core Modules & Algorithms
 
-### `infra_health.rs` — Infrastructure Monitoring
-Takes the InSAR interferogram + coherence matrix and:
-1. Filters for Persistent Scatterers (coherence > 0.85).
-2. Converts phase → Line-of-Sight displacement: `d = (φ × λ) / (4π)`.
-3. Classifies severity: STABLE (<2mm), CAUTION (2-5mm), ALERT (5-10mm), CRITICAL (>10mm).
-4. Exports top 2,000 scatterers as JSON with lat/lon coordinates.
+### 3.1. Pure-Rust HDF5 Reader (`rustyhdf5` & `rustyhdf5-format`)
+To eliminate the painful compilation requirement of native C/C++ libraries (such as `libhdf5-dev`), the processor uses a pure-Rust HDF5 implementation.
+* **Benefit**: Safe, compile-once, run-anywhere binary with zero dynamic library linking issues at runtime.
+* **Mechanism**: Maps HDF5 files to low-level byte buffers, extracting complex compound datasets (like compound `{r: f32, i: f32}` for SLC arrays) using zero-copy slicing.
 
-### `ship_detection.rs` — Maritime CFAR
-1. Builds a Summed Area Table (Integral Image) in O(N) time.
-2. Sweeps a sliding window: guard_radius=4, bg_radius=10.
-3. Threshold: `α = N × (Pfa^(-1/N) - 1)` where Pfa = 1e-6.
-4. Outputs ship detections with geographic coordinates as JSON.
+### 3.2. Phase-to-Displacement Scaling (Millimeters)
+Radar phase difference ($\phi$, in radians) is converted to line-of-sight displacement in millimeters using the specific carrier wavelength ($\lambda$) of the L-band radar:
 
-## Dependencies (Cargo.toml)
-| Crate | Purpose |
-|-------|---------|
-| `ndarray` | N-dimensional arrays for matrix math |
-| `num-complex` | Complex32 arithmetic |
-| `rustfft` | Fast Fourier Transforms |
-| `hdf5` | NASA HDF5 file reading (requires `libhdf5-dev`) |
-| `image` | PNG encoding |
-| `rayon` | Parallel iterators for multi-core processing |
-| `clap` | CLI argument parsing |
-| `serde` / `serde_json` | JSON serialization for GeoJSON output |
-| `chrono` | Timestamps for reports |
+$$\text{displacement}_{\text{mm}} = \frac{\phi \cdot \lambda \cdot 1000}{4\pi}$$
+
+* **Pipeline Execution**: The raw radians are preserved during PS-InSAR infrastructure safety modeling (to prevent double-scaling), but the final written GeoTIFF file (`_defo_phase.tif`) contains real displacement scaled in millimeters.
+
+### 3.3. GDAL NoData Tag (42113) Support
+To ensure standard GIS software (QGIS, ArcGIS, TiTiler) does not render out-of-bounds or masked pixels (water, low-coherence regions):
+* **`io.rs`** manually injects the standard GDAL metadata tag `42113` with the ASCII value `"nan\0"`.
+* The TIFF Image File Directory (IFD) dynamically expands inline, preventing memory allocation underflows.
+
+### 3.4. 2D Iterative Robust Deramping (`deramp.rs`)
+Compensates for orbital errors, ionospheric phase ramps, and topographic distortions by fitting a quadratic surface:
+
+$$\phi(x,y) = a_0 + a_1 x + a_2 y + a_3 x^2 + a_4 y^2 + a_5 xy$$
+
+* Fits using least-squares, then runs a 3-iteration robust loop.
+* Rejects outliers exceeding $2.5\sigma$ based on the Median Absolute Deviation ($\sigma_{\text{MAD}} = 1.4826 \times \text{MAD}$), shielding the orbit fit from localized tectonic/subsidence signals.
+
+---
+
+## 4. Simplified Command Line Interface (CLI)
+
+The old, complex CLI flags (`--synthetic`, `--no-rcmc`) have been removed. The simplified engine expects pre-focused HDF5 files directly:
+
+```
+Usage: sar_processor [OPTIONS] --input <FILE>
+
+Options:
+  -i, --input <FILE>                  Input file: NISAR HDF5 (.h5) — GSLC, GCOV, or GUNW
+      --insar-slave <SLAVE_FILE>      Secondary input file for two-pass InSAR (Slave image)
+  -o, --output <OUTPUT>               Output GeoTIFF path [default: focused_sar.tif]
+  -p, --polarization <POLAR>          Polarisation channel (HH, VV, HV, VH) [default: HH]
+      --tiles-dir <TILES_DIR>         Output directory for XYZ Web Tiles
+      --ship-detect                   Run CA-CFAR maritime ship detection
+      --crop-lat <LAT>                Center latitude to crop (for spatial filtering)
+      --crop-lon <LON>                Center longitude to crop
+      --crop-radius-km <RADIUS>       Radius of spatial crop in kilometers [default: 10.0]
+```

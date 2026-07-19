@@ -537,7 +537,7 @@ function AppDashboard() {
                     }
 
                     const tifUrl = encodeURIComponent(
-                        `file:///home/aditya/Desktop/sar_analyzer/sar-gateway/results/${finalTifPath}`
+                        api(`/results/${finalTifPath}`)
                     );
                     return (
                         <TileLayer

@@ -1,96 +1,77 @@
-# SAR Gateway Internals
+# SAR Gateway Component Internals
 
-> Source: `sar-gateway/src/` — Axum HTTP server bridging the React dashboard to the Rust processor.
+> Location: `sar-gateway/src/` — Multi-threaded asynchronous API gateway and job supervisor.
 
-## Overview
-The gateway is a lightweight Rust HTTP server built with Axum + Tokio. It has **two execution modes**:
-1. **Local Mode (default):** Spawns `sar_processor` as a child process on the user's machine.
-2. **K8s Mode:** Submits a `SarJob` Custom Resource to a Kubernetes cluster (enterprise deployment).
+---
 
-The mode is selected via the `LOCAL_MODE` environment variable (defaults to `true`).
+## 1. Component Overview
 
-## Module Map
-```
-main.rs       → Router setup, AppState, CORS, static file serving
-handlers.rs   → HTTP endpoint handlers (search, jobs, SSE streaming)
-jobs.rs       → Job orchestration: local subprocess OR Kubernetes CRD
-models.rs     → Request/Response data structures
-esa_client.rs → ESA Copernicus OData API client
-nasa_client.rs→ NASA ASF (Alaska Satellite Facility) search client
-```
+The `sar-gateway` acts as the coordinator for the entire platform. It is written in Rust using the **Axum** web framework and the **Tokio** runtime. It bridges the React dashboard control plane (UI) to the underlying compute engine (CLI/K8s).
 
-## REST API Endpoints
+It runs in two distinct modes depending on the deployment environment:
+1. **Local Subprocess Mode (Dev/Single-VM)**: Spawns the compiled `sar_processor` binary directly on the host machine using standard I/O pipes.
+2. **Kubernetes Mode (Cloud/Production)**: Submits custom `SarJob` Custom Resources (CRDs) to a Kubernetes API server via the `kube-rs` client.
 
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| `GET` | `/search` | `search_handler` | Query ESA Copernicus for Sentinel-1 scenes |
-| `GET` | `/search/nisar` | `search_nisar_handler` | Query NASA ASF for NISAR scenes |
-| `POST` | `/jobs` | `start_job_handler` | Submit a processing job |
-| `GET` | `/jobs/:id` | `get_job_handler` | Poll job status + output path + bbox |
-| `GET` | `/jobs/:id/logs` | `stream_logs_handler` | SSE stream of real-time processor logs |
-| `GET` | `/results/*` | `ServeDir` | Static file server for output PNGs |
-
-## State Management (`AppState`)
-```rust
-pub struct AppState {
-    pub jobs: Arc<RwLock<HashMap<String, Arc<RwLock<JobMetadata>>>>>,
-}
-```
-A thread-safe in-memory map of all active/historical jobs, keyed by UUID. Each `JobMetadata` contains:
-- `status`: Queued → Running → Completed/Failed
-- `logs`: Vec of all log lines (for replay to late-connecting SSE clients)
-- `tx`: `broadcast::Sender` for live log streaming
-- `output_path`: Path to the generated PNG
-- `bbox`: Geographic bounding box for map overlay
-
-## Local Mode Execution (`jobs.rs :: spawn_local_job`)
-```
-POST /jobs { input_file: "/path/to/NISAR.h5", pipeline: "cfar" }
-    │
-    ├─ Generate UUID: "sar-a1b2c3d4"
-    ├─ Insert JobMetadata into AppState
-    │
-    └─ tokio::spawn(async {
-         1. Create results/ directory
-         2. find_processor_binary()
-            → ../sar_processor/target/release/sar_processor
-            → ../sar_processor/target/debug/sar_processor
-            → ./sar_processor (fallback)
-         3. Build Command with args:
-            --input /path/to/file --output results/sar-a1b2c3d4.png
-            + --ship-detect (if pipeline == "cfar")
-            + --insar-slave (if pipeline == "insar")
-         4. Spawn child process with piped stdout/stderr
-         5. Stream stdout line-by-line:
-            → Parse {"event":"georef","bbox":{...}} → store bbox
-            → All other lines → push to logs + broadcast via tx
-         6. Stream stderr (env_logger output) → same broadcast
-         7. Wait for exit → update status to Completed/Failed
-       })
+```mermaid
+graph TD
+    Dashboard[React Dashboard] -->|HTTP REST / SSE| Gateway[Axum API Gateway]
+    Gateway -->|LOCAL_MODE=true| Subprocess[Spawn Local sar_processor]
+    Gateway -->|LOCAL_MODE=false| K8s[Create SarJob Custom Resource]
+    
+    Subprocess -->|Piped stdout/stderr| Gateway
+    K8s -->|kube-rs watch logs| Gateway
+    
+    Gateway -->|Server-Sent Events| Dashboard
 ```
 
-## SSE Streaming (`handlers.rs :: stream_logs_handler`)
-When the dashboard connects to `/jobs/:id/logs`:
-1. **Replay:** All historical log lines are sent first (so a late-connecting browser gets full context).
-2. **Live:** A `BroadcastStream` subscriber pipes new lines in real-time.
-3. **Keep-Alive:** Automatic SSE keep-alive prevents connection timeout.
+---
 
-## K8s Mode (`jobs.rs :: spawn_k8s_job`)
-When `LOCAL_MODE=false`:
-1. Connects to the Kubernetes API via `kube-rs` service account.
-2. Creates a `SarJob` CRD in the default namespace.
-3. Polls the CRD status every 2 seconds.
-4. Once the Operator creates a Pod, attaches to its log stream via `kube::Api::log_stream()`.
-5. Pipes the Pod's stdout into the same broadcast channel used by SSE.
+## 2. Updated Directory Mapping
 
-## Dependencies (Cargo.toml)
-| Crate | Purpose |
-|-------|---------|
-| `axum` | HTTP framework |
-| `tokio` | Async runtime (full features) |
-| `tower-http` | CORS middleware + static file serving |
-| `reqwest` | HTTP client for ESA/NASA API calls |
-| `tokio-stream` | SSE broadcast stream adapter |
-| `kube` / `k8s-openapi` | Kubernetes API client (K8s mode only) |
-| `uuid` | Job ID generation |
-| `serde` / `serde_json` | JSON serialization |
+```
+sar-gateway/src/
+├── main.rs         → Server instantiation, AppState initialization, router setup & static file serving
+├── handlers.rs     → Axum HTTP handlers (search, metadata, environmental context, and SSE streams)
+├── jobs.rs         → Async job orchestrator (local subprocess supervisor vs K8s CRD scheduler)
+├── models.rs       → Strongly typed request/response payload definitions (JSON serialization)
+├── esa_client.rs   → Copernicus OData API proxy client (Sentinel-1 query engine)
+└── nasa_client.rs  → NASA ASF Vertex query client (NISAR product query engine)
+```
+
+---
+
+## 3. REST & Event Streaming API
+
+The gateway exposes a clean REST API layer alongside Server-Sent Events (SSE) for log streaming:
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/jobs/health-ping` | System status verification ping (returns `{"status":"ok"}`) |
+| `GET` | `/assets/search` | Queries pre-defined critical infrastructure coordinates (e.g. Upper Kolab, Indravati) |
+| `GET` | `/context` | Queries dynamic weather and reservoir level telemetry for assets |
+| `GET` | `/search/nisar` | Queries NASA ASF for NISAR H5 products matching filters |
+| `POST` | `/jobs` | Submits a processing job (takes master/slave files, returns a job UUID) |
+| `GET` | `/jobs/:id` | Polls job execution phase, bounding box coordinates, and output file paths |
+| `POST` | `/jobs/:id/cancel` | Requests termination of an executing local subprocess or K8s Pod |
+| `GET` | `/jobs/:id/logs` | Establishes a persistent SSE channel streaming logs from the processor in real-time |
+| `GET` | `/results/*` | Static file service exposing the `./results` folder (crucial for TiTiler HTTP access) |
+
+---
+
+## 4. Local Execution & SSE Logging Pipeline
+
+In Local Mode (`LOCAL_MODE=true`), the gateway handles jobs asynchronously to prevent blocking the HTTP threads:
+
+1. **Job Queuing**: When a `/jobs` POST request arrives, a unique Job ID is generated (e.g., `sar-f83d2a1b`).
+2. **AppState Registration**: A `JobMetadata` object containing status, logs vector, and a broadcast channel is inserted into a thread-safe global `AppState` map (`Arc<RwLock<HashMap>>`).
+3. **Subprocess Spawn**: `tokio::spawn` launches the binary as a child process:
+   ```bash
+   ../sar_processor/target/release/sar_processor --input <IN> --output results/<ID>.tif
+   ```
+4. **Log Streaming & Event Sniffing**:
+   * Standard output is read line-by-line via `BufReader`.
+   * The gateway scans lines for structured georeferencing JSON outputs:
+     `{"event":"georef","bbox":{"south":...,"north":...}}`
+     When found, it parses the bbox coordinates and stores them in the job metadata for Leaflet alignment.
+   * All other log lines are pushed to the in-memory array and broadcasted to any connected SSE event loops.
+5. **SSE Connection Replay**: If the browser reconnects to `/jobs/:id/logs` after processing has started, the handler replays all cached log lines first before piping new log streams, ensuring the UI terminal never drops logs.

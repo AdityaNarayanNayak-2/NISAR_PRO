@@ -400,85 +400,102 @@ export default function InfrastructurePanel({
                 )}
 
 
+                {/* Keyframes for the pulse animation */}
+                <style>{`
+  @keyframes pulse-red {
+    0% { box-shadow: 0 0 6px rgba(245, 158, 11, 0.2), 0 0 12px rgba(245, 158, 11, 0.2); }
+    50% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.5), 0 0 20px rgba(245, 158, 11, 0.4); }
+    100% { box-shadow: 0 0 6px rgba(245, 158, 11, 0.2), 0 0 12px rgba(245, 158, 11, 0.2); }
+  }
+`}</style>
+
                 {/* ═══════ ENVIRONMENTAL CONTEXT (REDESIGNED) ═══════ */}
-                <div style={{ padding: '16px', borderBottom: '1px solid #1a1a1f' }}>
+                <div style={{ padding: '18px 16px', borderBottom: '1px solid #1a1a1f' }}>
 
                     {/* Section Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
                         <div style={{
-                            width: '24px', height: '24px', borderRadius: '6px', background: '#111114',
-                            border: '1px solid #1a1a1f', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: '#c8a96e', fontSize: '11px', fontFamily: MONO,
+                            width: '26px', height: '26px', borderRadius: '8px', background: '#111114',
+                            border: '1px solid #25252b', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#c8a96e', fontSize: '12px', fontFamily: MONO, boxShadow: 'inset 0 0 4px rgba(0,0,0,0.5)'
                         }}>🌡</div>
                         <div style={{
-                            fontFamily: MONO, fontSize: '9px', fontWeight: 600,
-                            letterSpacing: '0.2em', textTransform: 'uppercase', color: '#555560',
-                        }}>ENVIRONMENTAL CONTEXT</div>
+                            fontFamily: MONO, fontSize: '10px', fontWeight: 700,
+                            letterSpacing: '0.15em', textTransform: 'uppercase', color: '#888894',
+                        }}>Environmental Context</div>
                         <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, #25252b, transparent)' }} />
                     </div>
 
                     {/* Reservoir Card */}
                     {envContext?.reservoir && envContext.reservoir !== 'UNAVAILABLE' && (
                         <div style={{
-                            background: 'linear-gradient(135deg, #111114 0%, rgba(200,169,110,0.03) 100%)',
-                            border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
-                            marginBottom: '14px', position: 'relative', overflow: 'hidden',
+                            background: 'linear-gradient(135deg, #111114 0%, rgba(200,169,110,0.04) 100%)',
+                            border: '1px solid #25252b', borderRadius: '12px', padding: '16px',
+                            marginBottom: '16px', position: 'relative', overflow: 'hidden',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
                         }}>
                             {/* Gold accent bar on left */}
                             <div style={{
-                                position: 'absolute', top: 0, left: 0, width: '3px', height: '100%',
-                                background: 'linear-gradient(180deg, #c8a96e, transparent)',
+                                position: 'absolute', top: 0, left: 0, width: '4px', height: '100%',
+                                background: 'linear-gradient(180deg, #c8a96e, rgba(200,169,110,0.1))',
                             }} />
 
                             <div style={{
-                                fontFamily: MONO, fontSize: '10px', color: '#c8a96e', fontWeight: 600,
-                                letterSpacing: '0.08em', marginBottom: '10px', paddingLeft: '8px',
-                            }}>{envContext.reservoir.toUpperCase()}</div>
+                                fontFamily: MONO, fontSize: '11px', color: '#c8a96e', fontWeight: 700,
+                                letterSpacing: '0.1em', marginBottom: '14px', paddingLeft: '10px',
+                                textShadow: '0 0 8px rgba(200,169,110,0.2)'
+                            }}>
+                                {envContext.reservoir.toUpperCase()}
+                            </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px', paddingLeft: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px', paddingLeft: '10px' }}>
+                                {/* Current Level */}
                                 <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3a3a44', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CURRENT LEVEL</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '12px', color: '#e8e8ec', fontWeight: 600 }}>
-                                        {envContext.current_level_m != null ? `${envContext.current_level_m.toFixed(2)} m` : '—'}
+                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#555560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Current Level</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '14px', color: '#e8e8ec', fontWeight: 700 }}>
+                                        {envContext.current_level_m != null ? `${envContext.current_level_m.toFixed(2)}m` : '—'}
                                     </div>
                                 </div>
+                                {/* Usable Storage */}
                                 <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3a3a44', letterSpacing: '0.08em', textTransform: 'uppercase' }}>USABLE STORAGE</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#555560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Usable Storage</div>
                                     <div style={{
-                                        fontFamily: MONO, fontSize: '12px', fontWeight: 600,
-                                        color: envContext.storage_pct > 90 ? '#ef4444' : '#4ade80',
+                                        fontFamily: MONO, fontSize: '14px', fontWeight: 700,
+                                        color: envContext.storage_pct > 90 ? '#ef4444' : (envContext.storage_pct > 50 ? '#4ade80' : '#f59e0b'),
+                                        transition: 'color 0.3s ease'
                                     }}>
                                         {envContext.storage_pct != null ? `${envContext.storage_pct.toFixed(2)}%` : '—'}
                                     </div>
                                 </div>
+                                {/* FRL */}
                                 <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3a3a44', letterSpacing: '0.08em', textTransform: 'uppercase' }}>FRL (FULL LIMIT)</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#888888' }}>
-                                        {envContext.full_reservoir_level_m != null ? `${envContext.full_reservoir_level_m.toFixed(2)} m` : '—'}
+                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#555560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>FRL (Full Limit)</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#999999' }}>
+                                        {envContext.full_reservoir_level_m != null ? `${envContext.full_reservoir_level_m.toFixed(2)}m` : '—'}
                                     </div>
                                 </div>
+                                {/* MDDL */}
                                 <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#3a3a44', letterSpacing: '0.08em', textTransform: 'uppercase' }}>MDDL (MIN LIMIT)</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#888888' }}>
-                                        {envContext.mddl_level_m != null ? `${envContext.mddl_level_m.toFixed(2)} m` : '—'}
+                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#555560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>MDDL (Min Limit)</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#999999' }}>
+                                        {envContext.mddl_level_m != null ? `${envContext.mddl_level_m.toFixed(2)}m` : '—'}
                                     </div>
                                 </div>
                             </div>
 
                             <div style={{
                                 display: 'flex', justifyContent: 'space-between', fontFamily: MONO,
-                                fontSize: '7px', color: '#3a3a44', borderTop: '1px solid #1a1a1f',
-                                paddingTop: '8px', paddingLeft: '8px', letterSpacing: '0.05em',
+                                fontSize: '8px', color: '#3a3a44', borderTop: '1px solid #1a1a1f',
+                                paddingTop: '10px', marginTop: '4px', paddingLeft: '10px', letterSpacing: '0.05em',
                             }}>
-                                <span>SOURCE: {envContext.source?.includes("OHPC") ? "OHPC" : "—"}</span>
-                                <span>UPDATED: TODAY</span>
+                                <span>SRC: {envContext.source?.includes("OHPC") ? "OHPC" : "LOCAL"}</span>
+                                <span style={{ color: '#4ade8080' }}>● LIVE: TODAY</span>
                             </div>
                         </div>
                     )}
 
                     {/* Environmental Data Rows — ALIVE */}
                     {envRows.map((r, i) => {
-                        // Determine colors based on status
                         const isOff = r.value === '—' || r.status === 'off';
                         const isWarn = r.status === 'warn';
                         const isData = r.status === 'data';
@@ -492,10 +509,10 @@ export default function InfrastructurePanel({
                                         : '#c8a96e';
 
                         const glowColor = isOff ? 'transparent'
-                            : isWarn ? 'rgba(245,158,11,0.2)'
-                                : isData ? 'rgba(96,165,250,0.2)'
-                                    : isOk ? 'rgba(74,222,128,0.2)'
-                                        : 'rgba(200,169,110,0.15)';
+                            : isWarn ? 'rgba(245,158,11,0.3)'
+                                : isData ? 'rgba(96,165,250,0.3)'
+                                    : isOk ? 'rgba(74,222,128,0.3)'
+                                        : 'rgba(200,169,110,0.2)';
 
                         const valueColor = isOff ? '#3a3a44'
                             : isWarn ? '#f59e0b'
@@ -509,76 +526,70 @@ export default function InfrastructurePanel({
                                     : isOk ? 100
                                         : 50;
 
+                        const statusText = isWarn ? 'ELEVATED' : isData ? 'ACTIVE' : isOk ? 'NORMAL' : 'MONITORING';
+
                         return (
                             <div key={r.label} style={{
-                                padding: '10px 12px',
-                                marginBottom: i < envRows.length - 1 ? '6px' : '0',
-                                borderRadius: '8px',
-                                background: isOff ? 'transparent' : 'rgba(255,255,255,0.015)',
-                                border: `1px solid ${isOff ? '#1a1a1f' : 'rgba(255,255,255,0.04)'}`,
+                                padding: '12px 14px',
+                                marginBottom: i < envRows.length - 1 ? '8px' : '0',
+                                borderRadius: '10px',
+                                background: isOff ? 'transparent' : 'rgba(255,255,255,0.02)',
+                                border: `1px solid ${isOff ? '#1a1a1f' : 'rgba(255,255,255,0.05)'}`,
                                 transition: 'all 0.2s ease',
+                                cursor: 'default'
                             }}
-                                onMouseEnter={(e) => { if (!isOff) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; } }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = isOff ? 'transparent' : 'rgba(255,255,255,0.015)'; e.currentTarget.style.borderColor = isOff ? '#1a1a1f' : 'rgba(255,255,255,0.04)'; }}>
+                                onMouseEnter={(e) => { if (!isOff) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; } }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = isOff ? 'transparent' : 'rgba(255,255,255,0.02)'; e.currentTarget.style.borderColor = isOff ? '#1a1a1f' : 'rgba(255,255,255,0.05)'; }}>
 
                                 {/* Top row: dot + label + value */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
                                     {/* Animated status dot */}
                                     <div style={{
-                                        width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+                                        width: '9px', height: '9px', borderRadius: '50%', flexShrink: 0,
                                         background: dotColor,
-                                        boxShadow: `0 0 8px ${glowColor}, 0 0 16px ${glowColor}`,
-                                        ...(isWarn ? { animation: 'pulse-red 2s infinite' } : {}),
+                                        boxShadow: `0 0 8px ${glowColor}`,
+                                        animation: isWarn ? 'pulse-red 2s infinite' : 'none',
                                     }} />
 
                                     {/* Label */}
                                     <span style={{
-                                        fontFamily: MONO, fontSize: '9px', color: isOff ? '#3a3a44' : '#555560',
-                                        width: '70px', flexShrink: 0, letterSpacing: '0.08em', fontWeight: 500
+                                        fontFamily: MONO, fontSize: '10px', color: isOff ? '#3a3a44' : '#777782',
+                                        width: '80px', flexShrink: 0, letterSpacing: '0.08em', fontWeight: 500
                                     }}>{r.label}</span>
 
                                     {/* Value — big and colored */}
                                     <span style={{
-                                        fontFamily: MONO, fontSize: '11px', fontWeight: 600,
+                                        fontFamily: MONO, fontSize: '12px', fontWeight: 700,
                                         flex: 1, textAlign: 'right', color: valueColor,
-                                        lineHeight: 1.4,
+                                        lineHeight: 1.2,
+                                        textShadow: isOff ? 'none' : `0 0 6px ${glowColor}`
                                     }}>{r.value}</span>
                                 </div>
 
                                 {/* Mini progress bar — shows "health" of this parameter */}
                                 {!isOff && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <div style={{ flex: 1, height: '3px', background: '#1a1a1f', borderRadius: '2px', overflow: 'hidden' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{ flex: 1, height: '4px', background: '#1a1a1f', borderRadius: '4px', overflow: 'hidden' }}>
                                             <div style={{
                                                 height: '100%',
                                                 width: `${barFill}%`,
-                                                background: `linear-gradient(90deg, ${dotColor}80, ${dotColor})`,
-                                                borderRadius: '2px',
-                                                transition: 'width 0.8s ease',
+                                                background: `linear-gradient(90deg, ${dotColor}40, ${dotColor})`,
+                                                borderRadius: '4px',
+                                                transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                boxShadow: `0 0 6px ${glowColor}`
                                             }} />
                                         </div>
                                         <span style={{
-                                            fontFamily: MONO, fontSize: '7px', color: '#3a3a44',
-                                            letterSpacing: '0.05em', flexShrink: 0
+                                            fontFamily: MONO, fontSize: '8px', color: '#555560',
+                                            letterSpacing: '0.08em', flexShrink: 0, fontWeight: 600
                                         }}>
-                                            {isWarn ? 'ELEVATED' : isData ? 'ACTIVE' : isOk ? 'NORMAL' : 'MONITORING'}
+                                            {statusText}
                                         </span>
                                     </div>
                                 )}
                             </div>
                         );
                     })}
-
-
-                    {/* Footer */}
-                    <div style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        fontFamily: MONO, fontSize: '8px', color: '#3a3a44',
-                        paddingTop: '10px', marginTop: '8px', borderTop: '1px solid #1a1a1f', letterSpacing: '0.03em',
-                    }}>
-                        <span>Source: {envContext?.source || 'Pending'}</span>
-                        {contextFetchedAt && <span>{contextFetchedAt.toISOString().slice(0, 16).replace('T', ' ')}</span>}
-                    </div>
                 </div>
 
                 {/* ═══════ FETCH BUTTON (REDESIGNED) ═══════ */}
