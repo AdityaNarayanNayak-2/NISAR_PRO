@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MONO, SANS, C } from './constants';
 import { formatBytes, formatElapsed } from './helpers';
 import { api } from '../../config/api';
@@ -10,7 +10,30 @@ export default function SarSciencePanel({
     pipelines, pipeline, setPipeline,
     startJob, getInputFile, runningJobs, gatewayOnline,
     elapsed, jobs, setActiveJobId, setTerminalOpen, setViewingResult,
+    cropLat, setCropLat, cropLon, setCropLon, cropPreset, setCropPreset,
+    slaveFilePath, setSlaveFilePath,
+    gunwFilePath, setGunwFilePath,
+    minChangeDb, setMinChangeDb,
+    seedThresholdDb, setSeedThresholdDb,
+    growthThresholdDb, setGrowthThresholdDb,
+    minAreaPixels, setMinAreaPixels,
 }) {
+
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+
+    const inputStyle = {
+        width: '100%', padding: '7px 10px', background: C.bg2,
+        border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO,
+        fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px',
+    };
+
+    const presetBtnStyle = (active) => ({
+        flex: 1, padding: '6px 4px', background: active ? 'rgba(200,169,110,0.12)' : 'transparent',
+        border: active ? `1px solid ${C.accent.infra}` : `1px solid ${C.bg3}`,
+        color: active ? C.accent.infra : C.textDim, fontFamily: MONO, fontSize: '10px',
+        cursor: 'pointer', borderRadius: '2px', textAlign: 'center',
+    });
+
     return (
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
 
@@ -33,7 +56,7 @@ export default function SarSciencePanel({
                 <input
                     type="text" value={localFilePath} onChange={e => setLocalFilePath(e.target.value)}
                     placeholder="/path/to/NISAR_*.h5"
-                    style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px' }}
+                    style={inputStyle}
                     onFocus={e => e.target.style.borderColor = C.bg4}
                     onBlur={e => e.target.style.borderColor = C.bg3}
                 />
@@ -58,8 +81,8 @@ export default function SarSciencePanel({
 
             {dataMode === 'catalog' && (<>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '11px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px' }} />
-                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ width: '100%', padding: '8px 10px', background: C.bg2, border: `1px solid ${C.bg3}`, color: C.text, fontFamily: MONO, fontSize: '11px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px' }} />
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, fontSize: '11px' }} />
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, fontSize: '11px' }} />
                 </div>
                 <button onClick={handleSearch} disabled={isSearching} style={{ width: '100%', padding: '8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '11px', cursor: 'pointer', borderRadius: '2px' }}
                     onMouseEnter={e => { e.target.style.borderColor = C.bg4; e.target.style.color = C.text; }}
@@ -104,6 +127,139 @@ export default function SarSciencePanel({
                 </div>
             ))}
 
+            {/* ══ CROP CONTROLS (INSAR & FLOOD) ══ */}
+            {(pipeline === 'insar' || pipeline === 'flood') && (<>
+                <div style={{ height: '1px', background: C.bg3, margin: '14px 0' }} />
+                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.accent.infra, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
+                    ▸ CROP REGION
+                </div>
+
+                {/* Lat / Lon text inputs */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                    <div>
+                        <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>LATITUDE</div>
+                        <input
+                            type="text" value={cropLat || ''} onChange={e => setCropLat(e.target.value)}
+                            placeholder="18.7692"
+                            style={inputStyle}
+                        />
+                    </div>
+                    <div>
+                        <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>LONGITUDE</div>
+                        <input
+                            type="text" value={cropLon || ''} onChange={e => setCropLon(e.target.value)}
+                            placeholder="82.8334"
+                            style={inputStyle}
+                        />
+                    </div>
+                </div>
+
+                {/* Crop preset toggles */}
+                <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '6px' }}>CROP WINDOW</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
+                    {['1x1km', '5x5km', '1x2km', '10x10km', '20x20km'].map(p => (
+                        <button key={p} onClick={() => setCropPreset(p)} style={presetBtnStyle(cropPreset === p)}>
+                            {p.replace('km', ' km').replace('x', ' × ')}
+                        </button>
+                    ))}
+                </div>
+                <div style={{ fontFamily: SANS, fontSize: '10px', color: C.textDim, lineHeight: 1.4, marginBottom: '4px' }}>
+                    Crop before loading. Larger windows use more RAM.
+                </div>
+            </>)}
+
+            {/* ══ FLOOD MAPPING CONTROLS ══ */}
+            {pipeline === 'flood' && (
+                <>
+                    <div style={{ height: '1px', background: C.bg3, margin: '14px 0' }} />
+                    
+                    {/* Baseline reference GCOV input */}
+                    <div style={{ marginBottom: '10px' }}>
+                        <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>BASELINE REFERENCE (GCOV H5)</div>
+                        <input
+                            type="text" value={slaveFilePath || ''} onChange={e => setSlaveFilePath(e.target.value)}
+                            placeholder="/path/to/NISAR_baseline_dry.h5"
+                            style={inputStyle}
+                        />
+                    </div>
+
+                    {/* Coherence helper GUNW input (Optional) */}
+                    <div style={{ marginBottom: '14px' }}>
+                        <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>COHERENCE FILE (GUNW H5 - OPTIONAL)</div>
+                        <input
+                            type="text" value={gunwFilePath || ''} onChange={e => setGunwFilePath(e.target.value)}
+                            placeholder="/path/to/NISAR_coherence.h5"
+                            style={inputStyle}
+                        />
+                    </div>
+
+                    {/* Collapsible Advanced Settings */}
+                    <button
+                        onClick={() => setAdvancedOpen(!advancedOpen)}
+                        style={{
+                            background: 'none', border: 'none', color: C.accent.infra,
+                            fontFamily: MONO, fontSize: '10px', cursor: 'pointer',
+                            padding: '4px 0', display: 'flex', alignItems: 'center', gap: '4px',
+                            outline: 'none', marginBottom: '10px'
+                        }}
+                    >
+                        {advancedOpen ? '▼ ADVANCED CONFIGURATION' : '▶ ADVANCED CONFIGURATION'}
+                    </button>
+
+                    {advancedOpen && (
+                        <div style={{ background: C.bg2, padding: '10px', border: `1px solid ${C.bg3}`, borderRadius: '2px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                            {/* min_change_db */}
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '2px' }}>
+                                    <span>MIN CHANGE THRESHOLD</span>
+                                    <span style={{ color: C.text }}>{minChangeDb} dB</span>
+                                </div>
+                                <input
+                                    type="range" min="-10.0" max="-1.0" step="0.5"
+                                    value={minChangeDb} onChange={e => setMinChangeDb(parseFloat(e.target.value))}
+                                    style={{ width: '100%', accentColor: C.accent.infra }}
+                                />
+                            </div>
+
+                            {/* seed_threshold_db */}
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '2px' }}>
+                                    <span>GROWTH SEED THRESHOLD</span>
+                                    <span style={{ color: C.text }}>{seedThresholdDb} dB</span>
+                                </div>
+                                <input
+                                    type="range" min="-12.0" max="-3.0" step="0.5"
+                                    value={seedThresholdDb} onChange={e => setSeedThresholdDb(parseFloat(e.target.value))}
+                                    style={{ width: '100%', accentColor: C.accent.infra }}
+                                />
+                            </div>
+
+                            {/* growth_threshold_db */}
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '2px' }}>
+                                    <span>GROWTH LIMIT THRESHOLD</span>
+                                    <span style={{ color: C.text }}>{growthThresholdDb} dB</span>
+                                </div>
+                                <input
+                                    type="range" min="-6.0" max="-1.0" step="0.5"
+                                    value={growthThresholdDb} onChange={e => setGrowthThresholdDb(parseFloat(e.target.value))}
+                                    style={{ width: '100%', accentColor: C.accent.infra }}
+                                />
+                            </div>
+
+                            {/* min_area_pixels */}
+                            <div>
+                                <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>MIN REGION AREA (PIXELS)</div>
+                                <input
+                                    type="number" value={minAreaPixels} onChange={e => setMinAreaPixels(parseInt(e.target.value) || 1)}
+                                    style={{ ...inputStyle, background: C.bg1 }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+
             {/* DIVIDER */}
             <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />
 
@@ -142,7 +298,7 @@ export default function SarSciencePanel({
                         </div>
                         {job.status === 'completed' && (
                             <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                                <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
+                                <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, floodReport: job.floodReport, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
                                     style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.stable, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>VIEW</button>
                                 <button onClick={(e) => { e.stopPropagation(); window.open(api(job.output_path), '_blank'); }}
                                     style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>DL</button>

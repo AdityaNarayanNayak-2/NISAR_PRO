@@ -25,13 +25,13 @@ Platform Engineer building high-performance geospatial and cloud-native systems.
 
 ## PROJECTS
 
-**NISAR Pro — Distributed Geospatial Intelligence Platform** | *Rust, Kubernetes, React, Axum* | *2024 – Present*
+**NISAR Pro — Cloud-Native Geospatial Intelligence Platform** | *Rust, Kubernetes (K3s), Flux CD, Axum* | *2024 – Present*
 *[gitlab.com/Aditya-Narayan-Nayak/nisar_pro]*
-• Engineered a complete Synthetic Aperture Radar (SAR) processing pipeline in pure Rust, implementing the Range-Doppler Algorithm with sinc-interpolated RCMC, Lee Sigma filtering, and CLAHE contrast enhancement—achieving zero dependency on Python or C++ libraries.
-• Developed an advanced **InSAR (Interferometric SAR) module**, implementing complex interferogram formation and spatial coherence estimation via parallelized `ndarray` operations to detect Persistent Scatterers (PS).
-• Built a structural health monitoring engine capable of measuring millimeter-level displacement on critical infrastructure (bridges, dams), automatically classifying anomalies into Stable/Critical GeoJSON reports.
-• Wrote a native HDF5 parser for NASA/ISRO architectures, extracting complex SLC arrays from compound datatypes and processing a 6.4GB RSLC matrix (31,920 × 26,338 samples) in ∼3 minutes.
-• Architected a distributed execution backend using a custom `kube-rs` Kubernetes operator to reconcile `SarJob` CRDs into batch pods, streaming processing logs via Server-Sent Events (SSE) to an interactive React/Leaflet dashboard.
+• **Built a Pure-Rust SAR Processor from Scratch:** Engineered a highly efficient, first-of-its-kind data processing engine capable of analyzing massive 30GB+ satellite images from NASA and ISRO without crashing or running out of memory.
+• **Architected a 3-Tier Cloud Platform:** Designed the complete system architecture consisting of three main components: the Rust math engine, a high-speed API Gateway for orchestrating jobs, and an interactive React dashboard for users.
+• **Automated Cloud Deployments (GitOps):** Set up a lightweight Kubernetes (K3s) cluster using Flux CD, allowing the entire application to be deployed, monitored, and updated automatically whenever code is pushed.
+• **Real-Time Job Orchestration:** Built a backend Gateway that manages heavy, long-running satellite processing jobs and streams live progress logs directly to the user's web browser.
+• **Enterprise Networking & CI/CD:** Secured the platform with automated SSL certificates, configured robust CI/CD pipelines in GitLab, and wrote extensive, easy-to-read documentation for developer onboarding.
 
 **AutodeployAI** | *TypeScript, OpenRouter* | *2023*
 • Built a web application that generates production-ready Dockerfiles and Kubernetes manifests from natural language descriptions using LLM inference.

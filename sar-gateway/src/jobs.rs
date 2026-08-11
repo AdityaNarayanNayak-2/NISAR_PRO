@@ -98,6 +98,13 @@ pub async fn spawn_processing_job(
     crop_lat: Option<f64>,
     crop_lon: Option<f64>,
     crop_radius_km: Option<f64>,
+    processor: Option<String>,
+    crop_preset: Option<String>,
+    gunw_file: Option<String>,
+    min_change_db: Option<f32>,
+    seed_threshold_db: Option<f32>,
+    growth_threshold_db: Option<f32>,
+    min_area_pixels: Option<usize>,
 ) -> String {
     let job_id = format!("sar-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
     let (tx, _rx) = broadcast::channel(256);
@@ -124,9 +131,7 @@ pub async fn spawn_processing_job(
         let (cancel_tx, cancel_rx) = tokio::sync::mpsc::channel(1);
         metadata.write().await.cancel_tx = Some(cancel_tx);
 
-        // ═══════════════════════════════════════════════════════════════
-        // LOCAL SUBPROCESS MODE: spawn sar_processor as a child process
-        // ═══════════════════════════════════════════════════════════════
+        // ─── LOCAL SUBPROCESS MODE: spawn processor as a child process ───
         tokio::spawn(async move {
             spawn_local_job(
                 job_id_clone,
@@ -137,6 +142,13 @@ pub async fn spawn_processing_job(
                 crop_lat,
                 crop_lon,
                 crop_radius_km,
+                processor,
+                crop_preset,
+                gunw_file,
+                min_change_db,
+                seed_threshold_db,
+                growth_threshold_db,
+                min_area_pixels,
                 cancel_rx,
             ).await;
         });
@@ -152,7 +164,7 @@ pub async fn spawn_processing_job(
     job_id
 }
 
-/// Local subprocess execution: spawn sar_processor binary, stream stdout/stderr via SSE
+/// Local subprocess execution: spawn processor binary, stream stdout/stderr via SSE
 async fn spawn_local_job(
     job_id: String,
     input_file: Option<String>,
@@ -162,6 +174,13 @@ async fn spawn_local_job(
     crop_lat: Option<f64>,
     crop_lon: Option<f64>,
     crop_radius_km: Option<f64>,
+    processor: Option<String>,
+    crop_preset: Option<String>,
+    gunw_file: Option<String>,
+    min_change_db: Option<f32>,
+    seed_threshold_db: Option<f32>,
+    growth_threshold_db: Option<f32>,
+    min_area_pixels: Option<usize>,
     mut cancel_rx: tokio::sync::mpsc::Receiver<()>,
 ) {
     let results_dir = std::path::Path::new("results");
@@ -183,51 +202,103 @@ async fn spawn_local_job(
         }
     };
 
-    // Locate the sar_processor binary (try release first, then debug)
-    let binary = find_processor_binary();
-    info!("Local Mode: Using binary at {:?}", binary);
+    // ═══════════════════════════════════════════════════════════════════
+    // BINARY DISPATCH: SAR Science Processor vs Standard Processor
+    // ═══════════════════════════════════════════════════════════════════
+    let use_science = processor.as_deref() == Some("science");
+    let binary = if use_science {
+        find_science_processor_binary()
+    } else {
+        find_processor_binary()
+    };
+    info!("Local Mode: Using binary at {:?} (science={})", binary, use_science);
 
     let mut cmd = Command::new(&binary);
     cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("RUST_LOG", "info");
 
-    cmd.args(["--input", &input, "--output", &output_path]);
-    
-    if pipeline.as_deref() == Some("insar") {
-        // GUNW files contain pre-computed InSAR
-        // No slave needed — processor handles it
-        let is_gunw = input.contains("_GUNW_") || 
-                      input.ends_with("_gunw.h5");
-        
-        if !is_gunw {
-            // Only add slave for non-GUNW files
+    if use_science {
+        // ── SAR Science Processor args ────────────────────────────────
+        cmd.args(["--input", &input, "--output", &output_path.replace(".tif", "")]);
+
+        // Determine mode: insar, flood, or gcov
+        let mode = match pipeline.as_deref() {
+            Some("insar") => "insar",
+            Some("flood") => "flood",
+            _ => "gcov",
+        };
+        cmd.args(["--mode", mode]);
+
+        if mode == "insar" || mode == "flood" {
             if let Some(ref slave) = slave_file {
-                cmd.args(["--insar-slave", slave]);
-            } else {
-                // self-interferometry fallback
-                cmd.args(["--insar-slave", &input]);
+                cmd.args(["--slave", slave]);
+            } else if mode == "insar" {
+                cmd.args(["--slave", &input]); // self-interferometry fallback for insar only
             }
         }
-        // GUNW: processor auto-detects, no slave needed
-        
+
         if let (Some(lat), Some(lon)) = (crop_lat, crop_lon) {
             cmd.args([
                 "--crop-lat", &lat.to_string(),
                 "--crop-lon", &lon.to_string(),
             ]);
-            if let Some(r) = crop_radius_km {
-                cmd.args(["--crop-radius-km", &r.to_string()]);
-            }
         }
-    } else if pipeline.as_deref() == Some("cfar") {
-        cmd.args(["--ship-detect"]);
+
+        if let Some(ref preset) = crop_preset {
+            cmd.args(["--crop-preset", preset]);
+        }
+
+        if let Some(ref gunw) = gunw_file {
+            cmd.args(["--gunw", gunw]);
+        }
+        if let Some(min_ch) = min_change_db {
+            cmd.args(["--min-change-db", &min_ch.to_string()]);
+        }
+        if let Some(seed_th) = seed_threshold_db {
+            cmd.args(["--seed-threshold-db", &seed_th.to_string()]);
+        }
+        if let Some(growth_th) = growth_threshold_db {
+            cmd.args(["--growth-threshold-db", &growth_th.to_string()]);
+        }
+        if let Some(min_area) = min_area_pixels {
+            cmd.args(["--min-area-pixels", &min_area.to_string()]);
+        }
+    } else {
+        // ── Standard sar_processor args (unchanged) ──────────────────
+        cmd.args(["--input", &input, "--output", &output_path]);
+
+        if pipeline.as_deref() == Some("insar") {
+            let is_gunw = input.contains("_GUNW_") ||
+                          input.ends_with("_gunw.h5");
+
+            if !is_gunw {
+                if let Some(ref slave) = slave_file {
+                    cmd.args(["--insar-slave", slave]);
+                } else {
+                    cmd.args(["--insar-slave", &input]);
+                }
+            }
+
+            if let (Some(lat), Some(lon)) = (crop_lat, crop_lon) {
+                cmd.args([
+                    "--crop-lat", &lat.to_string(),
+                    "--crop-lon", &lon.to_string(),
+                ]);
+                if let Some(r) = crop_radius_km {
+                    cmd.args(["--crop-radius-km", &r.to_string()]);
+                }
+            }
+        } else if pipeline.as_deref() == Some("cfar") {
+            cmd.args(["--ship-detect"]);
+        }
     }
 
+    let binary_label = if use_science { "sar_science_processor" } else { "sar_processor" };
     {
         let mut m = metadata.write().await;
         m.status = JobStatus::Running;
-        let _ = m.tx.send(format!("[SYSTEM] LOCAL_MODE: Spawning sar_processor (job={})", job_id));
+        let _ = m.tx.send(format!("[SYSTEM] LOCAL_MODE: Spawning {} (job={})", binary_label, job_id));
     }
 
     let mut child = match cmd.spawn() {
@@ -321,7 +392,13 @@ async fn spawn_local_job(
         let mut m = metadata.write().await;
         if status.success() {
             m.status = JobStatus::Completed;
-            m.output_path = Some(format!("/results/{}.tif", job_id));
+            if pipeline.as_deref() == Some("flood") {
+                m.output_path = Some(format!("/results/{}_flood.png", job_id));
+            } else if use_science && (pipeline.as_deref() == Some("gcov") || pipeline.is_none()) {
+                m.output_path = Some(format!("/results/{}.png", job_id));
+            } else {
+                m.output_path = Some(format!("/results/{}.tif", job_id));
+            }
             let _ = m.tx.send("[SYSTEM] PROCESS_COMPLETED".to_string());
             info!("Job {} completed successfully", job_id);
         } else {
@@ -348,6 +425,23 @@ fn find_processor_binary() -> String {
 
     // Fallback: assume it's in PATH
     "sar_processor".to_string()
+}
+
+/// Locate the sar_science_processor binary (SAR Science InSAR/GCOV engine)
+fn find_science_processor_binary() -> String {
+    let possible_paths = [
+        "../sar_science_processor/target/release/sar_science_processor",
+        "../sar_science_processor/target/debug/sar_science_processor",
+        "./sar_science_processor",
+    ];
+
+    for p in &possible_paths {
+        if std::path::Path::new(p).exists() {
+            return p.to_string();
+        }
+    }
+
+    "sar_science_processor".to_string()
 }
 
 /// K8s CRD-based job execution (original implementation)

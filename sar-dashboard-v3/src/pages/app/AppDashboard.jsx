@@ -59,6 +59,18 @@ function AppDashboard() {
     const [assetState, setAssetState] = useState('');
     const [contextFetchedAt, setContextFetchedAt] = useState(null);
 
+    // ── SAR Science InSAR crop state ──
+    const [cropLat, setCropLat] = useState('');
+    const [cropLon, setCropLon] = useState('');
+    const [cropPreset, setCropPreset] = useState('5x5km');
+
+    // ── Flood Mapping States ──
+    const [gunwFilePath, setGunwFilePath] = useState('');
+    const [minChangeDb, setMinChangeDb] = useState(-3.0);
+    const [seedThresholdDb, setSeedThresholdDb] = useState(-5.0);
+    const [growthThresholdDb, setGrowthThresholdDb] = useState(-2.5);
+    const [minAreaPixels, setMinAreaPixels] = useState(8);
+
     // ── Gateway Health Check (PRESERVED) ──
     useEffect(() => {
         const check = async () => {
@@ -144,6 +156,23 @@ function AppDashboard() {
                 body.crop_lon = parseFloat(assetLon) || null;
                 body.crop_radius_km = 10.0;
             }
+            // SAR Science profile → use sar_science_processor
+            if (profile === 'sar_science') {
+                body.processor = 'science';
+                if ((pipeline === 'insar' || pipeline === 'flood') && cropLat && cropLon) {
+                    body.crop_lat = parseFloat(cropLat) || null;
+                    body.crop_lon = parseFloat(cropLon) || null;
+                    body.crop_preset = cropPreset;
+                }
+                if (pipeline === 'flood') {
+                    body.slave_file = slaveFilePath || null;
+                    body.gunw_file = gunwFilePath || null;
+                    body.min_change_db = parseFloat(minChangeDb);
+                    body.seed_threshold_db = parseFloat(seedThresholdDb);
+                    body.growth_threshold_db = parseFloat(growthThresholdDb);
+                    body.min_area_pixels = parseInt(minAreaPixels);
+                }
+            }
             const res = await fetch(api('/jobs'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -170,6 +199,11 @@ function AppDashboard() {
                             fetch(api(`/${parsed.path}`)).then(r => r.json()).then(report => { setJobs(prev => ({ ...prev, [id]: { ...prev[id], insarReport: report } })); }).catch(console.error);
                         } else if (parsed.event === 'ships_detected' && parsed.path) {
                             fetch(api(`/${parsed.path}`)).then(r => r.json()).then(ships => { setJobs(prev => ({ ...prev, [id]: { ...prev[id], ships } })); }).catch(console.error);
+                        } else if (parsed.event === 'flood_report' && parsed.path) {
+                            fetch(api(`/${parsed.path}`)).then(r => r.json()).then(report => {
+                                setJobs(prev => ({ ...prev, [id]: { ...prev[id], floodReport: report } }));
+                                setViewingResult(view => view ? { ...view, floodReport: report } : null);
+                            }).catch(console.error);
                         }
                     } catch (err) { /* not JSON */ }
                 }
@@ -252,7 +286,7 @@ function AppDashboard() {
                     const res = await fetch(api(`/jobs/${id}`)); const data = await res.json();
                     if (data.status === 'completed' && currentJobs[id].status !== 'completed') {
                         const jobBounds = currentJobs[id].bounds || (data.bbox ? [[data.bbox.south, data.bbox.west], [data.bbox.north, data.bbox.east]] : null);
-                        setTimeout(() => { setViewingResult({ url: api(data.output_path), bounds: jobBounds, insarReport: jobsRef.current[id]?.insarReport || null, ships: jobsRef.current[id]?.ships || null, pipeline: jobsRef.current[id]?.pipeline || 'standard_rda', elapsed: elapsedRef.current[id] || null, bbox: jobsRef.current[id]?.bbox || data.bbox || null }); }, 800);
+                        setTimeout(() => { setViewingResult({ url: api(data.output_path), bounds: jobBounds, insarReport: jobsRef.current[id]?.insarReport || null, ships: jobsRef.current[id]?.ships || null, floodReport: jobsRef.current[id]?.floodReport || null, pipeline: jobsRef.current[id]?.pipeline || 'standard_rda', elapsed: elapsedRef.current[id] || null, bbox: jobsRef.current[id]?.bbox || data.bbox || null }); }, 800);
                         setVisibleLayers({ deformation: true, coherence: false, amplitude: false });
                     }
                     setJobs(prev => ({ ...prev, [id]: { ...prev[id], status: data.status, output_path: data.output_path } }));
@@ -306,6 +340,7 @@ function AppDashboard() {
         { id: 'standard_rda', label: 'Standard SAR Focus', desc: 'Range-Doppler + RCMC + speckle filter' },
         { id: 'polsar', label: 'Polarimetric', desc: 'Pauli decomposition RGB (HH, HV, VV)' },
         { id: 'insar', label: 'InSAR Analysis', desc: 'Interferometric phase + displacement' },
+        { id: 'flood', label: 'Flood & Inundation', desc: 'Multi-temporal log-ratio + region growing' },
         { id: 'cfar', label: 'Maritime CFAR', desc: 'CA-CFAR vessel detection' },
     ];
     const pipelines = profile === 'sar_science'
@@ -505,6 +540,13 @@ function AppDashboard() {
                 attributionControl={false}
             >
                 <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}" />
+                {viewingResult && viewingResult.url && viewingResult.bounds && (
+                    <ImageOverlay
+                        url={viewingResult.url}
+                        bounds={viewingResult.bounds}
+                        opacity={0.8}
+                    />
+                )}
                 <MapEventTracker setCoords={setMouseCoords} setMapBounds={setMapBounds} />
                 {flyToCenter && <MapFlyTo center={flyToCenter} />}
 
@@ -516,66 +558,52 @@ function AppDashboard() {
                     />
                 )}
 
-                {/* COG TileLayer via TiTiler */}
-                {viewingResult && viewingResult.url && (() => {
-                    const resultPath = viewingResult.url.startsWith('/results/')
-                        ? viewingResult.url.replace('/results/', '')
-                        : viewingResult.url.split('/results/').pop();
+                {/* Continuous 2D Raster Overlay (InSAR Deformation & Coherence Images) */}
+                {/* InSAR Persistent Scatterer Overlays (Micro Tactical Spectrum Points) */}
+                {viewingResult && viewingResult.insarReport && viewingResult.insarReport.scatterers && (() => {
+                    const scatterers = viewingResult.insarReport.scatterers;
+                    // Filter for high coherence points to eliminate noisy background points
+                    const filteredPoints = scatterers.filter(p => (p.coherence ?? 1.0) >= 0.65);
+                    const pointsToRender = filteredPoints.length > 0 ? filteredPoints : scatterers;
 
-                    let finalTifPath = resultPath;
-                    let extraParams = '';
+                    return pointsToRender.map((point, idx) => {
+                        const sev = (point.severity || '').toUpperCase();
+                        const disp = point.displacement_mm ?? 0;
+                        const absDisp = Math.abs(disp);
 
-                    if (profile === 'infrastructure') {
-                        const baseName = resultPath.replace('.tif', '');
-                        if (activeLayer === 'deformation') {
-                            finalTifPath = baseName + '_defo_phase.tif';
-                            extraParams = '&colormap_name=rdylgn&rescale=-20,20';
-                        } else if (activeLayer === 'coherence') {
-                            finalTifPath = baseName + '_coherence.tif';
-                            extraParams = '&colormap_name=greys&rescale=0,1';
-                        }
-                    }
+                        // Exact Displacement Spectrum Color
+                        let pColor = '#22c55e'; // Stable Emerald
+                        if (sev === 'CRITICAL' || absDisp >= 15) pColor = '#ef4444'; // Red Subsidence/Outlier
+                        else if (sev === 'ALERT' || (disp <= -6 || disp >= 10)) pColor = '#f59e0b'; // Amber Alert
+                        else if (sev === 'CAUTION' || (disp <= -2 || disp >= 4)) pColor = '#e6a817'; // Gold Caution
+                        else if (disp > 2) pColor = '#3b82f6'; // Blue Uplift
 
-                    const tifUrl = encodeURIComponent(
-                        api(`/results/${finalTifPath}`)
-                    );
-                    return (
-                        <TileLayer
-                            url={`http://localhost:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}?url=${tifUrl}&tilesize=512${extraParams}`}
-                            attribution=""
-                            opacity={0.75}
-                            key={`${viewingResult.url}_${activeLayer}`}
-                            minZoom={7}
-                            maxZoom={13}
-                        />
-                    );
+                        const radius = (sev === 'CRITICAL' || absDisp >= 15) ? 2.5 : (sev === 'ALERT') ? 2.0 : 1.5;
+
+                        return (
+                            <CircleMarker
+                                key={`ps-${idx}`}
+                                center={[point.lat, point.lon]}
+                                radius={radius}
+                                pathOptions={{
+                                    color: pColor,
+                                    fillColor: pColor,
+                                    fillOpacity: 0.85,
+                                    weight: 0.5,
+                                }}
+                            >
+                                <Popup>
+                                    <div style={{ fontSize: '0.7rem', fontFamily: MONO, color: '#e2e8f0' }}>
+                                        <strong style={{ color: '#c8a96e' }}>PS Point #{idx + 1}</strong><br />
+                                        Severity: <span style={{ color: pColor, fontWeight: 600 }}>{sev || 'STABLE'}</span><br />
+                                        Displacement: <strong>{disp.toFixed(2)} mm</strong><br />
+                                        Coherence: {(point.coherence ?? 0).toFixed(2)}
+                                    </div>
+                                </Popup>
+                            </CircleMarker>
+                        );
+                    });
                 })()}
-
-                {/* InSAR Persistent Scatterer Overlays */}
-                {viewingResult && viewingResult.insarReport && viewingResult.insarReport.scatterers && (
-                    viewingResult.insarReport.scatterers.map((point, idx) => (
-                        <CircleMarker
-                            key={`ps-${idx}`}
-                            center={[point.lat, point.lon]}
-                            radius={point.severity === 'Critical' ? 6 : point.severity === 'Alert' ? 5 : point.severity === 'Caution' ? 4 : 3}
-                            pathOptions={{
-                                color: sevColor(point.severity),
-                                fillColor: sevColor(point.severity),
-                                fillOpacity: 0.8,
-                                weight: 1,
-                            }}
-                        >
-                            <Popup>
-                                <div style={{ fontSize: '0.7rem', fontFamily: MONO }}>
-                                    <strong style={{ color: '#0f172a' }}>PS Point #{idx}</strong><br />
-                                    Severity: {point.severity}<br />
-                                    Displacement: {point.displacement_mm?.toFixed(2) ?? '0.00'} mm<br />
-                                    Coherence: {point.coherence?.toFixed(2) ?? '0.00'}
-                                </div>
-                            </Popup>
-                        </CircleMarker>
-                    ))
-                )}
 
                 {/* CFAR Ship Detection Overlays */}
                 {viewingResult && viewingResult.ships && (
@@ -751,6 +779,24 @@ function AppDashboard() {
                         setActiveJobId={setActiveJobId}
                         setTerminalOpen={setTerminalOpen}
                         setViewingResult={setViewingResult}
+                        cropLat={cropLat}
+                        setCropLat={setCropLat}
+                        cropLon={cropLon}
+                        setCropLon={setCropLon}
+                        cropPreset={cropPreset}
+                        setCropPreset={setCropPreset}
+                        slaveFilePath={slaveFilePath}
+                        setSlaveFilePath={setSlaveFilePath}
+                        gunwFilePath={gunwFilePath}
+                        setGunwFilePath={setGunwFilePath}
+                        minChangeDb={minChangeDb}
+                        setMinChangeDb={setMinChangeDb}
+                        seedThresholdDb={seedThresholdDb}
+                        setSeedThresholdDb={setSeedThresholdDb}
+                        growthThresholdDb={growthThresholdDb}
+                        setGrowthThresholdDb={setGrowthThresholdDb}
+                        minAreaPixels={minAreaPixels}
+                        setMinAreaPixels={setMinAreaPixels}
                     />
                 )}
 
@@ -779,6 +825,74 @@ function AppDashboard() {
                 )}
             </div>
         // Continued in part 5...
+            {/* ═══ DISTRICT EMERGENCY ADVISORY CARD (DM FLOOD HUB) ═══ */}
+            {viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport && (
+                <div style={{
+                    position: 'absolute', top: '58px', left: '16px', zIndex: 900,
+                    width: '320px', background: 'rgba(15, 10, 10, 0.95)', backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(192, 57, 43, 0.6)', padding: '16px', borderRadius: '4px',
+                    boxShadow: '0 12px 36px rgba(0,0,0,0.8)', color: '#F0F0F0',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', borderBottom: '1px solid rgba(192, 57, 43, 0.3)', paddingBottom: '8px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EF4444', animation: 'pulse 1.5s infinite' }} />
+                        <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 600, color: '#EF4444', letterSpacing: '0.12em' }}>
+                            DISTRICT EMERGENCY ADVISORY
+                        </span>
+                    </div>
+
+                    <div style={{ fontFamily: SANS, fontSize: '12px', lineHeight: 1.5, color: '#DDD', marginBottom: '14px', fontStyle: 'italic' }}>
+                        "Heavy rainfall and reservoir discharge has led to significant inundation downstream. Immediate monitoring of low-lying settlements and river banks is advised."
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', marginBottom: '14px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                        <div>
+                            <div style={{ fontFamily: MONO, fontSize: '8px', color: '#888' }}>ACTIVE SENSOR DATE</div>
+                            <div style={{ fontFamily: MONO, fontSize: '11px', color: '#FFF', fontWeight: 600 }}>{viewingResult.floodReport.product ? viewingResult.floodReport.product.active_id.slice(22, 30) : '2026-08-05'}</div>
+                        </div>
+                        <div>
+                            <div style={{ fontFamily: MONO, fontSize: '8px', color: '#888' }}>BASELINE REFERENCE</div>
+                            <div style={{ fontFamily: MONO, fontSize: '11px', color: '#FFF', fontWeight: 600 }}>{viewingResult.floodReport.product ? viewingResult.floodReport.product.baseline_id.slice(22, 30) : '2026-07-12'}</div>
+                        </div>
+                        <div style={{ gridColumn: 'span 2', height: '1px', background: 'rgba(255,255,255,0.06)' }} />
+                        <div>
+                            <div style={{ fontFamily: MONO, fontSize: '8px', color: '#E6A817' }}>NEW FLOOD AREA</div>
+                            <div style={{ fontFamily: MONO, fontSize: '13px', color: '#EF4444', fontWeight: 700 }}>
+                                {viewingResult.floodReport.areas ? Math.round(viewingResult.floodReport.areas.total_flood_acres) : 0} Acres
+                            </div>
+                        </div>
+                        <div>
+                            <div style={{ fontFamily: MONO, fontSize: '8px', color: '#3A82F6' }}>PERMANENT WATER</div>
+                            <div style={{ fontFamily: MONO, fontSize: '13px', color: '#3A82F6', fontWeight: 600 }}>
+                                {viewingResult.floodReport.areas ? Math.round(viewingResult.floodReport.areas.permanent_water_acres) : 0} Acres
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Class Details */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontFamily: MONO, fontSize: '9px', color: '#AAA' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ width: '6px', height: '6px', background: '#FF2800', borderRadius: '50%' }} />
+                                High Confidence Inundation
+                            </span>
+                            <span style={{ color: '#FFF' }}>
+                                {viewingResult.floodReport.areas ? Math.round(viewingResult.floodReport.areas.new_inundation_high_acres) : 0} ac
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ width: '6px', height: '6px', background: '#FFA000', borderRadius: '50%' }} />
+                                Medium Confidence Inundation
+                            </span>
+                            <span style={{ color: '#FFF' }}>
+                                {viewingResult.floodReport.areas ? Math.round(viewingResult.floodReport.areas.new_inundation_medium_acres) : 0} ac
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ═══ GATEWAY OFFLINE BANNER ═══ */}
             {!gatewayOnline && (
                 <div style={{

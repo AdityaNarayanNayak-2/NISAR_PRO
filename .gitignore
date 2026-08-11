@@ -1,12 +1,6 @@
 # ══════════════════════════════════════════════
 # PRIVATE / PERSONAL — Never push to public repo
 # ══════════════════════════════════════════════
-Docs/Aditya_Nayak_Resume.md
-Docs/Strategy/nisar_pro_interview_cheat_sheet.md
-Docs/Strategy/skyserve_prep.md
-Docs/Strategy/session_walkthrough.md
-Docs/Strategy/pending_file_browser_plan.md
-
 # ══════════════════════════════════════════════
 # BUILD ARTIFACTS
 # ══════════════════════════════════════════════
@@ -27,7 +21,7 @@ sar-gateway/results/
 .DS_Store
 .vscode/
 .idea/
-
+.agents/
 # ══════════════════════════════════════════════
 # SECRETS
 # ══════════════════════════════════════════════

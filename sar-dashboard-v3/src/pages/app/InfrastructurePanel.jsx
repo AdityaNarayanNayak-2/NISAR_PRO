@@ -69,14 +69,22 @@ export default function InfrastructurePanel({
         ? Math.round((new Date(dateMatches[1].slice(0, 4), parseInt(dateMatches[1].slice(4, 6)) - 1, dateMatches[1].slice(6, 8)) - new Date(dateMatches[0].slice(0, 4), parseInt(dateMatches[0].slice(4, 6)) - 1, dateMatches[0].slice(6, 8))) / 86400000)
         : null;
 
-    // ── STATUS ──
+    // ── STATUS (Ratio & Proportion Based Evaluation) ──
     let statusText = 'NO DATA';
     let statusColor = '#555555';
+    let healthScore = null;
     if (s) {
-        if (s.critical_count > 0) { statusText = 'CRITICAL'; statusColor = '#C0392B'; }
-        else if (s.alert_count > 0) { statusText = 'ALERT'; statusColor = '#D4822A'; }
-        else if (s.caution_count > 0) { statusText = 'CAUTION'; statusColor = '#E6A817'; }
-        else { statusText = 'NORMAL'; statusColor = '#4CAF50'; }
+        const totalPts = s.total_ps_points || (s.stable_count + s.caution_count + s.alert_count + s.critical_count) || 1;
+        const critPct = (s.critical_count / totalPts) * 100;
+        const alertPct = (s.alert_count / totalPts) * 100;
+        const cautionPct = (s.caution_count / totalPts) * 100;
+
+        healthScore = Math.round(((s.stable_count * 1.0 + s.caution_count * 0.75 + s.alert_count * 0.4) / totalPts) * 100);
+
+        if (critPct >= 15) { statusText = 'CRITICAL'; statusColor = '#ef4444'; }
+        else if (critPct >= 5 || alertPct >= 20) { statusText = 'ALERT'; statusColor = '#f59e0b'; }
+        else if (critPct >= 1 || alertPct >= 10 || cautionPct >= 25) { statusText = 'CAUTION'; statusColor = '#e6a817'; }
+        else { statusText = 'NORMAL'; statusColor = '#4ade80'; }
     }
 
     // ── SATELLITE PASS ──
@@ -180,45 +188,45 @@ export default function InfrastructurePanel({
 
     return (
         <>
-            {/* ════════════════════════════════════════════════════
-                ZONE 1: LEFT PANEL (240px)
+            {/* ═══════════════════════════════          {/* ════════════════════════════════════════════════════
+                ZONE 1: LEFT PANEL (250px) - Compact No-Scroll UI
                 ════════════════════════════════════════════════════ */}
             <div style={{
                 position: 'absolute', top: '42px', left: 0, bottom: 0,
-                width: '260px', background: C.bg0,
+                width: '250px', background: C.bg0,
                 borderRight: `1px solid ${C.bg3}`, zIndex: 100,
                 overflowY: 'auto', boxSizing: 'border-box',
+                padding: '10px 10px 16px', display: 'flex', flexDirection: 'column', gap: '8px'
             }}>
-                {/* ═══════ ASSET SECTION (REDESIGNED) ═══════ */}
+                {/* ═══════ ASSET MONITORING & SEARCH ═══════ */}
                 <div style={{
                     background: 'linear-gradient(180deg, #0c0c0e 0%, #070708 100%)',
-                    borderBottom: '1px solid #1a1a1f', padding: '16px', position: 'relative',
+                    border: '1px solid #1a1a1f', borderRadius: '8px', padding: '10px', position: 'relative',
                 }}>
-                    {/* Top gold accent line */}
                     <div style={{
                         position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
                         background: 'linear-gradient(90deg, #c8a96e, transparent 60%)',
+                        borderRadius: '8px 8px 0 0'
                     }} />
 
                     {/* Section Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                         <div style={{
-                            width: '24px', height: '24px', borderRadius: '6px', background: '#111114',
+                            width: '18px', height: '18px', borderRadius: '4px', background: '#111114',
                             border: '1px solid #1a1a1f', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: '#c8a96e', fontSize: '11px', fontFamily: MONO,
+                            color: '#c8a96e', fontSize: '9px', fontFamily: MONO,
                         }}>◎</div>
                         <div style={{
                             fontFamily: MONO, fontSize: '9px', fontWeight: 600,
-                            letterSpacing: '0.2em', textTransform: 'uppercase', color: '#555560',
-                        }}>ASSET</div>
-                        <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, #25252b, transparent)' }} />
+                            letterSpacing: '0.12em', textTransform: 'uppercase', color: '#666675',
+                        }}>ASSET SEARCH</div>
                     </div>
 
                     {/* Search Input */}
-                    <div style={{ position: 'relative', marginBottom: '12px' }}>
+                    <div style={{ position: 'relative' }}>
                         <span style={{
-                            position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
-                            color: '#3a3a44', fontSize: '12px', fontFamily: MONO, pointerEvents: 'none',
+                            position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)',
+                            color: '#444450', fontSize: '10px', fontFamily: MONO, pointerEvents: 'none',
                         }}>⌕</span>
                         <input
                             type="text"
@@ -226,23 +234,22 @@ export default function InfrastructurePanel({
                             onChange={(e) => { setAssetSearch(e.target.value); searchAssets(e.target.value); }}
                             placeholder="Search dam or bridge..."
                             style={{
-                                width: '100%', padding: '10px 12px 10px 36px', background: '#0e0e11',
-                                border: '1px solid #1a1a1f', borderRadius: '8px', color: '#e8e8ec',
-                                fontFamily: MONO, fontSize: '11px', outline: 'none', boxSizing: 'border-box',
-                                transition: 'all 0.2s ease',
+                                width: '100%', padding: '5px 8px 5px 24px', background: '#0e0e11',
+                                border: '1px solid #1a1a1f', borderRadius: '4px', color: '#e8e8ec',
+                                fontFamily: MONO, fontSize: '10px', outline: 'none', boxSizing: 'border-box',
                             }}
-                            onFocus={(e) => { e.target.style.borderColor = '#c8a96e'; e.target.style.boxShadow = '0 0 0 3px rgba(200,169,110,0.15)'; }}
+                            onFocus={(e) => { e.target.style.borderColor = '#c8a96e'; }}
                             onBlur={(e) => {
-                                e.target.style.borderColor = '#1a1a1f'; e.target.style.boxShadow = 'none';
+                                e.target.style.borderColor = '#1a1a1f';
                                 setTimeout(() => setAssetSearchOpen(false), 200);
                             }}
                         />
                         {assetSearchOpen && assetResults.length > 0 && (
                             <div style={{
                                 position: 'absolute', top: '100%', left: 0, right: 0, background: '#0c0c0e',
-                                border: '1px solid #25252b', borderTop: 'none', borderRadius: '0 0 8px 8px',
-                                zIndex: 200, maxHeight: '200px', overflowY: 'auto', marginTop: '4px',
-                                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                                border: '1px solid #25252b', borderTop: 'none', borderRadius: '0 0 6px 6px',
+                                zIndex: 200, maxHeight: '140px', overflowY: 'auto', marginTop: '2px',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
                             }}>
                                 {assetResults.map((asset, i) => (
                                     <div
@@ -256,371 +263,207 @@ export default function InfrastructurePanel({
                                             setFlyToCenter([asset.lat, asset.lon]);
                                         }}
                                         style={{
-                                            padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #1a1a1f',
+                                            padding: '6px 8px', cursor: 'pointer', borderBottom: '1px solid #1a1a1f',
                                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                            transition: 'background 0.15s ease',
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.background = '#18181c'}
                                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                     >
-                                        <span style={{ fontFamily: MONO, fontSize: '11px', color: '#e8e8ec' }}>{asset.name}</span>
-                                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555560' }}>{asset.state || asset.country}</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#e8e8ec' }}>{asset.name}</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '8px', color: '#555560' }}>{asset.state || asset.country}</span>
                                     </div>
                                 ))}
                             </div>
                         )}
                     </div>
-
-                    {/* Asset Info Card */}
-                    {assetLat && assetLon && assetName && (
-                        <div style={{
-                            background: '#111114', border: '1px solid #1a1a1f', borderRadius: '10px',
-                            padding: '14px', position: 'relative', overflow: 'hidden',
-                        }}>
-                            {/* Decorative gold glow */}
-                            <div style={{
-                                position: 'absolute', top: 0, right: 0, width: '60px', height: '60px',
-                                background: 'radial-gradient(circle, rgba(200,169,110,0.08), transparent 70%)',
-                                pointerEvents: 'none',
-                            }} />
-
-                            <div style={{
-                                fontFamily: MONO, fontSize: '14px', fontWeight: 600, color: '#e8e8ec',
-                                marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px',
-                            }}>
-                                <span style={{
-                                    width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80',
-                                    boxShadow: '0 0 6px rgba(74,222,128,0.12)', flexShrink: 0,
-                                }} />
-                                {assetName}
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                                <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#3a3a44', letterSpacing: '0.1em', textTransform: 'uppercase' }}>TYPE</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#c8a96e', fontWeight: 500 }}>{assetType}</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#3a3a44', letterSpacing: '0.1em', textTransform: 'uppercase' }}>STATE</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#8a8a95' }}>{assetState || '—'}</div>
-                                </div>
-                            </div>
-
-                            <div style={{
-                                fontFamily: MONO, fontSize: '9px', color: '#555560', display: 'flex',
-                                alignItems: 'center', gap: '6px', paddingTop: '8px',
-                                borderTop: '1px solid #1a1a1f',
-                            }}>
-                                <span> Location:</span>
-                                <span>{assetLat}°N  {assetLon}°E</span>
-                            </div>
-
-                            {/* Status Badge */}
-                            <div style={{
-                                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                padding: '4px 10px', borderRadius: '20px', fontFamily: MONO,
-                                fontSize: '9px', fontWeight: 600, letterSpacing: '0.08em', marginTop: '10px',
-                                ...(statusText === 'CRITICAL' ? {
-                                    background: 'rgba(239,68,68,0.1)', color: '#ef4444',
-                                    border: '1px solid rgba(239,68,68,0.2)',
-                                } : statusText === 'ALERT' ? {
-                                    background: 'rgba(245,158,11,0.1)', color: '#f59e0b',
-                                    border: '1px solid rgba(245,158,11,0.2)',
-                                } : statusText === 'CAUTION' ? {
-                                    background: 'rgba(230,168,23,0.1)', color: '#e6a817',
-                                    border: '1px solid rgba(230,168,23,0.2)',
-                                } : {
-                                    background: 'rgba(74,222,128,0.1)', color: '#4ade80',
-                                    border: '1px solid rgba(74,222,128,0.2)',
-                                }),
-                            }}>
-                                <span style={{
-                                    width: '5px', height: '5px', borderRadius: '50%',
-                                    ...(statusText === 'CRITICAL' ? {
-                                        background: '#ef4444', boxShadow: '0 0 6px rgba(239,68,68,0.15)',
-                                        animation: 'pulse-red 2s infinite',
-                                    } : statusText === 'ALERT' ? {
-                                        background: '#f59e0b', boxShadow: '0 0 6px rgba(245,158,11,0.12)',
-                                    } : statusText === 'CAUTION' ? {
-                                        background: '#e6a817', boxShadow: '0 0 6px rgba(230,168,23,0.12)',
-                                    } : {
-                                        background: '#4ade80', boxShadow: '0 0 6px rgba(74,222,128,0.12)',
-                                    }),
-                                }} />
-                                {statusText}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
-                {/* ── SYSTEM STATUS OVERVIEW ── */}
+                {/* ═══════ INTEGRATED ASSET & STATUS CARD ═══════ */}
                 {assetLat && assetLon && assetName && (
-                    <div style={{ padding: '16px', borderBottom: '1px solid #1a1a1f' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                            <div style={{
-                                width: '24px', height: '24px', borderRadius: '6px', background: '#111114',
-                                border: '1px solid #1a1a1f', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: statusColor, fontSize: '11px', fontFamily: MONO,
-                            }}>⚡</div>
-                            <div style={{
-                                fontFamily: MONO, fontSize: '9px', fontWeight: 600,
-                                letterSpacing: '0.2em', textTransform: 'uppercase', color: '#555560',
-                            }}>SYSTEM STATUS</div>
-                            <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, #25252b, transparent)' }} />
+                    <div style={{
+                        background: '#0d0d10', border: '1px solid #1a1a1f', borderRadius: '8px',
+                        padding: '10px', position: 'relative', overflow: 'hidden',
+                    }}>
+                        {/* Status Header */}
+                        <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            marginBottom: '6px', gap: '6px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                                <div style={{
+                                    width: '8px', height: '8px', borderRadius: '50%', background: statusColor,
+                                    boxShadow: `0 0 8px ${statusColor}60`, flexShrink: 0,
+                                    animation: statusText === 'CRITICAL' || statusText === 'ALERT' ? 'pulse-red 1.5s infinite' : 'none'
+                                }} />
+                                <span style={{
+                                    fontFamily: MONO, fontSize: '11px', fontWeight: 700, color: '#f0f0f4',
+                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                }} title={assetName}>
+                                    {assetName}
+                                </span>
+                            </div>
+
+                            <span style={{
+                                padding: '2px 6px', borderRadius: '3px', fontFamily: MONO,
+                                fontSize: '8px', fontWeight: 700, letterSpacing: '0.05em',
+                                background: `${statusColor}20`, color: statusColor,
+                                border: `1px solid ${statusColor}40`, flexShrink: 0
+                            }}>
+                                {statusText}
+                            </span>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: MONO, fontSize: '9px', marginBottom: '6px' }}>
+                            <span style={{ color: '#c8a96e', fontWeight: 600 }}>{assetType}</span>
+                            <span style={{ color: '#666675' }}>{assetState || 'India'}</span>
                         </div>
 
                         <div style={{
-                            background: 'linear-gradient(135deg, #111114 0%, rgba(255,255,255,0.01) 100%)',
-                            border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
-                            position: 'relative', overflow: 'hidden',
+                            fontFamily: MONO, fontSize: '8px', color: '#555560', display: 'flex',
+                            justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid #16161a',
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                {/* Pulse Indicator */}
-                                <div style={{ position: 'relative', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <div style={{
-                                        position: 'absolute', width: '24px', height: '24px', borderRadius: '50%',
-                                        background: statusColor, opacity: 0.15,
-                                        animation: statusText === 'CRITICAL' ? 'pulse-red 1s infinite' : 'pulse-red 2s infinite'
-                                    }} />
-                                    <div style={{
-                                        width: '10px', height: '10px', borderRadius: '50%',
-                                        background: statusColor, boxShadow: `0 0 10px ${statusColor}, 0 0 20px ${statusColor}`
-                                    }} />
-                                </div>
-
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', letterSpacing: '0.08em', textTransform: 'uppercase' }}>INTEGRITY STATE</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '13px', fontWeight: 700, color: statusColor, letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {statusText}
-                                    </div>
-                                </div>
-                            </div>
+                            <span>COORDS</span>
+                            <span style={{ color: '#888898' }}>{parseFloat(assetLat).toFixed(4)}°N {parseFloat(assetLon).toFixed(4)}°E</span>
                         </div>
                     </div>
                 )}
 
-
-                {/* Keyframes for the pulse animation */}
+                {/* Keyframes for status pulse */}
                 <style>{`
-  @keyframes pulse-red {
-    0% { box-shadow: 0 0 6px rgba(245, 158, 11, 0.2), 0 0 12px rgba(245, 158, 11, 0.2); }
-    50% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.5), 0 0 20px rgba(245, 158, 11, 0.4); }
-    100% { box-shadow: 0 0 6px rgba(245, 158, 11, 0.2), 0 0 12px rgba(245, 158, 11, 0.2); }
-  }
-`}</style>
+                  @keyframes pulse-red {
+                    0% { opacity: 0.4; }
+                    50% { opacity: 1; }
+                    100% { opacity: 0.4; }
+                  }
+                `}</style>
 
-                {/* ═══════ ENVIRONMENTAL CONTEXT (REDESIGNED) ═══════ */}
-                <div style={{ padding: '18px 16px', borderBottom: '1px solid #1a1a1f' }}>
-
-                    {/* Section Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                        <div style={{
-                            width: '26px', height: '26px', borderRadius: '8px', background: '#111114',
-                            border: '1px solid #25252b', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: '#c8a96e', fontSize: '12px', fontFamily: MONO, boxShadow: 'inset 0 0 4px rgba(0,0,0,0.5)'
-                        }}>🌡</div>
-                        <div style={{
-                            fontFamily: MONO, fontSize: '10px', fontWeight: 700,
-                            letterSpacing: '0.15em', textTransform: 'uppercase', color: '#888894',
-                        }}>Environmental Context</div>
-                        <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, #25252b, transparent)' }} />
+                {/* ═══════ ENVIRONMENTAL CONTEXT & TELEMETRY ═══════ */}
+                <div style={{
+                    background: '#0d0d10', border: '1px solid #1a1a1f', borderRadius: '8px',
+                    padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ color: '#c8a96e', fontSize: '10px' }}>🌡</span>
+                            <span style={{
+                                fontFamily: MONO, fontSize: '9px', fontWeight: 700,
+                                letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888895',
+                            }}>ENVIRONMENTAL TELEMETRY</span>
+                        </div>
+                        {envContext && (
+                            <span style={{ fontFamily: MONO, fontSize: '7px', color: '#4ade80', letterSpacing: '0.05em' }}>● LIVE</span>
+                        )}
                     </div>
 
-                    {/* Reservoir Card */}
+                    {/* Reservoir Telemetry Grid (if reservoir present) */}
                     {envContext?.reservoir && envContext.reservoir !== 'UNAVAILABLE' && (
                         <div style={{
-                            background: 'linear-gradient(135deg, #111114 0%, rgba(200,169,110,0.04) 100%)',
-                            border: '1px solid #25252b', borderRadius: '12px', padding: '16px',
-                            marginBottom: '16px', position: 'relative', overflow: 'hidden',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                            background: 'rgba(200,169,110,0.03)', border: '1px solid rgba(200,169,110,0.15)',
+                            borderRadius: '6px', padding: '8px', position: 'relative'
                         }}>
-                            {/* Gold accent bar on left */}
                             <div style={{
-                                position: 'absolute', top: 0, left: 0, width: '4px', height: '100%',
-                                background: 'linear-gradient(180deg, #c8a96e, rgba(200,169,110,0.1))',
-                            }} />
-
-                            <div style={{
-                                fontFamily: MONO, fontSize: '11px', color: '#c8a96e', fontWeight: 700,
-                                letterSpacing: '0.1em', marginBottom: '14px', paddingLeft: '10px',
-                                textShadow: '0 0 8px rgba(200,169,110,0.2)'
+                                fontFamily: MONO, fontSize: '9px', color: '#c8a96e', fontWeight: 700,
+                                marginBottom: '6px', letterSpacing: '0.05em'
                             }}>
-                                {envContext.reservoir.toUpperCase()}
+                                {envContext.reservoir}
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px', paddingLeft: '10px' }}>
-                                {/* Current Level */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                                 <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#555560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Current Level</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '14px', color: '#e8e8ec', fontWeight: 700 }}>
-                                        {envContext.current_level_m != null ? `${envContext.current_level_m.toFixed(2)}m` : '—'}
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', textTransform: 'uppercase' }}>Current Level</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#e8e8ec', fontWeight: 700 }}>
+                                        {envContext.current_level_m != null ? `${envContext.current_level_m.toFixed(1)}m` : '—'}
                                     </div>
                                 </div>
-                                {/* Usable Storage */}
                                 <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#555560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Usable Storage</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', textTransform: 'uppercase' }}>Storage Capacity</div>
                                     <div style={{
-                                        fontFamily: MONO, fontSize: '14px', fontWeight: 700,
-                                        color: envContext.storage_pct > 90 ? '#ef4444' : (envContext.storage_pct > 50 ? '#4ade80' : '#f59e0b'),
-                                        transition: 'color 0.3s ease'
+                                        fontFamily: MONO, fontSize: '11px', fontWeight: 700,
+                                        color: envContext.storage_pct > 90 ? '#ef4444' : (envContext.storage_pct > 50 ? '#4ade80' : '#f59e0b')
                                     }}>
-                                        {envContext.storage_pct != null ? `${envContext.storage_pct.toFixed(2)}%` : '—'}
+                                        {envContext.storage_pct != null ? `${envContext.storage_pct.toFixed(1)}%` : '—'}
                                     </div>
                                 </div>
-                                {/* FRL */}
                                 <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#555560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>FRL (Full Limit)</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#999999' }}>
-                                        {envContext.full_reservoir_level_m != null ? `${envContext.full_reservoir_level_m.toFixed(2)}m` : '—'}
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', textTransform: 'uppercase' }}>FRL / MDDL</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#9999a0' }}>
+                                        {envContext.full_reservoir_level_m != null ? `${envContext.full_reservoir_level_m.toFixed(0)}m / ${envContext.mddl_level_m?.toFixed(0)}m` : '—'}
                                     </div>
                                 </div>
-                                {/* MDDL */}
                                 <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '8px', color: '#555560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>MDDL (Min Limit)</div>
-                                    <div style={{ fontFamily: MONO, fontSize: '11px', color: '#999999' }}>
-                                        {envContext.mddl_level_m != null ? `${envContext.mddl_level_m.toFixed(2)}m` : '—'}
+                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', textTransform: 'uppercase' }}>Basin</div>
+                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#9999a0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {envContext.river_basin || 'Local'}
                                     </div>
                                 </div>
-                            </div>
-
-                            <div style={{
-                                display: 'flex', justifyContent: 'space-between', fontFamily: MONO,
-                                fontSize: '8px', color: '#3a3a44', borderTop: '1px solid #1a1a1f',
-                                paddingTop: '10px', marginTop: '4px', paddingLeft: '10px', letterSpacing: '0.05em',
-                            }}>
-                                <span>SRC: {envContext.source?.includes("OHPC") ? "OHPC" : "LOCAL"}</span>
-                                <span style={{ color: '#4ade8080' }}>● LIVE: TODAY</span>
                             </div>
                         </div>
                     )}
 
-                    {/* Environmental Data Rows — ALIVE */}
-                    {envRows.map((r, i) => {
-                        const isOff = r.value === '—' || r.status === 'off';
-                        const isWarn = r.status === 'warn';
-                        const isData = r.status === 'data';
-                        const isOk = r.status === 'ok';
-                        const isAccent = r.status === 'accent';
+                    {/* Environmental Grid (Rainfall, Soil, Seismic, Season) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                        {envRows.map((r) => {
+                            const isOff = r.value === '—' || r.status === 'off';
+                            const isWarn = r.status === 'warn';
+                            const isData = r.status === 'data';
+                            const isOk = r.status === 'ok';
 
-                        const dotColor = isOff ? '#3a3a44'
-                            : isWarn ? '#f59e0b'
-                                : isData ? '#60a5fa'
-                                    : isOk ? '#4ade80'
-                                        : '#c8a96e';
+                            const valColor = isOff ? '#444450' : isWarn ? '#f59e0b' : isData ? '#60a5fa' : isOk ? '#4ade80' : '#c8a96e';
 
-                        const glowColor = isOff ? 'transparent'
-                            : isWarn ? 'rgba(245,158,11,0.3)'
-                                : isData ? 'rgba(96,165,250,0.3)'
-                                    : isOk ? 'rgba(74,222,128,0.3)'
-                                        : 'rgba(200,169,110,0.2)';
-
-                        const valueColor = isOff ? '#3a3a44'
-                            : isWarn ? '#f59e0b'
-                                : isData ? '#60a5fa'
-                                    : isOk ? '#4ade80'
-                                        : '#c8a96e';
-
-                        const barFill = isOff ? 0
-                            : isWarn ? 75
-                                : isData ? 60
-                                    : isOk ? 100
-                                        : 50;
-
-                        const statusText = isWarn ? 'ELEVATED' : isData ? 'ACTIVE' : isOk ? 'NORMAL' : 'MONITORING';
-
-                        return (
-                            <div key={r.label} style={{
-                                padding: '12px 14px',
-                                marginBottom: i < envRows.length - 1 ? '8px' : '0',
-                                borderRadius: '10px',
-                                background: isOff ? 'transparent' : 'rgba(255,255,255,0.02)',
-                                border: `1px solid ${isOff ? '#1a1a1f' : 'rgba(255,255,255,0.05)'}`,
-                                transition: 'all 0.2s ease',
-                                cursor: 'default'
-                            }}
-                                onMouseEnter={(e) => { if (!isOff) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; } }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = isOff ? 'transparent' : 'rgba(255,255,255,0.02)'; e.currentTarget.style.borderColor = isOff ? '#1a1a1f' : 'rgba(255,255,255,0.05)'; }}>
-
-                                {/* Top row: dot + label + value */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                                    {/* Animated status dot */}
-                                    <div style={{
-                                        width: '9px', height: '9px', borderRadius: '50%', flexShrink: 0,
-                                        background: dotColor,
-                                        boxShadow: `0 0 8px ${glowColor}`,
-                                        animation: isWarn ? 'pulse-red 2s infinite' : 'none',
-                                    }} />
-
-                                    {/* Label */}
-                                    <span style={{
-                                        fontFamily: MONO, fontSize: '10px', color: isOff ? '#3a3a44' : '#777782',
-                                        width: '80px', flexShrink: 0, letterSpacing: '0.08em', fontWeight: 500
-                                    }}>{r.label}</span>
-
-                                    {/* Value — big and colored */}
-                                    <span style={{
-                                        fontFamily: MONO, fontSize: '12px', fontWeight: 700,
-                                        flex: 1, textAlign: 'right', color: valueColor,
-                                        lineHeight: 1.2,
-                                        textShadow: isOff ? 'none' : `0 0 6px ${glowColor}`
-                                    }}>{r.value}</span>
-                                </div>
-
-                                {/* Mini progress bar — shows "health" of this parameter */}
-                                {!isOff && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <div style={{ flex: 1, height: '4px', background: '#1a1a1f', borderRadius: '4px', overflow: 'hidden' }}>
-                                            <div style={{
-                                                height: '100%',
-                                                width: `${barFill}%`,
-                                                background: `linear-gradient(90deg, ${dotColor}40, ${dotColor})`,
-                                                borderRadius: '4px',
-                                                transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                boxShadow: `0 0 6px ${glowColor}`
-                                            }} />
-                                        </div>
+                            return (
+                                <div key={r.label} style={{
+                                    background: '#09090c', border: `1px solid ${isWarn ? 'rgba(245,158,11,0.3)' : '#16161c'}`,
+                                    borderRadius: '5px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '2px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ fontFamily: MONO, fontSize: '7px', color: '#555565', letterSpacing: '0.05em' }}>{r.label}</span>
                                         <span style={{
-                                            fontFamily: MONO, fontSize: '8px', color: '#555560',
-                                            letterSpacing: '0.08em', flexShrink: 0, fontWeight: 600
-                                        }}>
-                                            {statusText}
-                                        </span>
+                                            width: '4px', height: '4px', borderRadius: '50%', background: valColor,
+                                            boxShadow: !isOff ? `0 0 4px ${valColor}60` : 'none'
+                                        }} />
                                     </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
+                                    <span style={{
+                                        fontFamily: MONO, fontSize: '10px', fontWeight: 700, color: valColor,
+                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                    }} title={r.value}>
+                                        {r.value}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
 
-                {/* ═══════ FETCH BUTTON (REDESIGNED) ═══════ */}
-                {assetLat && assetLon && !envContext && (
-                    <div style={{ padding: '0 16px 16px' }}>
+                    {/* Fetch Button if not fetched */}
+                    {assetLat && assetLon && !envContext && (
                         <button
                             onClick={fetchContext}
                             disabled={fetchingContext}
                             style={{
-                                width: '100%', padding: '10px', background: 'transparent',
-                                border: '1px solid #25252b', borderRadius: '8px', color: '#555560',
-                                fontFamily: MONO, fontSize: '10px', letterSpacing: '0.1em',
+                                width: '100%', padding: '6px', background: 'transparent',
+                                border: '1px solid #25252b', borderRadius: '4px', color: '#c8a96e',
+                                fontFamily: MONO, fontSize: '9px', letterSpacing: '0.08em',
                                 cursor: fetchingContext ? 'not-allowed' : 'pointer',
-                                transition: 'all 0.25s ease', position: 'relative', overflow: 'hidden',
-                                opacity: fetchingContext ? 0.5 : 1,
+                                opacity: fetchingContext ? 0.5 : 1, marginTop: '2px'
                             }}
-                            onMouseEnter={(e) => { if (!fetchingContext) { e.target.style.borderColor = '#c8a96e'; e.target.style.color = '#c8a96e'; } }}
-                            onMouseLeave={(e) => { e.target.style.borderColor = '#25252b'; e.target.style.color = '#555560'; }}
                         >
-                            {fetchingContext ? 'FETCHING...' : 'FETCH CONTEXT'}
+                            {fetchingContext ? 'FETCHING TELEMETRY...' : 'FETCH TELEMETRY'}
                         </button>
-                    </div>
-                )}
+                    )}
 
+                    {envContext?.source && (
+                        <div style={{ fontFamily: MONO, fontSize: '7px', color: '#444450', textAlign: 'right', letterSpacing: '0.04em' }}>
+                            SRC: {envContext.source}
+                        </div>
+                    )}
+                </div>
             </div>
+
 
             {/* ════════════════════════════════════════════════════
                 ZONE 3: BOTTOM BAR (80px)
                 ════════════════════════════════════════════════════ */}
             <div style={{
-                position: 'absolute', bottom: 0, left: '240px', right: 0,
+                position: 'absolute', bottom: 0, left: '250px', right: 0,
                 height: '80px', background: '#111111',
                 borderTop: '1px solid #2A2A2A', zIndex: 100,
                 display: 'flex', alignItems: 'center',
@@ -958,70 +801,93 @@ export default function InfrastructurePanel({
                             {/* Divider line before analysis sections */}
                             {s && <div style={{ height: '1px', background: '#1a1a1f', margin: '18px 0' }} />}
 
+                            {/* ── DEFORMATION DISTRIBUTION SPECTRUM ── */}
                             {s && (
                                 <>
-                                    <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', letterSpacing: '0.1em', marginBottom: '12px' }}>STRUCTURAL ANALYSIS</div>
+                                    <div style={{
+                                        background: 'linear-gradient(180deg, #111114 0%, rgba(200,169,110,0.02) 100%)',
+                                        border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
+                                        marginBottom: '14px'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                            <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#555560' }}>DEFORMATION SPECTRUM</span>
+                                            <span style={{ fontFamily: MONO, fontSize: '10px', fontWeight: 600, color: healthScore >= 80 ? '#4ade80' : healthScore >= 65 ? '#e6a817' : '#ef4444' }}>
+                                                {healthScore != null ? `${healthScore}% STABILITY` : '—'}
+                                            </span>
+                                        </div>
 
-                                    {/* HEALTH MATRIX */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#2A2A2A', border: '1px solid #2A2A2A', marginBottom: '16px' }}>
-                                        {[
-                                            { label: 'STABLE', value: s.stable_count, color: C.stable },
-                                            { label: 'CAUTION', value: s.caution_count, color: C.caution },
-                                            { label: 'ALERT', value: s.alert_count, color: C.alert },
-                                            { label: 'CRITICAL', value: s.critical_count, color: C.critical, highlight: s.critical_count > 0 },
-                                        ].map(cell => (
-                                            <div key={cell.label} style={{ background: cell.highlight ? C.bg1 : '#111111', padding: '8px', textAlign: 'center', border: cell.highlight ? `1px solid ${C.critical}` : 'none' }}>
-                                                <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', marginBottom: '4px' }}>{cell.label}</div>
-                                                <div style={{ fontFamily: MONO, fontSize: '22px', fontWeight: 600, color: cell.color }}>{cell.value}</div>
-                                            </div>
-                                        ))}
+                                        {/* Multi-segment proportional spectrum bar */}
+                                        {(() => {
+                                            const total = (s.stable_count + s.caution_count + s.alert_count + s.critical_count) || 1;
+                                            const stPct = ((s.stable_count / total) * 100).toFixed(1);
+                                            const caPct = ((s.caution_count / total) * 100).toFixed(1);
+                                            const alPct = ((s.alert_count / total) * 100).toFixed(1);
+                                            const crPct = ((s.critical_count / total) * 100).toFixed(1);
+                                            return (
+                                                <>
+                                                    <div style={{ height: '6px', width: '100%', background: '#1a1a1f', borderRadius: '3px', display: 'flex', overflow: 'hidden', marginBottom: '10px' }}>
+                                                        <div style={{ width: `${stPct}%`, background: '#4ade80', transition: 'width 0.4s ease' }} title={`Stable: ${s.stable_count} (${stPct}%)`} />
+                                                        <div style={{ width: `${caPct}%`, background: '#e6a817', transition: 'width 0.4s ease' }} title={`Caution: ${s.caution_count} (${caPct}%)`} />
+                                                        <div style={{ width: `${alPct}%`, background: '#f59e0b', transition: 'width 0.4s ease' }} title={`Alert: ${s.alert_count} (${alPct}%)`} />
+                                                        <div style={{ width: `${crPct}%`, background: '#ef4444', transition: 'width 0.4s ease' }} title={`Critical: ${s.critical_count} (${crPct}%)`} />
+                                                    </div>
+
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '4px', textAlign: 'center', fontFamily: MONO, fontSize: '9px' }}>
+                                                        <div><span style={{ color: '#4ade80' }}>●</span> <span style={{ color: '#888888' }}>{s.stable_count}</span></div>
+                                                        <div><span style={{ color: '#e6a817' }}>●</span> <span style={{ color: '#888888' }}>{s.caution_count}</span></div>
+                                                        <div><span style={{ color: '#f59e0b' }}>●</span> <span style={{ color: '#888888' }}>{s.alert_count}</span></div>
+                                                        <div><span style={{ color: '#ef4444' }}>●</span> <span style={{ color: '#888888' }}>{s.critical_count}</span></div>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
 
-                                    {/* Divider */}
-                                    <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
-
-                                    {/* TOP 10 SCATTERERS */}
+                                    {/* ── HIGHEST DEFORMATION POINTS TELEMETRY ── */}
                                     {topScatterers.length > 0 && (
-                                        <div style={{ marginBottom: '16px' }}>
-                                            <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', display: 'flex', paddingBottom: '4px', borderBottom: '1px solid #1A1A1A' }}>
-                                                <div style={{ width: '20px' }}>#</div>
-                                                <div style={{ flex: 1 }}>DISP (mm)</div>
-                                                <div style={{ width: '40px' }}>COH</div>
-                                                <div style={{ width: '60px' }}>SEV</div>
+                                        <div style={{
+                                            background: '#111114', border: '1px solid #1a1a1f', borderRadius: '10px',
+                                            padding: '14px', marginBottom: '14px'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#555560' }}>MAX DISPLACEMENT POINTS</span>
+                                                <span style={{ fontFamily: MONO, fontSize: '8px', color: '#3a3a44' }}>TOP 10</span>
                                             </div>
-                                            {topScatterers.map((pt, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    onClick={() => setSelectedPoint(pt)}
-                                                    onMouseEnter={e => e.currentTarget.style.background = '#1A1A1A'}
-                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                                    style={{ fontFamily: MONO, fontSize: '10px', display: 'flex', padding: '4px 0', borderBottom: '1px solid #1A1A1A', cursor: 'pointer' }}
-                                                >
-                                                    <div style={{ width: '20px', color: '#888888' }}>{idx + 1}</div>
-                                                    <div style={{ flex: 1, color: sevColor(pt.severity) }}>{pt.displacement_mm?.toFixed(2)}</div>
-                                                    <div style={{ width: '40px', color: C.text }}>{pt.coherence?.toFixed(2)}</div>
-                                                    <div style={{ width: '60px', color: sevColor(pt.severity) }}>{pt.severity}</div>
-                                                </div>
-                                            ))}
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {topScatterers.map((pt, idx) => {
+                                                    const maxAbsDisp = Math.abs(topScatterers[0]?.displacement_mm || 30);
+                                                    const barWidthPct = Math.min(100, (Math.abs(pt.displacement_mm) / maxAbsDisp) * 100);
+                                                    const col = sevColor(pt.severity);
+                                                    return (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => setSelectedPoint(pt)}
+                                                            onMouseEnter={e => e.currentTarget.style.background = '#18181c'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                            style={{
+                                                                padding: '6px 8px', borderRadius: '6px', border: '1px solid #1a1a1f',
+                                                                cursor: 'pointer', transition: 'all 0.15s ease'
+                                                            }}
+                                                        >
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: MONO, fontSize: '10px', marginBottom: '4px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span style={{ color: '#555560', fontSize: '9px' }}>#{idx + 1}</span>
+                                                                    <span style={{ color: col, fontWeight: 600 }}>{pt.displacement_mm?.toFixed(2)} mm</span>
+                                                                </div>
+                                                                <span style={{ color: '#555560', fontSize: '9px' }}>COH {pt.coherence?.toFixed(2)}</span>
+                                                            </div>
+                                                            {/* Micro Magnitude Sparkbar */}
+                                                            <div style={{ height: '2px', background: '#1a1a1f', borderRadius: '1px', overflow: 'hidden' }}>
+                                                                <div style={{ height: '100%', width: `${barWidthPct}%`, background: col, borderRadius: '1px' }} />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     )}
-
-                                    {/* Divider */}
-                                    <div style={{ height: '1px', background: '#2A2A2A', margin: '12px 0' }} />
                                 </>
-                            )}
-
-                            {/* ACQUISITION METADATA */}
-                            {localFilePath && (
-                                <div>
-                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#555555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '10px' }}>ACQUISITION METADATA</div>
-                                    {acquisitionRows.map(({ label, value }) => (
-                                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #161616' }}>
-                                            <span style={{ fontFamily: MONO, fontSize: '11px', color: '#555555' }}>{label}</span>
-                                            <span style={{ fontFamily: MONO, fontSize: '11px', color: '#F0F0F0', textAlign: 'right' }}>{value || '—'}</span>
-                                        </div>
-                                    ))}
-                                </div>
                             )}
                         </>
                     )}

@@ -17,6 +17,16 @@ pub struct ProcessRequest {
     pub crop_lat: Option<f64>,
     pub crop_lon: Option<f64>,
     pub crop_radius_km: Option<f64>,
+    /// Which binary to use: "standard" (sar_processor) or "science" (sar_science_processor)
+    pub processor: Option<String>,
+    /// Crop preset for SAR Science: "1x1km", "5x5km", "1x2km"
+    pub crop_preset: Option<String>,
+    // ── Flood Mapping Parameters ─────────────────────────────────────────
+    pub gunw_file: Option<String>,
+    pub min_change_db: Option<f32>,
+    pub seed_threshold_db: Option<f32>,
+    pub growth_threshold_db: Option<f32>,
+    pub min_area_pixels: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

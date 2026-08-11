@@ -782,6 +782,149 @@ pub fn save_sar_geotiff(
     Ok(())
 }
 
+/// Save a 2D u8 array as a georeferenced EPSG:4326 GeoTIFF.
+///
+/// Unlike save_sar_geotiff, this function does not apply any log-stretching,
+/// as it is intended for classification maps (e.g. water class maps).
+///
+/// # Arguments
+/// * `data` - 2D u8 array (rows × cols)
+/// * `output_filename` - Path for the output `.tif` file
+/// * `bbox` - Geographic bounding box as `[west, south, east, north]` in degrees
+pub fn save_geotiff_u8(
+    data: ArrayView2<u8>,
+    output_filename: &str,
+    bbox: Option<[f64; 4]>,
+) -> Result<()> {
+    use std::io::Write;
+
+    let rows = data.nrows() as u32;
+    let cols = data.ncols() as u32;
+    let [west, south, east, north] = bbox.unwrap_or([-180.0, -90.0, 180.0, 90.0]);
+
+    info!(
+        "Writing 8-bit GeoTIFF: {}×{} → {} [EPSG:4326 bbox: {:.4},{:.4},{:.4},{:.4}]",
+        cols, rows, output_filename, west, south, east, north
+    );
+
+    let pixels: Vec<u8> = data.iter().copied().collect();
+
+    // ── Tile geometry ─────────────────────────────────────────────────
+    let tile_size: u32 = 256;
+    let tiles_x = cols.div_ceil(tile_size);
+    let tiles_y = rows.div_ceil(tile_size);
+    let n_tiles = (tiles_x * tiles_y) as usize;
+    let tile_bytes = (tile_size * tile_size) as usize;
+
+    let mut tile_data: Vec<u8> = vec![0u8; n_tiles * tile_bytes];
+
+    for ty in 0..tiles_y {
+        for tx in 0..tiles_x {
+            let tile_idx = (ty * tiles_x + tx) as usize;
+            let tile_start = tile_idx * tile_bytes;
+
+            for py in 0..tile_size {
+                let img_y = ty * tile_size + py;
+                if img_y >= rows {
+                    break;
+                }
+                for px in 0..tile_size {
+                    let img_x = tx * tile_size + px;
+                    if img_x >= cols {
+                        continue;
+                    }
+                    let src = (img_y * cols + img_x) as usize;
+                    let dst = (py * tile_size + px) as usize;
+                    tile_data[tile_start + dst] = pixels[src];
+                }
+            }
+        }
+    }
+
+    let header_size: u32 = 8;
+    let tile_data_total = (n_tiles * tile_bytes) as u32;
+    let ifd_offset = header_size + tile_data_total;
+
+    let num_ifd_entries: u16 = 14;
+    let ifd_size = 2 + (num_ifd_entries as u32 * 12) + 4;
+    let overflow_base = ifd_offset + ifd_size;
+
+    let off_tile_offsets = overflow_base;
+    let off_tile_bytecounts = off_tile_offsets + (n_tiles as u32 * 4);
+    let off_pixel_scale = off_tile_bytecounts + (n_tiles as u32 * 4);
+    let off_tiepoint = off_pixel_scale + 24;
+    let off_geokeys = off_tiepoint + 48;
+
+    let tile_offsets: Vec<u32> = (0..n_tiles)
+        .map(|i| header_size + (i as u32 * tile_bytes as u32))
+        .collect();
+
+    let total_file_size = (off_geokeys + 32) as usize;
+    let mut buf: Vec<u8> = Vec::with_capacity(total_file_size);
+
+    buf.extend_from_slice(b"II");
+    buf.extend_from_slice(&42u16.to_le_bytes());
+    buf.extend_from_slice(&ifd_offset.to_le_bytes());
+
+    buf.extend_from_slice(&tile_data);
+
+    buf.extend_from_slice(&num_ifd_entries.to_le_bytes());
+
+    geotiff_ifd_short(&mut buf, 256, 1, cols as u16);
+    geotiff_ifd_short(&mut buf, 257, 1, rows as u16);
+    geotiff_ifd_short(&mut buf, 258, 1, 8); // BitsPerSample = 8
+    geotiff_ifd_short(&mut buf, 259, 1, 1); // Compression = None
+    geotiff_ifd_short(&mut buf, 262, 1, 1); // PhotometricInterpretation = MinIsBlack
+    geotiff_ifd_short(&mut buf, 277, 1, 1); // SamplesPerPixel = 1
+    geotiff_ifd_short(&mut buf, 322, 1, tile_size as u16);
+    geotiff_ifd_short(&mut buf, 323, 1, tile_size as u16);
+    geotiff_ifd_long_arr(&mut buf, 324, n_tiles as u32, off_tile_offsets);
+    geotiff_ifd_long_arr(&mut buf, 325, n_tiles as u32, off_tile_bytecounts);
+    geotiff_ifd_short(&mut buf, 339, 1, 1); // SampleFormat = UnsignedInteger
+
+    geotiff_ifd_double_arr(&mut buf, 33550, 3, off_pixel_scale);
+    geotiff_ifd_double_arr(&mut buf, 33922, 6, off_tiepoint);
+    geotiff_ifd_short_arr(&mut buf, 34735, 16, off_geokeys);
+
+    buf.extend_from_slice(&0u32.to_le_bytes());
+
+    for &off in &tile_offsets {
+        buf.extend_from_slice(&off.to_le_bytes());
+    }
+
+    for _ in 0..n_tiles {
+        buf.extend_from_slice(&(tile_bytes as u32).to_le_bytes());
+    }
+
+    let scale_x = (east - west) / cols as f64;
+    let scale_y = (north - south) / rows as f64;
+    let pixel_scale: [f64; 3] = [scale_x, scale_y, 0.0];
+    for &v in &pixel_scale {
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+
+    let tiepoint: [f64; 6] = [0.0, 0.0, 0.0, west, north, 0.0];
+    for &v in &tiepoint {
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+
+    let geokeys: [u16; 16] = [
+        1, 1, 0, 3,
+        1024, 0, 1, 1,
+        1025, 0, 1, 1,
+        2048, 0, 1, 4326,
+    ];
+    for &v in &geokeys {
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+
+    let mut file = std::fs::File::create(output_filename)?;
+    file.write_all(&buf)?;
+
+    info!("  ✓ Georeferenced 8-bit GeoTIFF written successfully ({} tiles)", n_tiles);
+    Ok(())
+}
+
 // ── GeoTIFF IFD entry helpers ────────────────────────────────────────────
 // Each IFD entry is exactly 12 bytes: tag(u16) + type(u16) + count(u32) + value/offset(u32)
 
@@ -1104,6 +1247,230 @@ pub fn save_geotiff_complex(
     Ok(())
 }
 
+/// Save a colormapped PNG from an f32 array (e.g. displacement in mm).
+///
+/// Uses a spectral colormap (blue → cyan → green → yellow → red) inspired by
+/// SNAPHU/PyGMTSAR deformation visualizations. NaN pixels become transparent.
+///
+/// # Arguments
+/// * `data` - 2D f32 array (e.g. displacement_mm)
+/// * `output_path` - Output PNG file path
+/// * `vmin` - Minimum value for colormap range (e.g. -25.0 mm)
+/// * `vmax` - Maximum value for colormap range (e.g. +25.0 mm)
+pub fn save_colormap_png_f32(
+    data: ArrayView2<f32>,
+    output_path: &str,
+    vmin: f32,
+    vmax: f32,
+) -> Result<()> {
+    let rows = data.nrows();
+    let cols = data.ncols();
+    let range = vmax - vmin;
+
+    info!(
+        "Rendering displacement colormap PNG: {}×{}, range=[{:.1}, {:.1}]",
+        rows, cols, vmin, vmax
+    );
+
+    // Spectral colormap: 5 stops
+    // Blue(subsidence) → Cyan → Green(stable) → Yellow → Red(uplift)
+    let stops: [(f32, [u8; 3]); 5] = [
+        (0.00, [0, 0, 200]),     // Deep blue — strong subsidence
+        (0.25, [0, 180, 220]),   // Cyan
+        (0.50, [30, 180, 30]),   // Green — stable
+        (0.75, [240, 200, 0]),   // Yellow
+        (1.00, [210, 20, 20]),   // Crimson — strong uplift
+    ];
+
+    fn lerp_color(t: f32, stops: &[(f32, [u8; 3]); 5]) -> [u8; 3] {
+        let t = t.clamp(0.0, 1.0);
+        for i in 0..stops.len() - 1 {
+            let (t0, c0) = stops[i];
+            let (t1, c1) = stops[i + 1];
+            if t >= t0 && t <= t1 {
+                let f = (t - t0) / (t1 - t0);
+                return [
+                    (c0[0] as f32 + f * (c1[0] as f32 - c0[0] as f32)) as u8,
+                    (c0[1] as f32 + f * (c1[1] as f32 - c0[1] as f32)) as u8,
+                    (c0[2] as f32 + f * (c1[2] as f32 - c0[2] as f32)) as u8,
+                ];
+            }
+        }
+        stops[stops.len() - 1].1
+    }
+
+    // Build RGBA image
+    let mut img_buf: Vec<u8> = vec![0u8; rows * cols * 4];
+    for r in 0..rows {
+        for c in 0..cols {
+            let val = data[[r, c]];
+            let idx = (r * cols + c) * 4;
+            if val.is_finite() && range.abs() > 1e-10 {
+                let t = (val - vmin) / range;
+                let rgb = lerp_color(t, &stops);
+                img_buf[idx] = rgb[0];
+                img_buf[idx + 1] = rgb[1];
+                img_buf[idx + 2] = rgb[2];
+                img_buf[idx + 3] = 200; // Semi-transparent for map overlay
+            } else {
+                // NaN / zero-range → fully transparent
+                img_buf[idx + 3] = 0;
+            }
+        }
+    }
+
+    let img: ImageBuffer<image::Rgba<u8>, Vec<u8>> =
+        ImageBuffer::from_raw(cols as u32, rows as u32, img_buf)
+            .ok_or_else(|| crate::errors::ProcessorError::ProcessingError(
+                "Failed to create RGBA image buffer".to_string()
+            ))?;
+    img.save(output_path)?;
+
+    info!("  ✓ Colormap PNG saved: {} ({}×{})", output_path, cols, rows);
+    Ok(())
+}
+
+/// Saves a flood classification map as an RGBA PNG.
+///
+/// - Class 0 (Dry land): transparent [0, 0, 0, 0]
+/// - Class 1 (Permanent water): blue [0, 100, 255, 140]
+/// - Class 2 (Flood High Conf): neon red [255, 40, 0, 220]
+/// - Class 3 (Flood Med Conf): orange [255, 160, 0, 180]
+/// - Class 4 (Flood Low Conf): yellow [255, 230, 0, 120]
+pub fn save_flood_map_png(
+    flood_map: ArrayView2<u8>,
+    output_path: &str,
+) -> Result<()> {
+    let rows = flood_map.nrows();
+    let cols = flood_map.ncols();
+    let mut img_buf = vec![0u8; rows * cols * 4];
+
+    for r in 0..rows {
+        for c in 0..cols {
+            let class = flood_map[[r, c]];
+            let idx = (r * cols + c) * 4;
+            match class {
+                1 => {
+                    // Permanent water: Blue
+                    img_buf[idx] = 0;
+                    img_buf[idx + 1] = 100;
+                    img_buf[idx + 2] = 255;
+                    img_buf[idx + 3] = 140;
+                }
+                2 => {
+                    // Flood High: Neon Red
+                    img_buf[idx] = 255;
+                    img_buf[idx + 1] = 40;
+                    img_buf[idx + 2] = 0;
+                    img_buf[idx + 3] = 220;
+                }
+                3 => {
+                    // Flood Med: Orange
+                    img_buf[idx] = 255;
+                    img_buf[idx + 1] = 160;
+                    img_buf[idx + 2] = 0;
+                    img_buf[idx + 3] = 180;
+                }
+                4 => {
+                    // Flood Low: Yellow
+                    img_buf[idx] = 255;
+                    img_buf[idx + 1] = 230;
+                    img_buf[idx + 2] = 0;
+                    img_buf[idx + 3] = 120;
+                }
+                _ => {
+                    // Land: Transparent
+                    img_buf[idx + 3] = 0;
+                }
+            }
+        }
+    }
+
+    let img: ImageBuffer<image::Rgba<u8>, Vec<u8>> =
+        ImageBuffer::from_raw(cols as u32, rows as u32, img_buf)
+            .ok_or_else(|| crate::errors::ProcessorError::ProcessingError(
+                "Failed to create flood map RGBA image buffer".to_string()
+            ))?;
+    img.save(output_path)?;
+
+    info!("  ✓ Flood map PNG saved: {} ({}×{})", output_path, cols, rows);
+    Ok(())
+}
+
+/// Generates a GeoJSON FeatureCollection of flood polygons.
+///
+/// Maps each flooded pixel to a bounding box polygon in WGS84 coordinates.
+pub fn save_flood_geojson(
+    flood_map: ArrayView2<u8>,
+    bbox: [f64; 4], // [west, south, east, north]
+    output_path: &str,
+) -> Result<()> {
+    let rows = flood_map.nrows();
+    let cols = flood_map.ncols();
+
+    let west = bbox[0];
+    let south = bbox[1];
+    let east = bbox[2];
+    let north = bbox[3];
+
+    let lat_height = north - south;
+    let lon_width = east - west;
+
+    let pixel_lat_step = lat_height / (rows as f64);
+    let pixel_lon_step = lon_width / (cols as f64);
+
+    let mut features = Vec::new();
+
+    for r in 0..rows {
+        for c in 0..cols {
+            let class = flood_map[[r, c]];
+            if class >= 2 && class <= 4 {
+                let conf_str = match class {
+                    2 => "HIGH",
+                    3 => "MEDIUM",
+                    4 => "LOW",
+                    _ => "UNKNOWN",
+                };
+
+                let p_north = north - (r as f64 * pixel_lat_step);
+                let p_south = north - ((r + 1) as f64 * pixel_lat_step);
+                let p_west = west + (c as f64 * pixel_lon_step);
+                let p_east = west + ((c + 1) as f64 * pixel_lon_step);
+
+                let feature = serde_json::json!({
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[
+                            [p_west, p_south],
+                            [p_east, p_south],
+                            [p_east, p_north],
+                            [p_west, p_north],
+                            [p_west, p_south]
+                        ]]
+                    },
+                    "properties": {
+                        "confidence": conf_str,
+                        "class_code": class
+                    }
+                });
+                features.push(feature);
+            }
+        }
+    }
+
+    let geojson = serde_json::json!({
+        "type": "FeatureCollection",
+        "features": features
+    });
+
+    let file = std::fs::File::create(output_path)?;
+    serde_json::to_writer_pretty(file, &geojson)?;
+
+    info!("  ✓ Flood GeoJSON saved: {} ({} features)", output_path, features.len());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1162,5 +1529,39 @@ mod tests {
         let bytes = std::fs::read(path).unwrap();
         assert_eq!(&bytes[0..2], b"II");
         assert_eq!(u16::from_le_bytes([bytes[2], bytes[3]]), 42);
+    }
+
+    #[test]
+    fn test_save_flood_map_png() {
+        let mut flood_map = Array2::<u8>::zeros((4, 4));
+        flood_map[[0, 0]] = 1; // Perm Water
+        flood_map[[1, 1]] = 2; // Flood High
+        flood_map[[2, 2]] = 3; // Flood Med
+        flood_map[[3, 3]] = 4; // Flood Low
+
+        let path = "/tmp/test_flood_map.png";
+        let res = save_flood_map_png(flood_map.view(), path);
+        assert!(res.is_ok());
+
+        let bytes = fs::read(path).unwrap();
+        assert_eq!(&bytes[0..4], b"\x89PNG");
+    }
+
+    #[test]
+    fn test_save_flood_geojson() {
+        let mut flood_map = Array2::<u8>::zeros((4, 4));
+        flood_map[[1, 1]] = 2; // Flood High
+        flood_map[[2, 2]] = 3; // Flood Med
+
+        let path = "/tmp/test_flood.json";
+        let bbox = [82.0, 18.0, 83.0, 19.0];
+        let res = save_flood_geojson(flood_map.view(), bbox, path);
+        assert!(res.is_ok());
+
+        let content = fs::read_to_string(path).unwrap();
+        assert!(content.contains("FeatureCollection"));
+        assert!(content.contains("Polygon"));
+        assert!(content.contains("HIGH"));
+        assert!(content.contains("MEDIUM"));
     }
 }

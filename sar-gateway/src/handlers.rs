@@ -52,6 +52,13 @@ pub async fn start_job_handler(
         payload.crop_lat,
         payload.crop_lon,
         payload.crop_radius_km,
+        payload.processor,
+        payload.crop_preset,
+        payload.gunw_file,
+        payload.min_change_db,
+        payload.seed_threshold_db,
+        payload.growth_threshold_db,
+        payload.min_area_pixels,
     ).await;
     
     Json(json!({
