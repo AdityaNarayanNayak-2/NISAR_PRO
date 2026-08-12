@@ -15,7 +15,7 @@ function AppLayout() {
     const location = useLocation()
     const { isStepComplete } = useWorkflowStore()
 
-    const isOnDashboard = location.pathname === '/app'
+    const isOnDashboard = location.pathname.replace(/\/$/, '') === '/app'
     const currentStepIndex = workflowSteps.findIndex(s => s.path === location.pathname)
 
     return (

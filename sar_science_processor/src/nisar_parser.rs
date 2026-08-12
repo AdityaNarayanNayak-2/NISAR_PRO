@@ -108,6 +108,8 @@ pub struct NisarProduct {
     pub pixel_spacing_x_m: Option<f64>,
     /// Grid pixel spacing in Y/vertical direction (meters, if geocoded)
     pub pixel_spacing_y_m: Option<f64>,
+    /// Coordinate Reference System (CRS)
+    pub crs: String,
 }
 
 /// NISAR product type, auto-detected from filename
@@ -454,6 +456,7 @@ pub fn parse_nisar_cropped(
             bbox: Some(crop_bbox),
             pixel_spacing_x_m: dx,
             pixel_spacing_y_m: dy,
+            crs: extract_crs(&file, product_type_str),
         })
     } else {
         info!("No coordinate grids found for product type '{}'. Using full image.", product_type_str);
@@ -468,6 +471,7 @@ pub fn parse_nisar_cropped(
             bbox,
             pixel_spacing_x_m: None,
             pixel_spacing_y_m: None,
+            crs: "UNKNOWN".to_string(),
         })
     }
 }
@@ -554,6 +558,7 @@ pub fn parse_nisar_rslc(path: &Path, polarization: &str) -> Result<NisarProduct>
         bbox,
         pixel_spacing_x_m: None,
         pixel_spacing_y_m: None,
+        crs: "UNKNOWN".to_string(),
     })
 }
 
@@ -586,6 +591,7 @@ fn parse_nisar_gslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
         bbox,
         pixel_spacing_x_m: dx,
         pixel_spacing_y_m: dy,
+        crs: extract_crs(&file, "GSLC"),
     })
 }
 
@@ -632,6 +638,7 @@ fn parse_nisar_gcov(path: &Path, polarization: &str) -> Result<NisarProduct> {
         bbox,
         pixel_spacing_x_m: dx,
         pixel_spacing_y_m: dy,
+        crs: extract_crs(&file, "GCOV"),
     })
 }
 
@@ -672,6 +679,7 @@ fn parse_nisar_gunw(path: &Path, polarization: &str) -> Result<NisarProduct> {
         bbox,
         pixel_spacing_x_m: dx,
         pixel_spacing_y_m: dy,
+        crs: extract_crs(&file, "GUNW"),
     })
 }
 
@@ -1135,6 +1143,35 @@ fn read_pixel_spacing_x_y(file: &File, product_type: &str) -> (Option<f64>, Opti
     let dy = read_scalar_f64(file, &y_path);
 
     (dx, dy)
+}
+
+/// Extract CRS from projection metadata or grid coordinates.
+fn extract_crs(file: &File, product_type: &str) -> String {
+    let proj_path = format!("/science/LSAR/{}/grids/frequencyA/projection", product_type);
+    if let Ok(proj_ds) = file.dataset(&proj_path) {
+        if let Ok(attrs) = proj_ds.attrs() {
+            if let Some(val) = attrs.get("epsg_code") {
+                match val {
+                    rustyhdf5::AttrValue::I64(v) => return format!("EPSG:{}", v),
+                    rustyhdf5::AttrValue::U64(v) => return format!("EPSG:{}", v),
+                    _ => {}
+                }
+            }
+        }
+    }
+    
+    // Fallback: check coordinates
+    let x_path = format!("/science/LSAR/{}/grids/frequencyA/xCoordinates", product_type);
+    let y_path = format!("/science/LSAR/{}/grids/frequencyA/yCoordinates", product_type);
+    if let (Some(x_coords), Some(y_coords)) = (read_1d_f64(file, &x_path), read_1d_f64(file, &y_path)) {
+        let looks_geographic = y_coords.iter().all(|&v| v.abs() <= 90.0)
+            && x_coords.iter().all(|&v| v.abs() <= 360.0);
+        if looks_geographic {
+            return "EPSG:4326".to_string();
+        }
+    }
+    
+    "UNKNOWN".to_string()
 }
 
 /// Convert WGS84 Lat/Lon to UTM Easting/Northing coordinates.

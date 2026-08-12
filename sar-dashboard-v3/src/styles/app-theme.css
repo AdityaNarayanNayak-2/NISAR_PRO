@@ -68,7 +68,7 @@
   /* Apply background */
   background: var(--app-bg-gradient);
   color: var(--app-text-primary);
-  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Outfit', 'Segoe UI', system-ui, -apple-system, sans-serif;
   min-height: 100vh;
 }
 

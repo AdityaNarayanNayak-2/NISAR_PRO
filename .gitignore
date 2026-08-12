@@ -11,7 +11,7 @@ dist/
 
 # Processing results (generated at runtime)
 sar-gateway/results/
-
+SarScienceFrontendExample/
 # Docker Archives
 *.tar
 

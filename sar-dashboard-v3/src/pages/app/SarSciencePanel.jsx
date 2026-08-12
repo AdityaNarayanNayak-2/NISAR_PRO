@@ -18,6 +18,8 @@ export default function SarSciencePanel({
     growthThresholdDb, setGrowthThresholdDb,
     minAreaPixels, setMinAreaPixels,
 }) {
+    const accent = C.accent.flood;
+    const activeBg = 'rgba(42, 139, 145, 0.08)';
 
     const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -28,9 +30,9 @@ export default function SarSciencePanel({
     };
 
     const presetBtnStyle = (active) => ({
-        flex: 1, padding: '6px 4px', background: active ? 'rgba(200,169,110,0.12)' : 'transparent',
-        border: active ? `1px solid ${C.accent.infra}` : `1px solid ${C.bg3}`,
-        color: active ? C.accent.infra : C.textDim, fontFamily: MONO, fontSize: '10px',
+        flex: 1, padding: '6px 4px', background: active ? activeBg : 'transparent',
+        border: active ? `1px solid ${accent}` : `1px solid ${C.bg3}`,
+        color: active ? accent : C.textDim, fontFamily: MONO, fontSize: '10px',
         cursor: 'pointer', borderRadius: '2px', textAlign: 'center',
     });
 
@@ -44,7 +46,7 @@ export default function SarSciencePanel({
                     <button key={m} onClick={() => setDataMode(m)} style={{
                         flex: 1, padding: '8px', background: 'none', cursor: 'pointer',
                         fontFamily: MONO, fontSize: '11px', border: 'none',
-                        borderBottom: dataMode === m ? `2px solid ${C.accent.infra}` : '2px solid transparent',
+                        borderBottom: dataMode === m ? `2px solid ${accent}` : '2px solid transparent',
                         color: dataMode === m ? C.text : C.textDim,
                     }}>
                         {m === 'local' ? 'LOCAL FILE' : 'NASA CATALOG'}
@@ -93,7 +95,7 @@ export default function SarSciencePanel({
                         {searchResults.map(scene => (
                             <div key={scene.id} onClick={() => setSelectedScene(scene)} style={{
                                 padding: '8px', borderBottom: `1px solid ${C.bg2}`, cursor: 'pointer',
-                                borderLeft: selectedScene?.id === scene.id ? `3px solid ${C.accent.infra}` : '3px solid transparent',
+                                borderLeft: selectedScene?.id === scene.id ? `3px solid ${accent}` : '3px solid transparent',
                                 paddingLeft: selectedScene?.id === scene.id ? '13px' : '8px',
                             }}>
                                 <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textMid, wordBreak: 'break-all' }}>{scene.id}</div>
@@ -111,29 +113,33 @@ export default function SarSciencePanel({
             <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />
 
             {/* PIPELINE */}
-            <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>PIPELINE</div>
-            {pipelines.map(p => (
-                <div key={p.id} onClick={() => setPipeline(p.id)} style={{
-                    padding: '8px 12px', cursor: 'pointer',
-                    borderLeft: pipeline === p.id ? `3px solid ${C.accent.infra}` : '3px solid transparent',
-                    background: pipeline === p.id ? 'rgba(200,169,110,0.06)' : 'transparent',
-                    marginBottom: '2px',
-                }}
-                    onMouseEnter={e => { if (pipeline !== p.id) e.target.style.background = C.bg2; }}
-                    onMouseLeave={e => { if (pipeline !== p.id) e.target.style.background = 'transparent'; }}
-                >
-                    <div style={{ fontFamily: MONO, fontSize: '12px', color: pipeline === p.id ? C.text : C.textMid }}>{p.label}</div>
-                    <div style={{ fontFamily: SANS, fontSize: '11px', color: C.textDim, marginTop: '2px' }}>{p.desc}</div>
-                </div>
-            ))}
+            {pipelines.length > 1 && (
+                <>
+                    <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>PIPELINE</div>
+                    {pipelines.map(p => (
+                        <div key={p.id} onClick={() => setPipeline(p.id)} style={{
+                            padding: '8px 12px', cursor: 'pointer',
+                            borderLeft: pipeline === p.id ? `3px solid ${accent}` : '3px solid transparent',
+                            background: pipeline === p.id ? activeBg : 'transparent',
+                            marginBottom: '2px',
+                        }}
+                            onMouseEnter={e => { if (pipeline !== p.id) e.target.style.background = C.bg2; }}
+                            onMouseLeave={e => { if (pipeline !== p.id) e.target.style.background = 'transparent'; }}
+                        >
+                            <div style={{ fontFamily: MONO, fontSize: '12px', color: pipeline === p.id ? C.text : C.textMid }}>{p.label}</div>
+                            <div style={{ fontFamily: SANS, fontSize: '11px', color: C.textDim, marginTop: '2px' }}>{p.desc}</div>
+                        </div>
+                    ))}
+                    <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />
+                </>
+            )}
 
             {/* ══ CROP CONTROLS (INSAR & FLOOD) ══ */}
             {(pipeline === 'insar' || pipeline === 'flood') && (<>
-                <div style={{ height: '1px', background: C.bg3, margin: '14px 0' }} />
-                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.accent.infra, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
+                <div style={{ fontFamily: MONO, fontSize: '10px', color: accent, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
                     ▸ CROP REGION
                 </div>
-
+                
                 {/* Lat / Lon text inputs */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
                     <div>
@@ -197,7 +203,7 @@ export default function SarSciencePanel({
                     <button
                         onClick={() => setAdvancedOpen(!advancedOpen)}
                         style={{
-                            background: 'none', border: 'none', color: C.accent.infra,
+                            background: 'none', border: 'none', color: accent,
                             fontFamily: MONO, fontSize: '10px', cursor: 'pointer',
                             padding: '4px 0', display: 'flex', alignItems: 'center', gap: '4px',
                             outline: 'none', marginBottom: '10px'
@@ -217,7 +223,7 @@ export default function SarSciencePanel({
                                 <input
                                     type="range" min="-10.0" max="-1.0" step="0.5"
                                     value={minChangeDb} onChange={e => setMinChangeDb(parseFloat(e.target.value))}
-                                    style={{ width: '100%', accentColor: C.accent.infra }}
+                                    style={{ width: '100%', accentColor: accent }}
                                 />
                             </div>
 
@@ -230,7 +236,7 @@ export default function SarSciencePanel({
                                 <input
                                     type="range" min="-12.0" max="-3.0" step="0.5"
                                     value={seedThresholdDb} onChange={e => setSeedThresholdDb(parseFloat(e.target.value))}
-                                    style={{ width: '100%', accentColor: C.accent.infra }}
+                                    style={{ width: '100%', accentColor: accent }}
                                 />
                             </div>
 
@@ -243,7 +249,7 @@ export default function SarSciencePanel({
                                 <input
                                     type="range" min="-6.0" max="-1.0" step="0.5"
                                     value={growthThresholdDb} onChange={e => setGrowthThresholdDb(parseFloat(e.target.value))}
-                                    style={{ width: '100%', accentColor: C.accent.infra }}
+                                    style={{ width: '100%', accentColor: accent }}
                                 />
                             </div>
 
@@ -265,7 +271,7 @@ export default function SarSciencePanel({
 
             {/* EXECUTE */}
             <button onClick={startJob} disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline} style={{
-                width: '100%', padding: '10px', background: C.accent.infra, color: C.bg0,
+                width: '100%', padding: '10px', background: accent, color: C.bg0,
                 fontFamily: MONO, fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '2px',
                 cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 'not-allowed' : 'pointer',
                 opacity: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 0.3 : 1,
@@ -291,14 +297,14 @@ export default function SarSciencePanel({
                             <span style={{ fontFamily: MONO, fontSize: '11px', color: C.textMid }}>{job.name}</span>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
                                 {job.status === 'completed' && <span style={{ color: C.stable }}>●</span>}
-                                {job.status === 'running' && <span style={{ color: C.accent.infra }}>●</span>}
+                                {job.status === 'running' && <span style={{ color: accent }}>●</span>}
                                 {job.status === 'failed' && <span style={{ color: C.critical }}>●</span>}
                                 {elapsed[job.id] != null && formatElapsed(elapsed[job.id])}
                             </span>
                         </div>
                         {job.status === 'completed' && (
                             <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                                <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, floodReport: job.floodReport, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
+                                <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, floodReport: job.floodReport, floodGeoJson: job.floodGeoJson, floodReportPath: job.floodReportPath, floodGeoJsonPath: job.floodGeoJsonPath, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
                                     style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.stable, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>VIEW</button>
                                 <button onClick={(e) => { e.stopPropagation(); window.open(api(job.output_path), '_blank'); }}
                                     style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>DL</button>

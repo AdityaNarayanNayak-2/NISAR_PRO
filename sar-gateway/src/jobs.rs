@@ -60,6 +60,8 @@ pub struct JobMetadata {
     pub tx: broadcast::Sender<String>,
     pub output_path: Option<String>,
     pub bbox: Option<GeoBbox>,
+    pub flood_report_path: Option<String>,
+    pub flood_geojson_path: Option<String>,
     pub created_at: std::time::Instant,
     pub cancel_tx: Option<tokio::sync::mpsc::Sender<()>>,
 }
@@ -70,6 +72,8 @@ pub struct JobResponse {
     pub status: JobStatus,
     pub output_path: Option<String>,
     pub bbox: Option<GeoBbox>,
+    pub flood_report_path: Option<String>,
+    pub flood_geojson_path: Option<String>,
 }
 
 // Convert SarJobStatus phase to internal JobStatus
@@ -116,6 +120,8 @@ pub async fn spawn_processing_job(
         tx: tx.clone(),
         output_path: None,
         bbox: None,
+        flood_report_path: None,
+        flood_geojson_path: None,
         created_at: std::time::Instant::now(),
         cancel_tx: None, // Will be set if local mode
     }));
@@ -394,6 +400,8 @@ async fn spawn_local_job(
             m.status = JobStatus::Completed;
             if pipeline.as_deref() == Some("flood") {
                 m.output_path = Some(format!("/results/{}_flood.png", job_id));
+                m.flood_report_path = Some(format!("/results/{}_flood.json", job_id));
+                m.flood_geojson_path = Some(format!("/results/{}_flood.geo.json", job_id));
             } else if use_science && (pipeline.as_deref() == Some("gcov") || pipeline.is_none()) {
                 m.output_path = Some(format!("/results/{}.png", job_id));
             } else {

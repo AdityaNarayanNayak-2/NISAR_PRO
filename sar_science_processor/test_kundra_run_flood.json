@@ -1,0 +1,44 @@
+{
+  "areas": {
+    "new_inundation_high_acres": 70.47446215037056,
+    "new_inundation_low_acres": 74.97178056249098,
+    "new_inundation_medium_acres": 0.0,
+    "permanent_water_acres": 1786.8686209739114,
+    "total_area_acres": 24710.54072593638,
+    "total_flood_acres": 145.44624271286153
+  },
+  "confidence_reasons": [
+    "calibrated_log_ratio_change_detection",
+    "otsus_method_on_change_image",
+    "region_growing_and_morphology",
+    "gunw_coherence_fusion_applied"
+  ],
+  "crop": {
+    "center_lat": 18.7883,
+    "center_lon": 82.6003,
+    "preset": "10x10km"
+  },
+  "flood_regions": 204,
+  "method": {
+    "coherence_used": true,
+    "detector": "log_ratio_change_detection",
+    "growth_threshold_db": -2.5,
+    "min_change_db": -3.0,
+    "morphology": "open_3x3 + close_3x3 + cc_filter_8px",
+    "region_growing": true,
+    "seed_threshold_db": -5.0,
+    "speckle_filter": "median_3x3",
+    "threshold_db": -3.0,
+    "threshold_method": "otsu_on_change_image"
+  },
+  "product": {
+    "active_id": "NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5",
+    "baseline_id": "NISAR_L2_PR_GCOV_009_055_A_011_4005_DHDH_A_20260101T000132_20260101T000206_X05009_N_F_J_001.h5",
+    "crs": "EPSG:32644",
+    "frequency": "L",
+    "pixel_spacing_x_m": 10.0,
+    "pixel_spacing_y_m": -10.0,
+    "polarization": "HH"
+  },
+  "warnings": []
+}

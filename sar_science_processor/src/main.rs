@@ -90,15 +90,15 @@ struct Cli {
     gunw: Option<PathBuf>,
 
     /// Minimum dB change threshold required for flood candidates (default: -3.0 dB)
-    #[arg(long, default_value = "-3.0")]
+    #[arg(long, default_value = "-3.0", allow_hyphen_values = true)]
     min_change_db: f32,
 
     /// Seed dB threshold for region growing (default: -5.0 dB)
-    #[arg(long, default_value = "-5.0")]
+    #[arg(long, default_value = "-5.0", allow_hyphen_values = true)]
     seed_threshold_db: f32,
 
     /// Growth dB threshold for region growing (default: -2.5 dB)
-    #[arg(long, default_value = "-2.5")]
+    #[arg(long, default_value = "-2.5", allow_hyphen_values = true)]
     growth_threshold_db: f32,
 
     /// Minimum connected component area in pixels (default: 8)
@@ -570,6 +570,7 @@ fn main() -> Result<()> {
         }
 
         "flood" => {
+            println!("{{\"event\":\"progress\",\"stage\":\"SUBMITTED\",\"message\":\"Job submitted to processor\"}}");
             info!("╔══════════════════════════════════════════════╗");
             info!("║       Flood & Inundation Mapping Pipeline    ║");
             info!("╚══════════════════════════════════════════════╝");
@@ -598,6 +599,7 @@ fn main() -> Result<()> {
                 radius_km: lat_half_km.max(lon_half_km),
             };
 
+            println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[1/5] Loading active product metadata...\"}}");
             // 1. Load Active GCOV
             info!("[1/5] Loading Active GCOV: {:?}", input);
             crash_journal::phase("FLOOD_STEP_1", &format!("Loading Active GCOV: {:?}", input.file_name().unwrap_or_default()));
@@ -624,6 +626,7 @@ fn main() -> Result<()> {
             }
 
             // 2. Load Optional Baseline GCOV
+            println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[2/5] Loading baseline reference product...\"}}");
             let baseline_product = if let Some(ref slave_path) = cli.slave {
                 info!("[2/5] Loading Baseline GCOV: {:?}", slave_path);
                 crash_journal::phase("FLOOD_STEP_2", &format!("Loading Baseline GCOV: {:?}", slave_path.file_name().unwrap_or_default()));
@@ -667,6 +670,7 @@ fn main() -> Result<()> {
             }
 
             // 3. Load Optional Coherence from GUNW
+            println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[3/5] Loading InSAR coherence helper...\"}}");
             let coherence = if let Some(ref gunw_path) = cli.gunw {
                 info!("[3/5] Loading GUNW coherence magnitude: {:?}", gunw_path);
                 match nisar_parser::parse_gunw_coherence_cropped(
@@ -691,6 +695,7 @@ fn main() -> Result<()> {
             };
 
             // 4. Load External Water Mask
+            println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[4/5] Loading SWBD water body mask...\"}}");
             let external_mask = if let Some(ref wbd_path) = cli.water_mask {
                 info!(
                     "[4/5] Loading external SWBD water body mask from {:?}",
@@ -711,6 +716,7 @@ fn main() -> Result<()> {
             };
 
             // 5. Run 7-Stage Flood Detection Pipeline
+            println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[5/5] Running 7-stage change detection...\"}}");
             crash_journal::phase("FLOOD_STEP_5", "Running 7-stage flood detection pipeline");
             info!("[5/5] Running 7-stage flood detection pipeline...");
             let band = cli.radar_band.parse::<sar_science_processor::flood_detect::RadarBand>()
@@ -741,6 +747,7 @@ fn main() -> Result<()> {
                 );
 
             // Save output files
+            println!("{{\"event\":\"progress\",\"stage\":\"GENERATING_OUTPUTS\",\"message\":\"Generating geospatial products...\"}}");
             let base = cli.output.replace(".tif", "").replace(".png", "");
             let bbox_opt = bbox.as_ref().map(|b| [b.west, b.south, b.east, b.north]);
 
@@ -800,7 +807,8 @@ fn main() -> Result<()> {
                     "frequency": "L",
                     "polarization": cli.polarization,
                     "pixel_spacing_x_m": active_dx,
-                    "pixel_spacing_y_m": active_dy
+                    "pixel_spacing_y_m": active_dy,
+                    "crs": active_product.crs
                 },
                 "method": {
                     "detector": "log_ratio_change_detection",
@@ -842,6 +850,7 @@ fn main() -> Result<()> {
                 serde_json::to_string(&full_report["areas"])?
             );
             println!("{{\"event\":\"output\",\"path\":\"{}\"}}", png_path);
+            println!("{{\"event\":\"progress\",\"stage\":\"COMPLETE\",\"message\":\"Analysis completed successfully\"}}");
 
             info!("╔══════════════════════════════════════════════╗");
             info!("║     Flood Mapping Pipeline Complete ✓        ║");

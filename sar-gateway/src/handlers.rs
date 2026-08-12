@@ -79,6 +79,8 @@ pub async fn get_job_handler(
             status: metadata.status.clone(),
             output_path: metadata.output_path.clone(),
             bbox: metadata.bbox.clone(),
+            flood_report_path: metadata.flood_report_path.clone(),
+            flood_geojson_path: metadata.flood_geojson_path.clone(),
         }))
     } else {
         Err(StatusCode::NOT_FOUND)
