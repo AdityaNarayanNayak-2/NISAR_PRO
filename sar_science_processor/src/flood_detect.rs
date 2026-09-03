@@ -62,7 +62,7 @@ impl FloodDetectionOptions {
                 min_change_db: -3.0,
                 seed_threshold_db: -5.0,
                 growth_threshold_db: -2.5,
-                permanent_water_thresh_db: -15.0,
+                permanent_water_thresh_db: -13.0,
                 min_area_pixels: 8,
                 enable_median_filter: true,
                 otsu_bins: 256,
@@ -101,7 +101,10 @@ impl Default for FloodDetectionOptions {
 /// Results summary containing detailed statistics for reporting
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FloodAnalysisResult {
+    /// Effective threshold used for detection: min(otsu_computed, user_ceiling)
     pub otsu_threshold_db: f32,
+    /// Raw Otsu threshold computed dynamically from the change histogram (uncapped)
+    pub raw_otsu_threshold_db: f32,
     pub total_pixels: usize,
     pub valid_pixels: usize,
     pub permanent_water_pixels: usize,
@@ -202,7 +205,8 @@ pub fn otsu_threshold(delta_db: &Array2<f32>, valid_mask: &Array2<bool>, n_bins:
         for c in 0..cols {
             if valid_mask[[r, c]] {
                 let v = delta_db[[r, c]];
-                if v.is_finite() {
+                // Physically scope to negative/zero change (specular water backscatter drop)
+                if v.is_finite() && v <= 0.0 {
                     min_val = min_val.min(v);
                     max_val = max_val.max(v);
                     count += 1;
@@ -211,11 +215,11 @@ pub fn otsu_threshold(delta_db: &Array2<f32>, valid_mask: &Array2<bool>, n_bins:
         }
     }
 
-    if count == 0 || (max_val - min_val).abs() < 1e-5 {
+    if count < 16 || (max_val - min_val).abs() < 1e-5 {
         return -3.0; // Default sensible fallback
     }
 
-    let n_bins = n_bins.max(16).min(1024);
+    let n_bins = n_bins.clamp(16, 1024);
     let bin_width = (max_val - min_val) / (n_bins as f32);
     let mut histogram = vec![0u64; n_bins];
 
@@ -223,7 +227,7 @@ pub fn otsu_threshold(delta_db: &Array2<f32>, valid_mask: &Array2<bool>, n_bins:
         for c in 0..cols {
             if valid_mask[[r, c]] {
                 let v = delta_db[[r, c]];
-                if v.is_finite() {
+                if v.is_finite() && v <= 0.0 {
                     let bin = (((v - min_val) / bin_width) as usize).min(n_bins - 1);
                     histogram[bin] += 1;
                 }
@@ -598,6 +602,7 @@ pub fn run_flood_detection_pipeline(
 
     let summary = FloodAnalysisResult {
         otsu_threshold_db: effective_threshold,
+        raw_otsu_threshold_db: otsu_thresh,
         total_pixels,
         valid_pixels: total_pixels,
         permanent_water_pixels: perm_count,
@@ -675,5 +680,69 @@ mod tests {
 
         let regions = morphological_cleanup(&mut grown, 4);
         assert!(regions >= 1);
+    }
+
+    #[test]
+    fn test_pipeline_raw_vs_effective_threshold_binding_cap() {
+        let (rows, cols) = (16, 16);
+        // Active: low backscatter in center (flood-like drop), baseline: high backscatter
+        let mut active = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+        let baseline = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+
+        // Create a slight drop of ~ -1.5 dB in a sub-region
+        // 10.0 * log10(0.708) ~= -1.5 dB -> active power = 7.08
+        for r in 4..12 {
+            for c in 4..12 {
+                active[[r, c]] = Complex32::new(7.08, 0.0);
+            }
+        }
+
+        let mut opts = FloodDetectionOptions::default();
+        opts.min_change_db = -3.0; // User ceiling is -3.0 dB (more negative)
+
+        let (_class_map, _delta_db, summary) = run_flood_detection_pipeline(
+            &active,
+            Some(&baseline),
+            None,
+            None,
+            &opts,
+        );
+
+        // Raw Otsu computed ~ -1.5 dB, while ceiling is -3.0 dB.
+        // effective_threshold = otsu_thresh.min(opts.min_change_db) -> -3.0 dB.
+        // Therefore cap is binding!
+        assert!(summary.raw_otsu_threshold_db > opts.min_change_db);
+        assert_eq!(summary.otsu_threshold_db, opts.min_change_db);
+        assert_ne!(summary.raw_otsu_threshold_db, summary.otsu_threshold_db);
+    }
+
+    #[test]
+    fn test_pipeline_raw_vs_effective_threshold_unbinding_cap() {
+        let (rows, cols) = (16, 16);
+        // Create a severe drop of -10 dB in a sub-region
+        let mut active = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+        let baseline = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+
+        for r in 4..12 {
+            for c in 4..12 {
+                active[[r, c]] = Complex32::new(1.0, 0.0); // 10 dB drop
+            }
+        }
+
+        let mut opts = FloodDetectionOptions::default();
+        opts.min_change_db = -3.0; // Ceiling is -3.0 dB
+
+        let (_class_map, _delta_db, summary) = run_flood_detection_pipeline(
+            &active,
+            Some(&baseline),
+            None,
+            None,
+            &opts,
+        );
+
+        // Severe drop makes Otsu threshold around -5 dB, which is < -3.0 dB ceiling.
+        // Thus effective = min(-5, -3) = -5 = raw Otsu! Cap is not binding.
+        assert!(summary.raw_otsu_threshold_db < opts.min_change_db);
+        assert_eq!(summary.raw_otsu_threshold_db, summary.otsu_threshold_db);
     }
 }

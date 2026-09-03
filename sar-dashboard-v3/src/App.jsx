@@ -7,7 +7,6 @@ import ConnectionSetup from './components/ConnectionSetup'
 import HomePage from './pages/HomePage'
 import DocsPage from './pages/DocsPage'
 import UseCasesPage from './pages/UseCasesPage'
-import AcademyPage from './pages/Academy/AcademyPage'
 
 // App
 import AppLayout from './pages/app/AppLayout'
@@ -40,7 +39,6 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/use-cases" element={<UseCasesPage />} />
-          <Route path="/academy" element={<AcademyPage />} />
 
           {/* App */}
           <Route path="/app" element={<AppLayout />}>

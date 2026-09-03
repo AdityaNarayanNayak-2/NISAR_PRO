@@ -1,7 +1,7 @@
 import React from 'react';
 import { Map, TrendingUp, Layers, FileCode, Cpu, HardDrive, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { MONO, SANS, C } from '../constants';
+import { MONO, SANS, C, TM } from '../constants';
 
 export default function WorkspaceSidebar({ activeView, onSelectView, onOpenReport, gatewayOnline }) {
     const mainNavItems = [
@@ -18,58 +18,52 @@ export default function WorkspaceSidebar({ activeView, onSelectView, onOpenRepor
     ];
 
     const sidebarStyle = {
-        width: '180px',
-        background: 'rgba(12, 16, 21, 0.75)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+        width: `${TM.side}px`,
+        background: '#0a0a0a',
+        borderRight: '1px solid rgba(255, 255, 255, 0.08)',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
         flexShrink: 0,
         userSelect: 'none',
-        padding: '20px 0',
         height: '100%',
         boxSizing: 'border-box',
-        boxShadow: 'inset -1px 0 0 rgba(255, 255, 255, 0.01)',
+        overflow: 'hidden'
     };
 
     const sectionTitleStyle = {
-        padding: '0 18px 8px 18px',
-        fontSize: '9px',
         fontFamily: MONO,
-        letterSpacing: '0.15em',
-        color: C.textDim,
+        fontSize: '9px',
+        fontWeight: 500,
+        letterSpacing: '0.16em',
         textTransform: 'uppercase',
-        fontWeight: 'bold',
-        opacity: 0.8
+        color: 'rgba(237, 237, 237, 0.32)',
+        padding: '0 8px 8px 8px',
     };
 
     const navButtonStyle = (isActive) => ({
-        width: 'calc(100% - 16px)',
-        marginLeft: '8px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '10px 12px',
-        border: isActive ? '1px solid rgba(42, 139, 145, 0.25)' : '1px solid transparent',
-        background: isActive ? 'rgba(42, 139, 145, 0.08)' : 'transparent',
-        color: isActive ? C.accent.flood : '#8a99ad',
-        fontFamily: MONO,
-        fontSize: '11px',
-        cursor: 'pointer',
+        width: '100%',
+        padding: '8px 10px',
+        border: '1px solid transparent',
         borderRadius: '2px',
-        outline: 'none',
+        background: 'transparent',
+        color: 'rgba(237, 237, 237, 0.55)',
+        fontFamily: SANS,
+        fontSize: '12px',
+        fontWeight: 400,
+        letterSpacing: '-0.01em',
+        cursor: 'pointer',
         boxSizing: 'border-box',
         marginBottom: '4px',
         textAlign: 'left',
-        position: 'relative',
-        overflow: 'hidden'
+        outline: 'none',
     });
 
     return (
         <aside style={sidebarStyle}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
                 {/* Workspace Nav */}
                 <div>
                     <div style={sectionTitleStyle}>WORKSPACE</div>
@@ -88,15 +82,29 @@ export default function WorkspaceSidebar({ activeView, onSelectView, onOpenRepor
                                         }
                                     }}
                                     style={navButtonStyle(isActive)}
-                                    whileHover={{ scale: 1.01, x: 2, background: isActive ? 'rgba(42, 139, 145, 0.12)' : 'rgba(255, 255, 255, 0.02)', color: isActive ? C.accent.flood : '#ffffff' }}
+                                    animate={{
+                                        color: isActive ? C.accent.flood : 'rgba(237, 237, 237, 0.55)',
+                                        background: isActive ? 'rgba(15, 150, 156, 0.14)' : 'rgba(255, 255, 255, 0.0)',
+                                        borderColor: isActive ? 'rgba(15, 150, 156, 0.35)' : 'rgba(255, 255, 255, 0.0)'
+                                    }}
+                                    whileHover={{ 
+                                        color: isActive ? C.accent.flood : '#ffffff', 
+                                        background: isActive ? 'rgba(15, 150, 156, 0.14)' : 'rgba(255, 255, 255, 0.03)',
+                                        borderColor: isActive ? 'rgba(15, 150, 156, 0.35)' : 'rgba(255, 255, 255, 0.08)'
+                                    }}
                                     whileTap={{ scale: 0.98 }}
-                                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                                    transition={{ duration: 0.15 }}
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <Icon size={12} style={{ color: isActive ? C.accent.flood : '#55657d' }} />
+                                        <Icon size={13} style={{ opacity: isActive ? 1 : 0.65, color: isActive ? C.accent.flood : 'inherit' }} />
                                         <span>{item.label}</span>
                                     </div>
-                                    <span style={{ fontSize: '9px', color: isActive ? `${C.accent.flood}90` : '#334155', fontFamily: MONO }}>
+                                    <span style={{ 
+                                        fontFamily: MONO, 
+                                        fontSize: '9px', 
+                                        color: isActive ? 'rgba(15, 150, 156, 0.55)' : 'rgba(237, 237, 237, 0.32)',
+                                        letterSpacing: '0.04em'
+                                    }}>
                                         {item.key}
                                     </span>
                                 </motion.button>
@@ -117,15 +125,29 @@ export default function WorkspaceSidebar({ activeView, onSelectView, onOpenRepor
                                     key={item.id}
                                     onClick={() => onSelectView(item.id)}
                                     style={navButtonStyle(isActive)}
-                                    whileHover={{ scale: 1.01, x: 2, background: isActive ? 'rgba(42, 139, 145, 0.12)' : 'rgba(255, 255, 255, 0.02)', color: isActive ? C.accent.flood : '#ffffff' }}
+                                    animate={{
+                                        color: isActive ? C.accent.flood : 'rgba(237, 237, 237, 0.55)',
+                                        background: isActive ? 'rgba(15, 150, 156, 0.14)' : 'rgba(255, 255, 255, 0.0)',
+                                        borderColor: isActive ? 'rgba(15, 150, 156, 0.35)' : 'rgba(255, 255, 255, 0.0)'
+                                    }}
+                                    whileHover={{ 
+                                        color: isActive ? C.accent.flood : '#ffffff', 
+                                        background: isActive ? 'rgba(15, 150, 156, 0.14)' : 'rgba(255, 255, 255, 0.03)',
+                                        borderColor: isActive ? 'rgba(15, 150, 156, 0.35)' : 'rgba(255, 255, 255, 0.08)'
+                                    }}
                                     whileTap={{ scale: 0.98 }}
-                                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                                    transition={{ duration: 0.15 }}
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <Icon size={12} style={{ color: isActive ? C.accent.flood : '#55657d' }} />
+                                        <Icon size={13} style={{ opacity: isActive ? 1 : 0.65, color: isActive ? C.accent.flood : 'inherit' }} />
                                         <span>{item.label}</span>
                                     </div>
-                                    <span style={{ fontSize: '9px', color: isActive ? `${C.accent.flood}90` : '#334155', fontFamily: MONO }}>
+                                    <span style={{ 
+                                        fontFamily: MONO, 
+                                        fontSize: '9px', 
+                                        color: isActive ? 'rgba(15, 150, 156, 0.55)' : 'rgba(237, 237, 237, 0.32)',
+                                        letterSpacing: '0.04em'
+                                    }}>
                                         {item.key}
                                     </span>
                                 </motion.button>
@@ -137,28 +159,21 @@ export default function WorkspaceSidebar({ activeView, onSelectView, onOpenRepor
 
             {/* Footer System Status Panel */}
             <div style={{
-                padding: '16px 18px 0 18px',
-                borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                padding: '10px 12px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                 fontFamily: MONO,
-                fontSize: '10px',
-                color: C.textDim,
+                fontSize: '9px',
+                color: 'rgba(237, 237, 237, 0.32)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '8px'
+                gap: '3px',
+                flexShrink: 0
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>PIPELINE:</span>
-                    <span style={{ color: gatewayOnline ? C.stable : C.critical, fontWeight: 'bold' }}>RUST v3.2</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>SENSOR:</span>
-                    <span style={{ color: C.textMid }}>NISAR L-HH</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>LATENCY:</span>
-                    <span style={{ color: C.textMid }}>0.42 SEC</span>
-                </div>
+                <span>Pipeline <strong style={{ color: C.accent.flood, fontWeight: 500 }}>Rust v3.2</strong></span>
+                <span>Sensor <strong style={{ color: 'rgba(237, 237, 237, 0.55)', fontWeight: 500 }}>NISAR L-HH</strong></span>
+                <span>Latency <strong style={{ color: 'rgba(237, 237, 237, 0.55)', fontWeight: 500 }}>0.42 sec</strong></span>
             </div>
         </aside>
     );
 }
+

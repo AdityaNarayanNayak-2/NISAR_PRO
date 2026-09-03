@@ -176,6 +176,16 @@ pub async fn search_assets_handler(
             state: Some("Odisha".to_string()),
         },
         AssetResult {
+            id: "local-kundra-block".to_string(),
+            name: "Kundra (Kundura)".to_string(),
+            asset_type: "AGRICULTURE".to_string(),
+            lat: 18.9306,
+            lon: 82.3885,
+            display_name: "Kundra Block (Agricultural Delta), Koraput, Odisha, India".to_string(),
+            country: "India".to_string(),
+            state: Some("Odisha".to_string()),
+        },
+        AssetResult {
             id: "local-kolab-res".to_string(),
             name: "Kolab Reservoir".to_string(),
             asset_type: "DAM".to_string(),
@@ -658,6 +668,29 @@ pub async fn context_handler(
     Json(response).into_response()
 }
 
+pub async fn auth_status_handler() -> Json<serde_json::Value> {
+    let has_token = std::env::var("EARTHDATA_TOKEN")
+        .or_else(|_| std::env::var("ASF_TOKEN"))
+        .map(|t| !t.trim().is_empty())
+        .unwrap_or(false);
+
+    let username = std::env::var("EARTHDATA_USERNAME")
+        .or_else(|_| std::env::var("ASF_USERNAME"))
+        .unwrap_or_default();
+    let password = std::env::var("EARTHDATA_PASSWORD")
+        .or_else(|_| std::env::var("ASF_PASSWORD"))
+        .unwrap_or_default();
+
+    let has_user_pass = !username.trim().is_empty() && !password.trim().is_empty();
+
+    Json(json!({
+        "authenticated": has_token || has_user_pass,
+        "auth_type": if has_token { "token" } else if has_user_pass { "credentials" } else { "none" },
+        "has_token": has_token,
+        "has_credentials": has_user_pass
+    }))
+}
+
 pub async fn download_stream_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
@@ -673,15 +706,18 @@ pub async fn download_stream_handler(
     // Ensure the data/ directory exists
     tokio::fs::create_dir_all("data").await.ok();
 
-    // Determine filename ensuring _GUNW_ is present
-    let extension = if url.ends_with(".nc") { "nc" } else { "h5" };
-    let filename = if id.contains("_GUNW_") {
-        format!("{}.{}", id, extension)
-    } else if id.contains("-GUNW-") {
-        let normalized = id.replace("-GUNW-", "_GUNW_");
-        format!("{}.{}", normalized, extension)
+    // Determine normalized filename
+    let filename = if id.ends_with(".h5") || id.ends_with(".nc") || id.ends_with(".tif") {
+        id.clone()
+    } else if let Some(url_filename) = url.split('?').next().and_then(|u| u.split('/').last()).filter(|f| f.contains('.')) {
+        url_filename.to_string()
     } else {
-        format!("{}_GUNW_.{}", id, extension)
+        let extension = if url.contains(".nc") { "nc" } else { "h5" };
+        if id.contains("-GUNW-") {
+            format!("{}.{}", id.replace("-GUNW-", "_GUNW_"), extension)
+        } else {
+            format!("{}.{}", id, extension)
+        }
     };
 
     let filepath = format!("data/{}", filename);
@@ -689,21 +725,55 @@ pub async fn download_stream_handler(
     // Create a channel for SSE events
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(100);
 
+    // Optional query auth parameters
+    let query_token = params.get("token").cloned();
+    let query_user = params.get("username").cloned();
+    let query_pass = params.get("password").cloned();
+
     // Spawn the download task
     tokio::spawn(async move {
-        let username = std::env::var("EARTHDATA_USERNAME")
-            .or_else(|_| std::env::var("ASF_USERNAME"))
-            .unwrap_or_default();
-        let password = std::env::var("EARTHDATA_PASSWORD")
-            .or_else(|_| std::env::var("ASF_PASSWORD"))
-            .unwrap_or_default();
-
-        if username.is_empty() || password.is_empty() {
-            log::warn!("Earthdata credentials not found in env. Attempting unauthenticated download.");
+        // 1. Check local cache first
+        let path = std::path::Path::new(&filepath);
+        if path.exists() {
+            if let Ok(meta) = tokio::fs::metadata(path).await {
+                if meta.len() > 1024 * 100 { // at least 100KB (not an empty error file)
+                    log::info!("File already cached locally at {} ({} bytes). Skipping download.", filepath, meta.len());
+                    let _ = tx.send(Ok(Event::default().json_data(json!({
+                        "status": "download_complete",
+                        "path": filepath,
+                        "cached": true,
+                        "bytes_downloaded": meta.len(),
+                        "total_bytes": meta.len(),
+                        "progress": 100.0
+                    })).unwrap())).await;
+                    return;
+                }
+            }
         }
+
+        let token = query_token
+            .or_else(|| std::env::var("EARTHDATA_TOKEN").ok())
+            .or_else(|| std::env::var("ASF_TOKEN").ok())
+            .filter(|t| !t.trim().is_empty());
+
+        let username = query_user
+            .or_else(|| std::env::var("EARTHDATA_USERNAME").ok())
+            .or_else(|| std::env::var("ASF_USERNAME").ok())
+            .unwrap_or_default();
+        let password = query_pass
+            .or_else(|| std::env::var("EARTHDATA_PASSWORD").ok())
+            .or_else(|| std::env::var("ASF_PASSWORD").ok())
+            .unwrap_or_default();
 
         let client = match reqwest::Client::builder()
             .cookie_store(true)
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if attempt.previous().len() > 10 {
+                    attempt.error("too many redirects")
+                } else {
+                    attempt.follow()
+                }
+            }))
             .build()
         {
             Ok(c) => c,
@@ -718,9 +788,11 @@ pub async fn download_stream_handler(
 
         log::info!("Starting download of {} to {}", url, filepath);
 
-        // Perform request
+        // Perform request with Bearer token or Basic auth
         let mut req = client.get(&url);
-        if !username.is_empty() {
+        if let Some(t) = &token {
+            req = req.bearer_auth(t);
+        } else if !username.is_empty() {
             req = req.basic_auth(&username, Some(&password));
         }
 
@@ -736,9 +808,16 @@ pub async fn download_stream_handler(
         };
 
         if !response.status().is_success() {
+            let status_code = response.status();
+            let err_msg = if status_code.as_u16() == 401 || status_code.as_u16() == 403 {
+                "Earthdata authentication failed (401/403). Please verify your Earthdata credentials or Token.".to_string()
+            } else {
+                format!("HTTP error status: {}", status_code)
+            };
             let _ = tx.send(Ok(Event::default().json_data(json!({
                 "status": "error",
-                "message": format!("HTTP error status: {}", response.status())
+                "message": err_msg,
+                "status_code": status_code.as_u16()
             })).unwrap())).await;
             return;
         }
@@ -758,6 +837,9 @@ pub async fn download_stream_handler(
         let mut stream = response.bytes_stream();
         let mut downloaded: u64 = 0;
         let mut last_progress_report = 0.0;
+        let start_time = std::time::Instant::now();
+        let mut last_time = start_time;
+        let mut last_downloaded: u64 = 0;
 
         use tokio::io::AsyncWriteExt;
 
@@ -783,13 +865,42 @@ pub async fn download_stream_handler(
 
             downloaded += chunk.len() as u64;
 
-            if let Some(total) = total_size {
-                let pct = (downloaded as f64 / total as f64) * 100.0;
-                if pct - last_progress_report >= 1.0 || pct >= 100.0 {
-                    last_progress_report = pct;
+            let now = std::time::Instant::now();
+            let elapsed_since_last = now.duration_since(last_time).as_secs_f64();
+
+            if elapsed_since_last >= 0.5 {
+                let bytes_diff = downloaded.saturating_sub(last_downloaded);
+                let speed_mbps = (bytes_diff as f64 / (1024.0 * 1024.0)) / elapsed_since_last.max(0.001);
+
+                last_time = now;
+                last_downloaded = downloaded;
+
+                if let Some(total) = total_size {
+                    let pct = ((downloaded as f64 / total as f64) * 100.0).min(100.0);
+                    let remaining_bytes = total.saturating_sub(downloaded);
+                    let eta_secs = if speed_mbps > 0.01 {
+                        (remaining_bytes as f64 / (1024.0 * 1024.0)) / speed_mbps
+                    } else {
+                        0.0
+                    };
+
+                    if pct - last_progress_report >= 0.5 || pct >= 100.0 {
+                        last_progress_report = pct;
+                        let _ = tx.send(Ok(Event::default().json_data(json!({
+                            "status": "downloading",
+                            "progress": (pct * 10.0).round() / 10.0,
+                            "downloaded_bytes": downloaded,
+                            "total_bytes": total,
+                            "speed_mbps": (speed_mbps * 10.0).round() / 10.0,
+                            "eta_secs": eta_secs.round() as u64
+                        })).unwrap())).await;
+                    }
+                } else {
                     let _ = tx.send(Ok(Event::default().json_data(json!({
                         "status": "downloading",
-                        "progress": pct
+                        "progress": 0.0,
+                        "downloaded_bytes": downloaded,
+                        "speed_mbps": (speed_mbps * 10.0).round() / 10.0
                     })).unwrap())).await;
                 }
             }
@@ -807,7 +918,10 @@ pub async fn download_stream_handler(
 
         let _ = tx.send(Ok(Event::default().json_data(json!({
             "status": "download_complete",
-            "path": filepath
+            "path": filepath,
+            "bytes_downloaded": downloaded,
+            "total_bytes": downloaded,
+            "progress": 100.0
         })).unwrap())).await;
     });
 

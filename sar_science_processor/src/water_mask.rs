@@ -72,6 +72,7 @@ pub fn apply_intensity_water_mask(
 /// SWBD files are raw byte grids representing water coverage:
 /// - 0: Ocean or deep water body
 /// - 255: Land / dry terrain
+///
 /// Sizes are 1201×1201 (3 arc-sec) or 3601×3601 (1 arc-sec).
 pub fn read_swbd_wbd(path: &Path) -> Result<Array2<u8>> {
     let data = std::fs::read(path)

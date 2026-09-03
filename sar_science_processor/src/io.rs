@@ -1424,8 +1424,9 @@ pub fn save_flood_geojson(
     for r in 0..rows {
         for c in 0..cols {
             let class = flood_map[[r, c]];
-            if class >= 2 && class <= 4 {
+            if (1..=4).contains(&class) {
                 let conf_str = match class {
+                    1 => "PERMANENT_WATER",
                     2 => "HIGH",
                     3 => "MEDIUM",
                     4 => "LOW",

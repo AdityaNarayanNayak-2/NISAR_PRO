@@ -63,11 +63,11 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
     const cardBorder = '1px solid rgba(255, 255, 255, 0.04)';
 
     return (
-        <div style={{ 
-            flex: 1, 
-            display: 'flex', 
-            flexDirection: 'column', 
-            overflow: 'hidden', 
+        <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
             background: 'rgba(12, 16, 21, 0.75)',
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
@@ -85,7 +85,7 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {onClose && (
-                        <motion.button 
+                        <motion.button
                             onClick={onClose}
                             style={{ background: 'none', border: 'none', color: C.textMid, cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', outline: 'none' }}
                             whileHover={{ scale: 1.1, color: '#ffffff' }}
@@ -103,19 +103,44 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                         </div>
                     </div>
                 </div>
-                {elapsed && (
-                    <div style={{
-                        fontFamily: MONO,
-                        fontSize: '10px',
-                        background: 'rgba(76, 175, 80, 0.08)',
-                        padding: '4px 8px',
-                        borderRadius: '2px',
-                        border: '1px solid rgba(76, 175, 80, 0.15)',
-                        color: C.stable
-                    }}>
-                        ⏱ {formatElapsed(elapsed)}
-                    </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {elapsed && (
+                        <div style={{
+                            fontFamily: MONO,
+                            fontSize: '10px',
+                            background: 'rgba(76, 175, 80, 0.08)',
+                            padding: '4px 8px',
+                            borderRadius: '2px',
+                            border: '1px solid rgba(76, 175, 80, 0.15)',
+                            color: C.stable
+                        }}>
+                            ⏱ {formatElapsed(elapsed)}
+                        </div>
+                    )}
+                    {onClose && (
+                        <button
+                            onClick={onClose}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                background: 'rgba(0, 229, 255, 0.12)',
+                                border: `1px solid ${C.accent.flood}`,
+                                color: C.accent.flood,
+                                fontFamily: MONO,
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                padding: '4px 8px',
+                                borderRadius: '2px',
+                                cursor: 'pointer',
+                                letterSpacing: '0.05em'
+                            }}
+                            title="Configure and start a new analysis"
+                        >
+                            + NEW RUN
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* SCROLLABLE CONTENT */}
@@ -145,7 +170,7 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                 </div>
 
                 {sections.impact && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ type: 'spring', stiffness: 200, damping: 20 }}
@@ -153,25 +178,30 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                     >
                         {/* Hero Measurement Card */}
                         <div style={{
-                            background: 'rgba(42, 139, 145, 0.04)',
-                            border: '1px solid rgba(42, 139, 145, 0.15)',
+                            background: 'rgba(255, 255, 255, 0.015)',
+                            border: '1px solid rgba(255, 255, 255, 0.04)',
                             borderRadius: '2px',
                             padding: '16px',
                             marginBottom: '10px',
                             position: 'relative',
-                            overflow: 'hidden'
                         }}>
-                            <div style={{ fontFamily: MONO, fontSize: '9px', color: C.accent.flood, letterSpacing: '0.05em', fontWeight: 'bold' }}>
+                            {/* L-corner brackets */}
+                            <span style={{ position: 'absolute', top: '-1px', left: '-1px', width: '8px', height: '8px', borderTop: `1px solid ${C.accent.flood}`, borderLeft: `1px solid ${C.accent.flood}` }} />
+                            <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '8px', height: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.32)', borderRight: '1px solid rgba(255, 255, 255, 0.32)' }} />
+                            <span style={{ position: 'absolute', bottom: '-1px', left: '-1px', width: '8px', height: '8px', borderBottom: '1px solid rgba(255, 255, 255, 0.32)', borderLeft: '1px solid rgba(255, 255, 255, 0.32)' }} />
+                            <span style={{ position: 'absolute', bottom: '-1px', right: '-1px', width: '8px', height: '8px', borderBottom: `1px solid ${C.accent.flood}`, borderRight: `1px solid ${C.accent.flood}` }} />
+
+                            <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '6px' }}>
                                 NEW INUNDATION (NET)
                             </div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '8px 0 4px 0' }}>
-                                <span style={{ fontFamily: MONO, fontSize: '32px', fontWeight: 'bold', color: '#ffffff' }}>
+                                <span style={{ fontFamily: SANS, fontSize: '34px', fontWeight: 300, color: C.text, letterSpacing: '-0.04em', lineHeight: 1 }}>
                                     {p.totalFloodAcres.toFixed(2)}
                                 </span>
-                                <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 'bold', color: C.accent.flood }}>ACRES</span>
+                                <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', color: C.accent.flood, marginLeft: '6px' }}>acres</span>
                             </div>
-                            <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim }}>
-                                Mapped Area: {p.totalAreaAcres.toLocaleString(undefined, { maximumFractionDigits: 2 })} ac (10 km × 10 km)
+                            <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginTop: '8px' }}>
+                                Mapped Area · {p.totalAreaAcres.toLocaleString(undefined, { maximumFractionDigits: 2 })} ac · 10 km × 10 km
                             </div>
                         </div>
 
@@ -179,64 +209,61 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                         <div style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(2, 1fr)',
-                            gap: '8px',
+                            gap: '6px',
                             fontFamily: MONO,
-                            marginBottom: '12px'
+                            marginBottom: '12px',
+                            marginTop: '10px'
                         }}>
                             {/* High Conf */}
-                            <div style={{ background: cardBackground, border: cardBorder, padding: '12px', borderRadius: '2px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: C.textDim }}>
-                                    <span>HIGH CONF</span>
-                                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: C.accent.flood }} />
+                            <div style={{ background: cardBackground, border: cardBorder, padding: '10px', position: 'relative' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '8px', letterSpacing: '0.15em', textTransform: 'uppercase', color: C.textDim, marginBottom: '5px' }}>
+                                    <span style={{ width: '5px', height: '5px', background: C.accent.flood }} />
+                                    <span>High Conf</span>
                                 </div>
-                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: C.text }}>
-                                    {p.highConfAcres.toFixed(2)}
+                                <div style={{ fontFamily: SANS, fontSize: '18px', fontWeight: 300, color: C.text, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                                    {p.highConfAcres.toFixed(2)}<span style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginLeft: '3px' }}>ac</span>
                                 </div>
-                                <div style={{ fontSize: '9px', color: C.accent.flood }}>acres</div>
                             </div>
 
                             {/* Med Conf */}
-                            <div style={{ background: cardBackground, border: cardBorder, padding: '12px', borderRadius: '2px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: C.textDim }}>
-                                    <span>MEDIUM CONF</span>
-                                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: C.caution }} />
+                            <div style={{ background: cardBackground, border: cardBorder, padding: '10px', position: 'relative' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '8px', letterSpacing: '0.15em', textTransform: 'uppercase', color: C.textDim, marginBottom: '5px' }}>
+                                    <span style={{ width: '5px', height: '5px', background: C.caution }} />
+                                    <span>Medium Conf</span>
                                 </div>
-                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: C.text }}>
-                                    {p.medConfAcres.toFixed(2)}
+                                <div style={{ fontFamily: SANS, fontSize: '18px', fontWeight: 300, color: C.text, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                                    {p.medConfAcres.toFixed(2)}<span style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginLeft: '3px' }}>ac</span>
                                 </div>
-                                <div style={{ fontSize: '9px', color: C.caution }}>acres</div>
                             </div>
 
                             {/* Permanent Water */}
-                            <div style={{ background: cardBackground, border: cardBorder, padding: '12px', borderRadius: '2px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: C.textDim }}>
-                                    <span>PERM WATER</span>
-                                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: C.data }} />
+                            <div style={{ background: cardBackground, border: cardBorder, padding: '10px', position: 'relative' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '8px', letterSpacing: '0.15em', textTransform: 'uppercase', color: C.textDim, marginBottom: '5px' }}>
+                                    <span style={{ width: '5px', height: '5px', background: '#5483b3' }} />
+                                    <span>Perm Water</span>
                                 </div>
-                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: C.text }}>
-                                    {p.permWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                                <div style={{ fontFamily: SANS, fontSize: '18px', fontWeight: 300, color: C.text, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                                    {p.permWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 1 })}<span style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginLeft: '3px' }}>ac</span>
                                 </div>
-                                <div style={{ fontSize: '9px', color: C.data }}>acres</div>
                             </div>
 
                             {/* Detected Regions */}
-                            <div style={{ background: cardBackground, border: cardBorder, padding: '12px', borderRadius: '2px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: C.textDim }}>
-                                    <span>DET. REGIONS</span>
-                                    <Layers size={10} style={{ color: C.accent.flood }} />
+                            <div style={{ background: cardBackground, border: cardBorder, padding: '10px', position: 'relative' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '8px', letterSpacing: '0.15em', textTransform: 'uppercase', color: C.textDim, marginBottom: '5px' }}>
+                                    <span style={{ width: '5px', height: '5px', background: C.textDim }} />
+                                    <span>Det. Regions</span>
                                 </div>
-                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: C.text }}>
-                                    {p.detectedRegionsCount}
+                                <div style={{ fontFamily: SANS, fontSize: '18px', fontWeight: 300, color: C.text, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                                    {p.detectedRegionsCount}<span style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginLeft: '3px' }}>poly</span>
                                 </div>
-                                <div style={{ fontSize: '9px', color: C.textDim }}>polygons</div>
                             </div>
                         </div>
 
                         {/* Proportion Bar */}
-                        <div style={{ display: 'flex', height: '6px', borderRadius: '1px', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', marginBottom: '14px' }}>
+                        <div style={{ display: 'flex', height: '2px', overflow: 'hidden', background: 'rgba(255,255,255,0.04)', marginBottom: '14px', marginTop: '10px' }}>
                             <div style={{ width: `${highPct}%`, background: C.accent.flood }} title={`High Confidence: ${p.highConfAcres.toFixed(1)} ac`} />
                             <div style={{ width: `${medPct}%`, background: C.caution }} title={`Medium Confidence: ${p.medConfAcres.toFixed(1)} ac`} />
-                            <div style={{ width: `${permPct}%`, background: C.data }} title={`Permanent Water: ${p.permWaterAcres.toFixed(1)} ac`} />
+                            <div style={{ width: `${permPct}%`, background: '#5483b3' }} title={`Permanent Water: ${p.permWaterAcres.toFixed(1)} ac`} />
                         </div>
                     </motion.div>
                 )}
@@ -245,73 +272,47 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                 <div style={sectionHeaderStyle} onClick={() => toggleSection('acquisition')}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: C.textMid }}>
                         <Radio size={12} style={{ color: C.accent.flood }} />
-                        <span>SECTION 2: ACQUISITION</span>
+                        <span>SECTION 2 · ACQUISITION</span>
                     </div>
                     <span style={{ color: C.textDim }}>{sections.acquisition ? '▼' : '▲'}</span>
                 </div>
 
                 {sections.acquisition && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ type: 'spring', stiffness: 200, damping: 20 }}
                         style={{ marginTop: '10px' }}
                     >
                         <div style={{
-                            background: cardBackground,
-                            border: cardBorder,
-                            borderRadius: '2px',
-                            padding: '14px',
+                            display: 'grid',
+                            gridTemplateColumns: '1fr auto',
+                            gap: '7px 12px',
                             fontFamily: MONO,
-                            fontSize: '11px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '10px'
+                            fontSize: '10px',
+                            letterSpacing: '0.02em',
+                            padding: '4px 0'
                         }}>
-                            {/* Column Header Grid */}
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(3, 1fr)',
-                                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                paddingBottom: '10px'
-                            }}>
-                                <div>
-                                    <div style={{ fontSize: '9px', color: C.textDim }}>SENSOR</div>
-                                    <div style={{ fontWeight: 'bold', color: C.text, marginTop: '3px' }}>NISAR</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '9px', color: C.textDim }}>BAND</div>
-                                    <div style={{ fontWeight: 'bold', color: C.accent.flood, marginTop: '3px' }}>L-band</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '9px', color: C.textDim }}>POLARIZATION</div>
-                                    <div style={{ fontWeight: 'bold', color: C.text, marginTop: '3px' }}>{p.polarization}</div>
-                                </div>
-                            </div>
+                            <span style={{ color: C.textDim }}>Sensor</span>
+                            <span style={{ color: C.accent.flood, fontWeight: 500 }}>NISAR</span>
 
-                            {/* Active & Baseline Dates */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ color: C.textDim }}>Active Date:</span>
-                                    <span style={{ color: C.accent.flood, fontWeight: 'bold' }}>{p.activeDate}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ color: C.textDim }}>Baseline Date:</span>
-                                    <span style={{ color: C.textMid }}>{p.baselineDate}</span>
-                                </div>
-                            </div>
+                            <span style={{ color: C.textDim }}>Band</span>
+                            <span style={{ color: C.textMid }}>L-band</span>
 
-                            {/* Grid & CRS info */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', fontSize: '9px', color: C.textDim }}>
-                                <div>
-                                    <span>GRID: </span>
-                                    <span style={{ color: C.textMid, fontWeight: 'semibold' }}>{p.gridLabel}</span>
-                                </div>
-                                <div>
-                                    <span>CRS: </span>
-                                    <span style={{ color: C.textMid, fontWeight: 'semibold' }}>{p.epsg}</span>
-                                </div>
-                            </div>
+                            <span style={{ color: C.textDim }}>Polarization</span>
+                            <span style={{ color: C.textMid }}>{p.polarization}</span>
+
+                            <span style={{ color: C.textDim }}>Active date</span>
+                            <span style={{ color: C.accent.flood, fontWeight: 500 }}>{p.activeDate}</span>
+
+                            <span style={{ color: C.textDim }}>Baseline date</span>
+                            <span style={{ color: C.textMid }}>{p.baselineDate}</span>
+
+                            <span style={{ color: C.textDim }}>Grid</span>
+                            <span style={{ color: C.textMid }}>{p.gridLabel}</span>
+
+                            <span style={{ color: C.textDim }}>CRS</span>
+                            <span style={{ color: C.textMid }}>{p.epsg}</span>
                         </div>
                     </motion.div>
                 )}
@@ -320,50 +321,147 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                 <div style={sectionHeaderStyle} onClick={() => toggleSection('methodology')}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: C.textMid }}>
                         <Cpu size={12} style={{ color: C.accent.flood }} />
-                        <span>SECTION 3: DETECTION</span>
+                        <span>SECTION 3 · DETECTION</span>
                     </div>
                     <span style={{ color: C.textDim }}>{sections.methodology ? '▼' : '▲'}</span>
                 </div>
 
                 {sections.methodology && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ type: 'spring', stiffness: 200, damping: 20 }}
                         style={{ marginTop: '10px' }}
                     >
                         <div style={{
-                            background: cardBackground,
-                            border: cardBorder,
-                            borderRadius: '2px',
-                            padding: '14px',
-                            fontFamily: MONO,
-                            fontSize: '11px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '8px'
+                            gap: '5px',
                         }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                                <span style={{ color: C.textDim }}>Methodology:</span>
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 10px',
+                                background: cardBackground,
+                                border: cardBorder,
+                                fontFamily: MONO,
+                                fontSize: '10px',
+                                letterSpacing: '0.02em'
+                            }}>
+                                <span style={{ color: C.textDim }}>Methodology</span>
                                 <span style={{ color: C.textMid }}>Log-ratio SAR change</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                                <span style={{ color: C.textDim }}>Otsu Threshold:</span>
-                                <span style={{ color: C.accent.flood, fontWeight: 'bold' }}>{floodReport.method?.threshold_db || '-3.0'} dB</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                                <span style={{ color: C.textDim }}>Median Filter:</span>
+
+                            {floodReport.method?.raw_otsu_db != null ? (
+                                <>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '8px 10px',
+                                        background: cardBackground,
+                                        border: cardBorder,
+                                        fontFamily: MONO,
+                                        fontSize: '10px',
+                                        letterSpacing: '0.02em'
+                                    }}>
+                                        <span style={{ color: C.textDim }}>Otsu Threshold (computed)</span>
+                                        <span style={{ color: C.textMid }}>
+                                            {typeof floodReport.method.raw_otsu_db === 'number'
+                                                ? `${Number(floodReport.method.raw_otsu_db).toFixed(2)} dB`
+                                                : `${floodReport.method.raw_otsu_db} dB`}
+                                        </span>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '8px 10px',
+                                        background: cardBackground,
+                                        border: cardBorder,
+                                        fontFamily: MONO,
+                                        fontSize: '10px',
+                                        letterSpacing: '0.02em'
+                                    }}>
+                                        <span style={{ color: C.textDim }}>User Ceiling (min change)</span>
+                                        <span style={{ color: C.textMid }}>
+                                            {floodReport.method.min_change_db != null
+                                                ? `${floodReport.method.min_change_db} dB`
+                                                : '-3.0 dB'}
+                                        </span>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '8px 10px',
+                                        background: cardBackground,
+                                        border: cardBorder,
+                                        fontFamily: MONO,
+                                        fontSize: '10px',
+                                        letterSpacing: '0.02em'
+                                    }}>
+                                        <span style={{ color: C.textDim }}>Effective Threshold Used</span>
+                                        <span style={{ color: C.accent.flood, fontWeight: 'bold' }}>
+                                            {typeof floodReport.method.threshold_db === 'number'
+                                                ? `${Number(floodReport.method.threshold_db).toFixed(2)} dB`
+                                                : `${floodReport.method?.threshold_db || '-3.0'} dB`}
+                                            {Math.abs(Number(floodReport.method.raw_otsu_db) - Number(floodReport.method.threshold_db)) < 0.001 ? (
+                                                <span style={{ color: C.textDim, fontWeight: 'normal', fontSize: '9px', marginLeft: '6px' }}>(computed)</span>
+                                            ) : (
+                                                <span style={{ color: C.textDim, fontWeight: 'normal', fontSize: '9px', marginLeft: '6px' }}>(capped)</span>
+                                            )}
+                                        </span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '8px 10px',
+                                    background: cardBackground,
+                                    border: cardBorder,
+                                    fontFamily: MONO,
+                                    fontSize: '10px',
+                                    letterSpacing: '0.02em'
+                                }}>
+                                    <span style={{ color: C.textDim }}>Otsu Threshold</span>
+                                    <span style={{ color: C.textMid }}>{floodReport.method?.threshold_db || '-3.0'} dB</span>
+                                </div>
+                            )}
+
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 10px',
+                                background: cardBackground,
+                                border: cardBorder,
+                                fontFamily: MONO,
+                                fontSize: '10px',
+                                letterSpacing: '0.02em'
+                            }}>
+                                <span style={{ color: C.textDim }}>Median Filter</span>
                                 <span style={{ color: C.textMid }}>3 × 3 kernel</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                                <span style={{ color: C.textDim }}>Region Growing:</span>
-                                <span style={{ color: C.stable, fontWeight: 'semibold' }}>
-                                    {floodReport.method?.region_growing ? 'Enabled' : 'Disabled'}
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: C.textDim }}>Morphology:</span>
-                                <span style={{ color: C.textMid }}>Open 3x3 / Close 3x3</span>
+
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 10px',
+                                background: cardBackground,
+                                border: cardBorder,
+                                fontFamily: MONO,
+                                fontSize: '10px',
+                                letterSpacing: '0.02em'
+                            }}>
+                                <span style={{ color: C.textDim }}>Region Growing</span>
+                                <span style={{ color: C.textMid }}>{floodReport.method?.region_growing ? 'Enabled' : 'Disabled'}</span>
                             </div>
                         </div>
                     </motion.div>
@@ -379,7 +477,7 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                 </div>
 
                 {sections.actions && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ type: 'spring', stiffness: 200, damping: 20 }}

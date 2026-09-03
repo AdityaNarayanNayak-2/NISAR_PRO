@@ -1,9 +1,11 @@
-export const KUNDRA_CENTER = [18.7883, 82.6003]; // [Lat, Lng]
+export const KOLAB_RESERVOIR_CENTER = [18.7883, 82.6003]; // [Lat, Lng] Upper Kolab Dam
+export const KUNDRA_CENTER = [18.9306, 82.3885]; // [Lat, Lng] Kundra Block Headquarters
 
-export const KUNDRA_AOI_BBOX = [
+export const KOLAB_AOI_BBOX = [
   18.7433, 82.5533, // South, West
   18.8333, 82.6473  // North, East
 ];
+export const KUNDRA_AOI_BBOX = KOLAB_AOI_BBOX; // alias for backward compatibility
 
 export const PERMANENT_WATER_POLYGONS = [
   // Upper Kolab Reservoir Northern Arm

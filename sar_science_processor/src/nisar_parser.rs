@@ -286,7 +286,7 @@ pub fn parse_nisar_cropped(
         let data_path = match product_type {
             NisarProductType::GCOV => format!("/science/LSAR/GCOV/grids/frequencyA/{}{}", pol, pol),
             NisarProductType::GSLC => format!("/science/LSAR/GSLC/grids/frequencyA/{}", pol),
-            NisarProductType::GUNW => format!("/science/LSAR/GUNW/grids/frequencyA/unwrappedPhase"),
+            NisarProductType::GUNW => "/science/LSAR/GUNW/grids/frequencyA/unwrappedPhase".to_string(),
             _ => bail!("Unsupported cropped product type"),
         };
 
@@ -433,16 +433,16 @@ pub fn parse_nisar_cropped(
                 east: crop_lon_max,
             }
         } else {
-            // For projected coordinate grids, approximate WGS84 bbox in degrees from center and radius
-            let lat_radius = crop.radius_km / 111.0;
-            let cos_lat = crop.center_lat.to_radians().cos().abs().max(0.01);
-            let lon_radius = crop.radius_km / (111.0 * cos_lat);
+            // For projected coordinate grids, exact inverse-project the extracted corner coordinates
+            let zone = ((crop.center_lon + 180.0) / 6.0).floor() as i32 + 1;
+            let (lat_sw, lon_sw) = utm_to_latlon(lons[col_start], lats[row_end - 1], zone, true);
+            let (lat_ne, lon_ne) = utm_to_latlon(lons[col_end - 1], lats[row_start], zone, true);
 
             GeoBoundingBox {
-                south: crop.center_lat - lat_radius,
-                north: crop.center_lat + lat_radius,
-                west: crop.center_lon - lon_radius,
-                east: crop.center_lon + lon_radius,
+                south: lat_sw.min(lat_ne),
+                north: lat_sw.max(lat_ne),
+                west: lon_sw.min(lon_ne),
+                east: lon_sw.max(lon_ne),
             }
         };
 
@@ -1238,6 +1238,51 @@ fn latlon_to_utm(lat: f64, lon: f64, zone: i32) -> (f64, f64) {
     (easting, northing)
 }
 
+/// Convert UTM Easting/Northing coordinates back to WGS84 Lat/Lon (degrees).
+pub fn utm_to_latlon(easting: f64, northing: f64, zone: i32, northern_hemisphere: bool) -> (f64, f64) {
+    let a = 6378137.0;
+    let ecc_squared = 0.00669437999013;
+    let k0 = 0.9996;
+
+    let ecc_prime_squared = ecc_squared / (1.0 - ecc_squared);
+    let e1 = (1.0f64 - (1.0f64 - ecc_squared).sqrt()) / (1.0f64 + (1.0f64 - ecc_squared).sqrt());
+
+    let x = easting - 500000.0;
+    let y = if northern_hemisphere { northing } else { northing - 10000000.0 };
+
+    let lon_origin = ((zone - 1) * 6 - 180 + 3) as f64;
+    let lon_origin_rad = lon_origin.to_radians();
+
+    let m = y / k0;
+    let mu = m / (a * (1.0 - ecc_squared / 4.0 - 3.0 * ecc_squared * ecc_squared / 64.0 - 5.0 * ecc_squared * ecc_squared * ecc_squared / 256.0));
+
+    let phi1_rad = mu
+        + (3.0 * e1 / 2.0 - 27.0 * e1 * e1 * e1 / 32.0) * (2.0 * mu).sin()
+        + (21.0 * e1 * e1 / 16.0 - 55.0 * e1 * e1 * e1 * e1 / 32.0) * (4.0 * mu).sin()
+        + (151.0 * e1 * e1 * e1 / 96.0) * (6.0 * mu).sin()
+        + (1097.0 * e1 * e1 * e1 * e1 / 512.0) * (8.0 * mu).sin();
+
+    let n1 = a / (1.0 - ecc_squared * phi1_rad.sin() * phi1_rad.sin()).sqrt();
+    let t1 = phi1_rad.tan() * phi1_rad.tan();
+    let c1 = ecc_prime_squared * phi1_rad.cos() * phi1_rad.cos();
+    let r1 = a * (1.0 - ecc_squared) / (1.0 - ecc_squared * phi1_rad.sin() * phi1_rad.sin()).powf(1.5);
+    let d = x / (n1 * k0);
+
+    let lat_rad = phi1_rad - (n1 * phi1_rad.tan() / r1) * (
+        d * d / 2.0
+        - (5.0 + 3.0 * t1 + 10.0 * c1 - 4.0 * c1 * c1 - 9.0 * ecc_prime_squared) * d * d * d * d / 24.0
+        + (61.0 + 90.0 * t1 + 298.0 * c1 + 45.0 * t1 * t1 - 252.0 * ecc_prime_squared - 3.0 * c1 * c1) * d * d * d * d * d * d / 720.0
+    );
+
+    let lon_rad = lon_origin_rad + (
+        d
+        - (1.0 + 2.0 * t1 + c1) * d * d * d / 6.0
+        + (5.0 - 2.0 * c1 + 28.0 * t1 - 3.0 * c1 * c1 + 8.0 * ecc_prime_squared + 24.0 * t1 * t1) * d * d * d * d * d / 120.0
+    ) / phi1_rad.cos();
+
+    (lat_rad.to_degrees(), lon_rad.to_degrees())
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // Unit Tests
 // ───────────────────────────────────────────────────────────────────────────
@@ -1256,6 +1301,27 @@ mod tests {
             "L-band λ should be ≈23.8 cm, got {:.4} m",
             wavelength
         );
+    }
+
+    /// Verify exact geodetic roundtrip between WGS84 and UTM
+    #[test]
+    fn test_utm_roundtrip() {
+        let test_points = [
+            (18.7883, 82.6003, 44), // Upper Kolab
+            (18.9306, 82.3885, 44), // Kundra Block
+            (21.5339, 83.8751, 44), // Hirakud
+            (0.0, 81.0, 44),       // Equator
+            (45.0, -122.0, 10),    // Mid-lat West
+        ];
+
+        for (lat, lon, zone) in test_points {
+            let (easting, northing) = latlon_to_utm(lat, lon, zone);
+            let (rev_lat, rev_lon) = utm_to_latlon(easting, northing, zone, true);
+            let err_lat = (rev_lat - lat).abs();
+            let err_lon = (rev_lon - lon).abs();
+            assert!(err_lat < 1e-6, "Latitude error too large: {} vs {}", rev_lat, lat);
+            assert!(err_lon < 1e-6, "Longitude error too large: {} vs {}", rev_lon, lon);
+        }
     }
 
     /// Verify that interleaved (re,im) → Complex32 conversion is correct

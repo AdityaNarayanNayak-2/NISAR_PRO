@@ -330,7 +330,7 @@ async fn spawn_local_job(
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
             // Check for georef JSON event
-            if line.starts_with("{\"event\":\"georef\"") {
+            if line.contains("\"event\":\"georef\"") || line.contains("\"event\": \"georef\"") {
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
                     if let Some(bbox_val) = parsed.get("bbox") {
                         if let Ok(bbox) = serde_json::from_value::<GeoBbox>(bbox_val.clone()) {
@@ -404,6 +404,8 @@ async fn spawn_local_job(
                 m.flood_geojson_path = Some(format!("/results/{}_flood.geo.json", job_id));
             } else if use_science && (pipeline.as_deref() == Some("gcov") || pipeline.is_none()) {
                 m.output_path = Some(format!("/results/{}.png", job_id));
+            } else if use_science && pipeline.as_deref() == Some("insar") {
+                m.output_path = Some(format!("/results/{}_insar.png", job_id));
             } else {
                 m.output_path = Some(format!("/results/{}.tif", job_id));
             }

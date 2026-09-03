@@ -137,7 +137,7 @@ pub fn checkpoint_before_alloc(operation: &str, estimated_bytes: u64) {
             "  System memory: {}\n  Estimated allocation: {} MB\n  Headroom after alloc: ~{} MB",
             m,
             estimated_mb,
-            if m.available_mb > estimated_mb { m.available_mb - estimated_mb } else { 0 }
+            m.available_mb.saturating_sub(estimated_mb)
         ),
             None => format!(
                 "  Estimated allocation: {} MB (system memory unknown)",

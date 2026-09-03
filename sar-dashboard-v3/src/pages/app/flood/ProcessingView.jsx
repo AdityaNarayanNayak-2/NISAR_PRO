@@ -8,8 +8,9 @@ export default function ProcessingView({ floodReport }) {
     const rows = method ? [
         ['Detector', method.detector],
         ['Threshold method', method.threshold_method],
+        ['Otsu computed', method.raw_otsu_db != null ? `${typeof method.raw_otsu_db === 'number' ? Number(method.raw_otsu_db).toFixed(2) : method.raw_otsu_db} dB` : null],
+        ['User ceiling (min change)', method.min_change_db != null ? `${method.min_change_db} dB` : null],
         ['Effective threshold', method.threshold_db != null ? `${method.threshold_db} dB` : null],
-        ['Minimum change', method.min_change_db != null ? `${method.min_change_db} dB` : null],
         ['Seed / growth', method.seed_threshold_db != null && method.growth_threshold_db != null ? `${method.seed_threshold_db} / ${method.growth_threshold_db} dB` : null],
         ['Speckle filter', method.speckle_filter],
         ['Morphology', method.morphology],

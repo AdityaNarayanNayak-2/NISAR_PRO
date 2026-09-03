@@ -814,6 +814,7 @@ fn main() -> Result<()> {
                     "detector": "log_ratio_change_detection",
                     "threshold_method": "otsu_on_change_image",
                     "threshold_db": report.otsu_threshold_db,
+                    "raw_otsu_db": report.raw_otsu_threshold_db,
                     "min_change_db": cli.min_change_db,
                     "seed_threshold_db": cli.seed_threshold_db,
                     "growth_threshold_db": cli.growth_threshold_db,

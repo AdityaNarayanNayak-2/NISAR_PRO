@@ -5,9 +5,10 @@ import 'leaflet/dist/leaflet.css';
 import { api, getGatewayUrl } from '../../config/api';
 import { Terminal, Play, ChevronDown, CheckCircle, AlertTriangle, Loader, Search, FolderOpen, Satellite, Eye, Download, ArrowLeft, MapPin, Calendar, Layers, X, Anchor, Crosshair, Waves, Palette, WifiOff, Clock, Info, Ship, FileText } from 'lucide-react';
 
-import { MONO, SANS, C, PROFILES } from './constants';
+import { MONO, SANS, C, PROFILES, TM } from './constants';
 import { parseNisarFilename, sevColor, dispColor, formatBytes, formatElapsed } from './helpers';
-import { MapFlyTo, MapEventTracker } from './MapComponents';
+import { MapFlyTo, MapFlyToBounds, MapEventTracker, MapResizer, MapAoiDrawer } from './MapComponents';
+import L from 'leaflet';
 import SarSciencePanel from './SarSciencePanel';
 import InfrastructurePanel from './InfrastructurePanel';
 import WorkspaceSidebar from './flood/WorkspaceSidebar';
@@ -27,12 +28,14 @@ function AppDashboard() {
     const [mapBounds, setMapBounds] = useState(null);
     const [flyToCenter, setFlyToCenter] = useState(null);
     const [dataMode, setDataMode] = useState('local');
-    const [localFilePath, setLocalFilePath] = useState('');
+    const [localFilePath, setLocalFilePath] = useState('/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5');
     const [selectedScene, setSelectedScene] = useState(null);
-    const [startDate, setStartDate] = useState('2026-01-01');
-    const [endDate, setEndDate] = useState('2026-06-01');
-    const [searchResults, setSearchResults] = useState([]);
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
     const [isSearching, setIsSearching] = useState(false);
+    const [searchResults, setSearchResults] = useState([]);
+    const [drawnAoi, setDrawnAoi] = useState(null);
+    const [isDrawingAoi, setIsDrawingAoi] = useState(false);
     const [pipeline, setPipeline] = useState('standard_rda');
     const [jobs, setJobs] = useState({});
     const [activeJobId, setActiveJobId] = useState(null);
@@ -62,7 +65,7 @@ function AppDashboard() {
     const [visibleLayers, setVisibleLayers] = useState({ deformation: true, coherence: false, amplitude: false });
     // Derive activeLayer for TileLayer: deformation takes priority
     const activeLayer = visibleLayers.deformation ? 'deformation' : visibleLayers.coherence ? 'coherence' : 'amplitude';
-    const [slaveFilePath, setSlaveFilePath] = useState('');
+    const [slaveFilePath, setSlaveFilePath] = useState('/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_009_055_A_011_4005_DHDH_A_20260101T000132_20260101T000206_X05009_N_F_J_001.h5');
     const [assetSearch, setAssetSearch] = useState('');
     const [assetResults, setAssetResults] = useState([]);
     const [assetSearchOpen, setAssetSearchOpen] = useState(false);
@@ -70,8 +73,8 @@ function AppDashboard() {
     const [contextFetchedAt, setContextFetchedAt] = useState(null);
 
     // ── SAR Science InSAR crop state ──
-    const [cropLat, setCropLat] = useState('');
-    const [cropLon, setCropLon] = useState('');
+    const [cropLat, setCropLat] = useState('18.7883');
+    const [cropLon, setCropLon] = useState('82.6003');
     const [cropPreset, setCropPreset] = useState('5x5km');
 
     // ── Flood Mapping States ──
@@ -85,11 +88,36 @@ function AppDashboard() {
     const [activeView, setActiveView] = useState('map');
     const [selectedRegion, setSelectedRegion] = useState(null);
 
-    // Reset active view and selected region when changing profile
+    // Reset active view and selected region when changing profile, and preload completed flood run
     useEffect(() => {
         if (profile === 'flood') {
             setActiveView('map');
             setSelectedRegion(null);
+            fetch(api('/jobs/sar-e4efe049')).then(r => r.ok ? r.json() : null).then(data => {
+                if (data && data.flood_report_path) {
+                    Promise.all([
+                        fetch(api(data.flood_report_path)).then(r => r.json()),
+                        fetch(api(data.flood_geojson_path)).then(r => r.ok ? r.json() : null)
+                    ]).then(([floodReport, floodGeoJson]) => {
+                        const jobBounds = data.bbox ? [[data.bbox.south, data.bbox.west], [data.bbox.north, data.bbox.east]] : null;
+                        const jobObj = {
+                            id: data.id,
+                            name: 'UPPER KOLAB FLOOD EVENT (HISTORICAL)',
+                            status: 'completed',
+                            output_path: data.output_path,
+                            floodReport,
+                            floodGeoJson,
+                            floodReportPath: data.flood_report_path,
+                            floodGeoJsonPath: data.flood_geojson_path,
+                            pipeline: 'flood',
+                            bbox: data.bbox,
+                            bounds: jobBounds
+                        };
+                        setJobs(prev => ({ ...prev, [data.id]: jobObj }));
+                        // Keep historical job available in jobs/tabs without trapping the user in the report view
+                    }).catch(console.error);
+                }
+            }).catch(console.error);
         }
     }, [profile]);
 
@@ -155,15 +183,30 @@ function AppDashboard() {
 
     // ── Catalog Search (PRESERVED) ──
     const handleSearch = async () => {
-        if (!mapBounds) return;
+        const bbox = drawnAoi ? drawnAoi.bbox : (mapBounds ? `${mapBounds.getWest().toFixed(4)},${mapBounds.getSouth().toFixed(4)},${mapBounds.getEast().toFixed(4)},${mapBounds.getNorth().toFixed(4)}` : null);
+        if (!bbox) {
+            showError('Please wait for map viewport to initialize or draw an AOI box.');
+            return;
+        }
         setIsSearching(true);
         try {
-            const bbox = `${mapBounds.getWest()},${mapBounds.getSouth()},${mapBounds.getEast()},${mapBounds.getNorth()}`;
-            const res = await fetch(api(`/search/nisar?bbox=${bbox}&start_date=${startDate}T00:00:00Z&end_date=${endDate}T23:59:59Z`));
+            let searchUrl = `/search/nisar?bbox=${bbox}`;
+            if (startDate) searchUrl += `&start_date=${startDate}T00:00:00Z`;
+            if (endDate) searchUrl += `&end_date=${endDate}T23:59:59Z`;
+            const res = await fetch(api(searchUrl));
             const data = await res.json();
-            setSearchResults(data);
-        } catch (err) { console.error('Catalog search failed:', err); showError('Catalog search failed - is the gateway running?'); setSearchResults([]); }
-        finally { setIsSearching(false); }
+            const scenes = Array.isArray(data) ? data : [];
+            setSearchResults(scenes);
+            if (scenes.length === 0) {
+                showError('No NISAR scenes found in this area/date range.');
+            }
+        } catch (err) {
+            console.error('Catalog search failed:', err);
+            showError('Catalog search failed - is the gateway running?');
+            setSearchResults([]);
+        } finally {
+            setIsSearching(false);
+        }
     };
 
     const loadFloodArtifacts = (id, reportPath) => {
@@ -181,14 +224,26 @@ function AppDashboard() {
                 ...previous,
                 [id]: { ...previous[id], floodReport, floodGeoJson, floodReportPath: reportPath, floodGeoJsonPath: geoJsonPath },
             }));
-            setViewingResult(previous => previous?.pipeline === 'flood'
-                ? { ...previous, floodReport, floodGeoJson, floodReportPath: reportPath, floodGeoJsonPath: geoJsonPath }
-                : previous);
+            setViewingResult(previous => ({
+                ...(previous || {}),
+                id,
+                pipeline: 'flood',
+                url: previous?.url || api(`/results/${id}_flood.png`),
+                floodReport,
+                floodGeoJson,
+                floodReportPath: reportPath,
+                floodGeoJsonPath: geoJsonPath,
+                bounds: previous?.bounds
+            }));
         }).catch(error => console.error('Unable to load flood artifacts:', error));
     };
 
     // ── Start Job (PRESERVED) ──
     const startJob = async () => {
+        if (dataMode === 'catalog' && selectedScene) {
+            handleAcquireAndProcess(true);
+            return;
+        }
         const inputFile = getInputFile();
         if (!inputFile) return;
         if (!gatewayOnline) { showError('Gateway is offline. Start it with: LOCAL_MODE=true RUST_LOG=info cargo run --release'); return; }
@@ -316,16 +371,46 @@ function AppDashboard() {
     };
 
     // ── ASF Acquire + Process ──
-    const handleAcquireAndProcess = async () => {
+    const handleAcquireAndProcess = async (autoStart = true) => {
         if (!selectedScene) return;
-        setDownloadProgress(0); setTerminalOpen(true);
-        const downloadSse = new EventSource(api(`/asf/download-stream?granule_id=${selectedScene.id}&url=${encodeURIComponent(selectedScene.download_url)}`));
+        if (!gatewayOnline) { showError('Gateway is offline'); return; }
+        setDownloadProgress({ status: 'downloading', progress: 0, granuleId: selectedScene.id });
+        setTerminalOpen(true);
+        const downloadUrl = api(`/asf/download-stream?granule_id=${encodeURIComponent(selectedScene.id)}&url=${encodeURIComponent(selectedScene.download_url)}`);
+        const downloadSse = new EventSource(downloadUrl);
         downloadSse.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data.status === 'downloading') setDownloadProgress(data.progress);
-            if (data.status === 'download_complete') { downloadSse.close(); setDownloadProgress('complete'); startJobFromPath(data.path); }
+            try {
+                const data = JSON.parse(e.data);
+                if (data.status === 'downloading') {
+                    setDownloadProgress({
+                        status: 'downloading',
+                        progress: data.progress,
+                        downloaded_bytes: data.downloaded_bytes,
+                        total_bytes: data.total_bytes,
+                        speed_mbps: data.speed_mbps,
+                        eta_secs: data.eta_secs,
+                        granuleId: selectedScene.id
+                    });
+                } else if (data.status === 'download_complete') {
+                    downloadSse.close();
+                    setDownloadProgress({ status: 'download_complete', path: data.path, granuleId: selectedScene.id });
+                    if (autoStart) {
+                        startJobFromPath(data.path);
+                    }
+                } else if (data.status === 'error') {
+                    downloadSse.close();
+                    setDownloadProgress(null);
+                    showError(data.message || 'Download failed');
+                }
+            } catch (err) {
+                console.error('Failed to parse download SSE payload:', err);
+            }
         };
-        downloadSse.onerror = () => { downloadSse.close(); setDownloadProgress(null); showError('Download failed'); };
+        downloadSse.onerror = () => {
+            downloadSse.close();
+            setDownloadProgress(null);
+            showError('Download stream connection interrupted.');
+        };
     };
 
     // ── Refs (PRESERVED) ──
@@ -820,8 +905,8 @@ function AppDashboard() {
                     display: (profile === 'flood' && activeView !== 'map') ? 'none' : 'block',
                     position: 'absolute',
                     top: '42px',
-                    left: profile === 'infrastructure' ? '240px' : profile === 'flood' ? '180px' : '0px',
-                    right: profile === 'infrastructure' ? '0px' : (profile === 'flood' && activeView === 'map') ? '340px' : '0px',
+                    left: profile === 'infrastructure' ? '240px' : profile === 'flood' ? `${TM.side}px` : '0px',
+                    right: profile === 'infrastructure' ? '0px' : (profile === 'flood' && activeView === 'map') ? `${TM.panel}px` : '0px',
                     bottom: profile === 'infrastructure' ? '80px' : (viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport) ? '32px' : '0px',
                     cursor: 'crosshair',
                     zIndex: 0
@@ -837,15 +922,30 @@ function AppDashboard() {
                         opacity={0.8}
                     />
                 )}
+                <MapResizer />
                 <MapEventTracker setCoords={setMouseCoords} setMapBounds={setMapBounds} />
+                <MapAoiDrawer
+                    isDrawing={isDrawingAoi}
+                    setIsDrawing={setIsDrawingAoi}
+                    drawnAoi={drawnAoi}
+                    setDrawnAoi={setDrawnAoi}
+                    accent={activeProfile.accent || '#2a8b91'}
+                />
                 {flyToCenter && <MapFlyTo center={flyToCenter} />}
 
-                {selectedScene && selectedScene.footprint && (
-                    <GeoJSON
-                        key={selectedScene.id}
-                        data={selectedScene.footprint}
-                        style={{ color: '#0ea5e9', weight: 1.5, fillOpacity: 0.08, dashArray: '6' }}
-                    />
+                {selectedScene && selectedScene.footprint && selectedScene.footprint.coordinates && (
+                    <>
+                        <MapFlyToBounds bounds={(() => {
+                            try {
+                                return L.geoJSON(selectedScene.footprint).getBounds();
+                            } catch { return null; }
+                        })()} />
+                        <GeoJSON
+                            key={selectedScene.id}
+                            data={selectedScene.footprint}
+                            style={{ color: '#0ea5e9', weight: 2, fillOpacity: 0.12, dashArray: '6' }}
+                        />
+                    </>
                 )}
 
                 {/* Continuous 2D Raster Overlay (InSAR Deformation & Coherence Images) */}
@@ -860,6 +960,11 @@ function AppDashboard() {
                         const sev = (point.severity || '').toUpperCase();
                         const disp = point.displacement_mm ?? 0;
                         const absDisp = Math.abs(disp);
+
+                        // If point is stable and has no alert status, hide it to avoid green dots cluttering the map
+                        if (absDisp < 2.0 && sev !== 'CRITICAL' && sev !== 'ALERT' && sev !== 'CAUTION') {
+                            return null;
+                        }
 
                         // Exact Displacement Spectrum Color
                         let pColor = '#22c55e'; // Stable Emerald
@@ -1052,7 +1157,7 @@ function AppDashboard() {
 
             {/* ═══ RIGHT PANEL (SAR Science / Maritime only) ═══ */}
             <div style={{
-                position: 'absolute', top: '42px', right: 0, bottom: 0, width: '340px', zIndex: 100,
+                position: 'absolute', top: '42px', right: 0, bottom: 0, width: `${TM.panel}px`, zIndex: 100,
                 background: 'rgba(17, 17, 17, 0.82)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
                 borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
                 display: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map')) ? 'none' : 'flex',
@@ -1060,7 +1165,62 @@ function AppDashboard() {
                 overflow: 'hidden',
             }}>
 
-                {/* ── PROFILE: FLOOD MONITORING ── */}
+                {/* ── PROFILE: FLOOD MONITORING TOP TABS ── */}
+                {profile === 'flood' && (
+                    <div style={{
+                        display: 'flex',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: 'rgba(10, 14, 20, 0.75)',
+                        flexShrink: 0
+                    }}>
+                        <button
+                            onClick={() => setViewingResult(null)}
+                            style={{
+                                flex: 1, padding: '10px 8px', fontFamily: MONO, fontSize: '10px', fontWeight: 600,
+                                background: (!viewingResult || viewingResult.pipeline !== 'flood') ? 'rgba(0, 229, 255, 0.12)' : 'transparent',
+                                border: 'none',
+                                borderBottom: (!viewingResult || viewingResult.pipeline !== 'flood') ? `2px solid ${C.accent.flood}` : '2px solid transparent',
+                                color: (!viewingResult || viewingResult.pipeline !== 'flood') ? C.accent.flood : C.textDim,
+                                cursor: 'pointer', textAlign: 'center', letterSpacing: '0.06em',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                            }}
+                        >
+                            ⚙ CONFIGURE & RUN
+                        </button>
+                        <button
+                            onClick={() => {
+                                const floodJob = Object.values(jobs).find(j => j.pipeline === 'flood' && j.floodReport)
+                                    || jobs['sar-e4efe049'];
+                                if (floodJob) {
+                                    setViewingResult({
+                                        url: api(floodJob.output_path),
+                                        bounds: floodJob.bounds,
+                                        floodReport: floodJob.floodReport,
+                                        floodGeoJson: floodJob.floodGeoJson,
+                                        floodReportPath: floodJob.floodReportPath,
+                                        floodGeoJsonPath: floodJob.floodGeoJsonPath,
+                                        pipeline: 'flood',
+                                        elapsed: floodJob.elapsed || 42,
+                                        bbox: floodJob.bbox
+                                    });
+                                }
+                            }}
+                            style={{
+                                flex: 1, padding: '10px 8px', fontFamily: MONO, fontSize: '10px', fontWeight: 600,
+                                background: (viewingResult && viewingResult.pipeline === 'flood') ? 'rgba(0, 229, 255, 0.12)' : 'transparent',
+                                border: 'none',
+                                borderBottom: (viewingResult && viewingResult.pipeline === 'flood') ? `2px solid ${C.accent.flood}` : '2px solid transparent',
+                                color: (viewingResult && viewingResult.pipeline === 'flood') ? C.accent.flood : C.textDim,
+                                cursor: 'pointer', textAlign: 'center', letterSpacing: '0.06em',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                            }}
+                        >
+                            📊 ANALYSIS REPORT
+                        </button>
+                    </div>
+                )}
+
+                {/* ── PROFILE: FLOOD MONITORING CONTENT ── */}
                 {profile === 'flood' && (
                     viewingResult && viewingResult.pipeline === 'flood' ? (
                         viewingResult.floodReport ? (
@@ -1137,6 +1297,13 @@ function AppDashboard() {
                             setGrowthThresholdDb={setGrowthThresholdDb}
                             minAreaPixels={minAreaPixels}
                             setMinAreaPixels={setMinAreaPixels}
+                            downloadProgress={downloadProgress}
+                            handleAcquireAndProcess={handleAcquireAndProcess}
+                            drawnAoi={drawnAoi}
+                            setDrawnAoi={setDrawnAoi}
+                            isDrawingAoi={isDrawingAoi}
+                            setIsDrawingAoi={setIsDrawingAoi}
+                            setFlyToCenter={setFlyToCenter}
                         />
                     )
                 )}
@@ -1161,14 +1328,15 @@ function AppDashboard() {
             </div>
         // Continued in part 5...
             {/* ═══ BOTTOM PROCESSING SUMMARY STRIP ═══ */}
-            {viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport && (
+            {viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport && activeView === 'map' && (
                 <div style={{
                     position: 'absolute',
-                    bottom: terminalOpen && activeJobId ? '240px' : '0px',
-                    left: 0,
-                    right: 0,
+                    bottom: terminalOpen && activeJobId ? '240px' : 0,
+                    left: `${TM.side}px`,
+                    right: `${TM.panel}px`,
                     height: '32px',
-                    background: 'rgba(15, 10, 10, 0.9)',
+                    background: 'rgba(10, 14, 20, 0.95)',
+                    backdropFilter: 'blur(8px)',
                     borderTop: '1px solid rgba(255, 255, 255, 0.06)',
                     display: 'flex',
                     alignItems: 'center',
@@ -1177,19 +1345,19 @@ function AppDashboard() {
                     fontFamily: MONO,
                     fontSize: '10px',
                     color: C.textMid,
-                    zIndex: 900,
+                    zIndex: 950,
                     transition: 'bottom 200ms ease'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ color: C.accent.flood, fontWeight: 'bold' }}>PIPELINE: FLOOD DETECTION</span>
-                        <span style={{ color: C.bg4 }}>|</span>
-                        <span>ALGORITHM: LOG-RATIO + OTSU ({viewingResult.floodReport.method?.threshold_db || '-3.0'} dB) + REGION GROWING</span>
+                        <span style={{ color: C.accent.flood, fontWeight: 'bold' }}>FLOOD DETECTION</span>
+                        <span style={{ color: 'rgba(255,255,255,0.12)' }}>|</span>
+                        <span>LOG-RATIO + OTSU ({viewingResult.floodReport.method?.threshold_db || '-3.0'} dB)</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span>POLYGONS: {viewingResult.floodReport.flood_regions || 0}</span>
                         {viewingResult.elapsed && (
                             <>
-                                <span style={{ color: C.bg4 }}>|</span>
+                                <span style={{ color: 'rgba(255,255,255,0.12)' }}>|</span>
                                 <span>ELAPSED: {formatElapsed(viewingResult.elapsed)}</span>
                             </>
                         )}
@@ -1228,13 +1396,20 @@ function AppDashboard() {
             {/* ═══ COORDINATES HUD ═══ */}
             <div style={{
                 position: 'absolute',
-                bottom: profile === 'infrastructure' ? '90px' : (viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport) ? '48px' : '16px',
-                left: profile === 'infrastructure' ? '248px' : profile === 'flood' ? '196px' : '16px',
-                zIndex: 900,
+                bottom: (() => {
+                    let b = 8;
+                    if (profile === 'infrastructure') return '90px';
+                    if (profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodReport && activeView === 'map') b = 40;
+                    if (terminalOpen && activeJobId) b += 240;
+                    return `${b}px`;
+                })(),
+                left: profile === 'infrastructure' ? '248px' : profile === 'flood' ? `${TM.side + 8}px` : '16px',
+                zIndex: 960,
                 background: 'rgba(17, 17, 17, 0.85)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
                 border: '1px solid rgba(255, 255, 255, 0.06)', padding: '4px 12px',
                 fontFamily: MONO, fontSize: '11px', color: C.data,
-                display: 'flex', alignItems: 'center', gap: '10px', borderRadius: '2px'
+                display: 'flex', alignItems: 'center', gap: '10px', borderRadius: '2px',
+                transition: 'bottom 200ms ease'
             }}>
                 <span>LAT: {mouseCoords.lat}°</span>
                 <span>LON: {mouseCoords.lon}°</span>
@@ -1252,7 +1427,11 @@ function AppDashboard() {
 
             {/* ═══ TERMINAL DRAWER ═══ */}
             <div style={{
-                position: 'absolute', bottom: profile === 'infrastructure' ? '80px' : 0, left: profile === 'infrastructure' ? '240px' : 0, right: 0, zIndex: 1000,
+                position: 'absolute',
+                bottom: profile === 'infrastructure' ? '80px' : 0,
+                left: profile === 'infrastructure' ? '240px' : profile === 'flood' ? `${TM.side}px` : 0,
+                right: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map')) ? 0 : `${TM.panel}px`,
+                zIndex: 1000,
                 height: terminalOpen && activeJobId ? '240px' : '0px',
                 transition: 'height 200ms ease', overflow: 'hidden',
                 background: 'rgba(10, 10, 10, 0.9)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
@@ -1321,21 +1500,22 @@ function AppDashboard() {
             </div>
 
             {/* ═══ MINIMIZED TERMINAL BUTTON ═══ */}
-            {!terminalOpen && activeJobId && (
+            {!terminalOpen && activeJobId && activeView === 'map' && (
                 <button
                     onClick={() => setTerminalOpen(true)}
                     style={{
                         position: 'absolute',
-                        bottom: (viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport) ? '48px' : '16px',
-                        right: '16px',
-                        zIndex: 900,
-                        background: '#111111', border: '1px solid #2A2A2A', borderRadius: '2px',
-                        padding: '6px 12px', color: '#888888', fontFamily: MONO, fontSize: '11px',
-                        cursor: 'pointer'
+                        bottom: (viewingResult?.pipeline === 'flood' && viewingResult.floodReport) ? '40px' : '8px',
+                        right: `${TM.panel + 12}px`,
+                        zIndex: 960,
+                        background: 'rgba(17,17,17,0.9)', border: '1px solid #2A2A2A', borderRadius: '2px',
+                        padding: '5px 10px', color: '#888888', fontFamily: MONO, fontSize: '10px',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
                     }}
-                    onMouseEnter={e => { e.target.style.borderColor = '#404040'; e.target.style.color = '#F0F0F0'; }}
-                    onMouseLeave={e => { e.target.style.borderColor = '#2A2A2A'; e.target.style.color = '#888888'; }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent.flood; e.currentTarget.style.color = '#F0F0F0'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#888888'; }}
                 >
+                    <Terminal size={11} /> SHOW LOG
                 </button>
             )}
 
@@ -1349,7 +1529,7 @@ function AppDashboard() {
 
             {/* ═══ WORKSPACE SIDEBAR NAVIGATION (profile === 'flood') ═══ */}
             {profile === 'flood' && (
-                <div style={{ position: 'absolute', left: 0, top: '42px', bottom: 0, width: '180px', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ position: 'absolute', left: 0, top: '42px', bottom: 0, width: `${TM.side}px`, zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
                     <WorkspaceSidebar
                         activeView={activeView}
                         onSelectView={setActiveView}
@@ -1369,7 +1549,7 @@ function AppDashboard() {
             {profile === 'flood' && activeView !== 'map' && (
                 <div style={{
                     position: 'absolute',
-                    left: '180px',
+                    left: `${TM.side}px`,
                     top: '42px',
                     right: 0,
                     bottom: 0,
@@ -1432,69 +1612,7 @@ function AppDashboard() {
                 </div>
             )}
 
-            {/* ═══ FLOOD COMPARISON STRIP ═══ */}
-            {profile === 'flood' && activeView === 'map' && viewingResult?.floodReport && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: '24px',
-                    left: '196px',
-                    right: '356px',
-                    height: '42px',
-                    zIndex: 900,
-                    background: 'rgba(10, 15, 20, 0.95)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid #1c2532',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 16px',
-                    boxSizing: 'border-box',
-                    justifyContent: 'space-between',
-                    userSelect: 'none'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <button style={{
-                            background: 'rgba(42, 139, 145, 0.15)',
-                            border: '1px solid rgba(42, 139, 145, 0.3)',
-                            color: C.accent.flood,
-                            fontFamily: MONO,
-                            fontSize: '9px',
-                            padding: '4px 8px',
-                            borderRadius: '2px',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            outline: 'none'
-                        }}>
-                            ACTIVE / BASELINE
-                        </button>
-                        <span style={{ fontFamily: MONO, fontSize: '9px', color: '#475569', letterSpacing: '0.05em' }}>
-                            | REAL JOB COMPARISON
-                        </span>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                        {[
-                            { date: parseFloodReport(viewingResult.floodReport)?.baselineDate || 'BASELINE', active: false },
-                            { date: parseFloodReport(viewingResult.floodReport)?.activeDate || 'ACTIVE', active: true },
-                        ].map((pt, idx) => (
-                            <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}>
-                                <div style={{
-                                    width: '6px',
-                                    height: '6px',
-                                    borderRadius: '50%',
-                                    background: pt.active ? C.accent.flood : '#334155',
-                                    border: pt.active ? `1px solid ${C.text}` : '1px solid transparent',
-                                    boxShadow: pt.active ? `0 0 8px ${C.accent.flood}` : 'none',
-                                    marginBottom: '4px'
-                                }} />
-                                <span style={{ fontFamily: MONO, fontSize: '8px', color: pt.active ? C.text : '#475569', fontWeight: pt.active ? 'bold' : 'normal' }}>
-                                    {pt.date}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            {/* FLOOD COMPARISON STRIP removed — info consolidated into bottom processing strip */}
         </div>
     );
 }

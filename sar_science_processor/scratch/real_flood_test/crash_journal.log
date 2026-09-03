@@ -57,3 +57,84 @@
 [2026-08-11 12:48:32.237] [ALLOC_FREED] Completed: Baseline GCOV parsed & cropped
   System memory after: RAM: 13304 MB avail / 15612 MB total | Swap: 7280 MB free / 7999 MB total
 [2026-08-11 12:48:32.238] [PHASE] >>> FLOOD_STEP_5 — Running 7-stage flood detection pipeline [RAM: 13304 MB avail]
+[2026-09-01 09:36:40.795] [SESSION_START] SAR Science Processor v0.1.0 started
+  PID: 3031883
+  System: RAM: 6233 MB avail / 15612 MB total | Swap: 4268 MB free / 7999 MB total
+[2026-09-01 09:36:40.796] [PHASE] >>> STARTUP — mode=flood input=Some("NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5") [RAM: 6233 MB avail]
+[2026-09-01 09:36:40.796] [PHASE] >>> FLOOD_STEP_1 — Loading Active GCOV: "NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5" [RAM: 6233 MB avail]
+[2026-09-01 09:36:40.839] [ALLOC_CHECKPOINT] About to: read_f32 full dataset 33552×34272 (4386.5 MB) from '/science/LSAR/GCOV/grids/frequencyA/HHHH'
+  System memory: RAM: 6234 MB avail / 15612 MB total | Swap: 4268 MB free / 7999 MB total
+  Estimated allocation: 4386 MB
+  Headroom after alloc: ~1848 MB
+[2026-09-01 09:36:40.839] [TIMER_START] 'GCOV read_f32 + crop' started
+[2026-09-01 09:37:32.363] [ALLOC_FREED] Completed: GCOV raw_f32 dropped
+  System memory after: RAM: 10552 MB avail / 15612 MB total | Swap: 1912 MB free / 7999 MB total
+[2026-09-01 09:37:32.363] [TIMER] 'GCOV read_f32 + crop' completed in 51.52s
+[2026-09-01 09:37:32.424] [ALLOC_FREED] Completed: Active GCOV parsed & cropped
+  System memory after: RAM: 10553 MB avail / 15612 MB total | Swap: 1912 MB free / 7999 MB total
+[2026-09-01 09:37:32.425] [PHASE] >>> FLOOD_STEP_2 — Loading Baseline GCOV: "NISAR_L2_PR_GCOV_009_055_A_011_4005_DHDH_A_20260101T000132_20260101T000206_X05009_N_F_J_001.h5" [RAM: 10553 MB avail]
+[2026-09-01 09:37:32.489] [ALLOC_CHECKPOINT] About to: read_f32 full dataset 33552×34272 (4386.5 MB) from '/science/LSAR/GCOV/grids/frequencyA/HHHH'
+  System memory: RAM: 10558 MB avail / 15612 MB total | Swap: 1912 MB free / 7999 MB total
+  Estimated allocation: 4386 MB
+  Headroom after alloc: ~6172 MB
+[2026-09-01 09:37:32.489] [TIMER_START] 'GCOV read_f32 + crop' started
+[2026-09-01 09:38:19.704] [ALLOC_FREED] Completed: GCOV raw_f32 dropped
+  System memory after: RAM: 11254 MB avail / 15612 MB total | Swap: 1320 MB free / 7999 MB total
+[2026-09-01 09:38:19.708] [TIMER] 'GCOV read_f32 + crop' completed in 47.22s
+[2026-09-01 09:38:19.742] [ALLOC_FREED] Completed: Baseline GCOV parsed & cropped
+  System memory after: RAM: 11256 MB avail / 15612 MB total | Swap: 1320 MB free / 7999 MB total
+[2026-09-01 09:38:19.742] [PHASE] >>> FLOOD_STEP_5 — Running 7-stage flood detection pipeline [RAM: 11256 MB avail]
+[2026-09-03 08:36:25.147] [SESSION_START] SAR Science Processor v0.1.0 started
+  PID: 3344000
+  System: RAM: 5379 MB avail / 15612 MB total | Swap: 3817 MB free / 7999 MB total
+[2026-09-03 08:36:25.148] [PHASE] >>> STARTUP — mode=flood input=Some("NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5") [RAM: 5379 MB avail]
+[2026-09-03 08:36:25.148] [PHASE] >>> FLOOD_STEP_1 — Loading Active GCOV: "NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5" [RAM: 5379 MB avail]
+[2026-09-03 08:36:25.192] [ALLOC_CHECKPOINT] About to: read_f32 full dataset 33552×34272 (4386.5 MB) from '/science/LSAR/GCOV/grids/frequencyA/HHHH'
+  System memory: RAM: 5382 MB avail / 15612 MB total | Swap: 3817 MB free / 7999 MB total
+  Estimated allocation: 4386 MB
+  Headroom after alloc: ~996 MB
+[2026-09-03 08:36:25.192] [TIMER_START] 'GCOV read_f32 + crop' started
+[2026-09-03 08:37:20.467] [ALLOC_FREED] Completed: GCOV raw_f32 dropped
+  System memory after: RAM: 9755 MB avail / 15612 MB total | Swap: 4 MB free / 7999 MB total
+[2026-09-03 08:37:20.527] [TIMER] 'GCOV read_f32 + crop' completed in 55.33s
+[2026-09-03 08:37:20.785] [ALLOC_FREED] Completed: Active GCOV parsed & cropped
+  System memory after: RAM: 9780 MB avail / 15612 MB total | Swap: 7 MB free / 7999 MB total
+[2026-09-03 08:37:20.786] [PHASE] >>> FLOOD_STEP_2 — Loading Baseline GCOV: "NISAR_L2_PR_GCOV_009_055_A_011_4005_DHDH_A_20260101T000132_20260101T000206_X05009_N_F_J_001.h5" [RAM: 9779 MB avail]
+[2026-09-03 08:37:20.858] [ALLOC_CHECKPOINT] About to: read_f32 full dataset 33552×34272 (4386.5 MB) from '/science/LSAR/GCOV/grids/frequencyA/HHHH'
+  System memory: RAM: 9788 MB avail / 15612 MB total | Swap: 8 MB free / 7999 MB total
+  Estimated allocation: 4386 MB
+  Headroom after alloc: ~5402 MB
+[2026-09-03 08:37:20.858] [TIMER_START] 'GCOV read_f32 + crop' started
+[2026-09-03 08:38:09.970] [ALLOC_FREED] Completed: GCOV raw_f32 dropped
+  System memory after: RAM: 9879 MB avail / 15612 MB total | Swap: 0 MB free / 7999 MB total
+[2026-09-03 08:38:09.983] [TIMER] 'GCOV read_f32 + crop' completed in 49.13s
+[2026-09-03 08:38:10.065] [ALLOC_FREED] Completed: Baseline GCOV parsed & cropped
+  System memory after: RAM: 9888 MB avail / 15612 MB total | Swap: 1 MB free / 7999 MB total
+[2026-09-03 08:38:10.065] [PHASE] >>> FLOOD_STEP_5 — Running 7-stage flood detection pipeline [RAM: 9888 MB avail]
+[2026-09-03 08:39:13.094] [SESSION_START] SAR Science Processor v0.1.0 started
+  PID: 3356112
+  System: RAM: 9389 MB avail / 15612 MB total | Swap: 264 MB free / 7999 MB total
+[2026-09-03 08:39:13.094] [PHASE] >>> STARTUP — mode=flood input=Some("NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5") [RAM: 9389 MB avail]
+[2026-09-03 08:39:13.095] [PHASE] >>> FLOOD_STEP_1 — Loading Active GCOV: "NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5" [RAM: 9389 MB avail]
+[2026-09-03 08:39:13.140] [ALLOC_CHECKPOINT] About to: read_f32 full dataset 33552×34272 (4386.5 MB) from '/science/LSAR/GCOV/grids/frequencyA/HHHH'
+  System memory: RAM: 9387 MB avail / 15612 MB total | Swap: 264 MB free / 7999 MB total
+  Estimated allocation: 4386 MB
+  Headroom after alloc: ~5001 MB
+[2026-09-03 08:39:13.140] [TIMER_START] 'GCOV read_f32 + crop' started
+[2026-09-03 08:40:02.360] [ALLOC_FREED] Completed: GCOV raw_f32 dropped
+  System memory after: RAM: 9651 MB avail / 15612 MB total | Swap: 4 MB free / 7999 MB total
+[2026-09-03 08:40:02.361] [TIMER] 'GCOV read_f32 + crop' completed in 49.22s
+[2026-09-03 08:40:02.401] [ALLOC_FREED] Completed: Active GCOV parsed & cropped
+  System memory after: RAM: 9653 MB avail / 15612 MB total | Swap: 4 MB free / 7999 MB total
+[2026-09-03 08:40:02.402] [PHASE] >>> FLOOD_STEP_2 — Loading Baseline GCOV: "NISAR_L2_PR_GCOV_009_055_A_011_4005_DHDH_A_20260101T000132_20260101T000206_X05009_N_F_J_001.h5" [RAM: 9653 MB avail]
+[2026-09-03 08:40:02.444] [ALLOC_CHECKPOINT] About to: read_f32 full dataset 33552×34272 (4386.5 MB) from '/science/LSAR/GCOV/grids/frequencyA/HHHH'
+  System memory: RAM: 9659 MB avail / 15612 MB total | Swap: 4 MB free / 7999 MB total
+  Estimated allocation: 4386 MB
+  Headroom after alloc: ~5273 MB
+[2026-09-03 08:40:02.444] [TIMER_START] 'GCOV read_f32 + crop' started
+[2026-09-03 08:40:50.337] [ALLOC_FREED] Completed: GCOV raw_f32 dropped
+  System memory after: RAM: 9920 MB avail / 15612 MB total | Swap: 0 MB free / 7999 MB total
+[2026-09-03 08:40:50.350] [TIMER] 'GCOV read_f32 + crop' completed in 47.91s
+[2026-09-03 08:40:50.460] [ALLOC_FREED] Completed: Baseline GCOV parsed & cropped
+  System memory after: RAM: 9923 MB avail / 15612 MB total | Swap: 0 MB free / 7999 MB total
+[2026-09-03 08:40:50.460] [PHASE] >>> FLOOD_STEP_5 — Running 7-stage flood detection pipeline [RAM: 9923 MB avail]

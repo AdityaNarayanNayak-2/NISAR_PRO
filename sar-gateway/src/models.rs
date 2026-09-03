@@ -60,15 +60,16 @@ pub struct ContextResponse {
     pub outflow_cumecs: Option<f64>,
     pub river_basin: Option<String>,
 }
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct NisarSearchQuery {
     pub bbox: String, // format: "minLon,minLat,maxLon,maxLat"
     pub start_date: Option<String>,
     pub end_date: Option<String>,
     pub platform: Option<String>,
+    pub processing_level: Option<String>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct NisarScene {
     pub id: String,
     pub date: String,

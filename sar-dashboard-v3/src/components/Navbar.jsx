@@ -6,7 +6,6 @@ import { Satellite, Rocket, ChevronRight, Github } from 'lucide-react'
 const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/use-cases', label: 'Use Cases' },
-    { path: '/academy', label: 'Academy' },
     { path: '/docs', label: 'Docs' },
 ]
 

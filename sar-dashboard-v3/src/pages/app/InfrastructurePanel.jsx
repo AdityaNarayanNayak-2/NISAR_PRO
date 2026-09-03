@@ -192,16 +192,16 @@ export default function InfrastructurePanel({
                 ZONE 1: LEFT PANEL (250px) - Compact No-Scroll UI
                 ════════════════════════════════════════════════════ */}
             <div style={{
-                position: 'absolute', top: '42px', left: 0, bottom: 0,
+                position: 'absolute', top: '42px', left: 0, bottom: '80px',
                 width: '250px', background: C.bg0,
                 borderRight: `1px solid ${C.bg3}`, zIndex: 100,
-                overflowY: 'auto', boxSizing: 'border-box',
-                padding: '10px 10px 16px', display: 'flex', flexDirection: 'column', gap: '8px'
+                overflowY: 'hidden', boxSizing: 'border-box',
+                padding: '8px 8px 12px', display: 'flex', flexDirection: 'column', gap: '6px'
             }}>
                 {/* ═══════ ASSET MONITORING & SEARCH ═══════ */}
                 <div style={{
                     background: 'linear-gradient(180deg, #0c0c0e 0%, #070708 100%)',
-                    border: '1px solid #1a1a1f', borderRadius: '8px', padding: '10px', position: 'relative',
+                    border: '1px solid #1a1a1f', borderRadius: '8px', padding: '6px 8px', position: 'relative',
                 }}>
                     <div style={{
                         position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
@@ -282,7 +282,7 @@ export default function InfrastructurePanel({
                 {assetLat && assetLon && assetName && (
                     <div style={{
                         background: '#0d0d10', border: '1px solid #1a1a1f', borderRadius: '8px',
-                        padding: '10px', position: 'relative', overflow: 'hidden',
+                        padding: '6px 8px', position: 'relative', overflow: 'hidden',
                     }}>
                         {/* Status Header */}
                         <div style={{
@@ -340,7 +340,7 @@ export default function InfrastructurePanel({
                 {/* ═══════ ENVIRONMENTAL CONTEXT & TELEMETRY ═══════ */}
                 <div style={{
                     background: '#0d0d10', border: '1px solid #1a1a1f', borderRadius: '8px',
-                    padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px'
+                    padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -359,7 +359,7 @@ export default function InfrastructurePanel({
                     {envContext?.reservoir && envContext.reservoir !== 'UNAVAILABLE' && (
                         <div style={{
                             background: 'rgba(200,169,110,0.03)', border: '1px solid rgba(200,169,110,0.15)',
-                            borderRadius: '6px', padding: '8px', position: 'relative'
+                            borderRadius: '6px', padding: '4px 6px', position: 'relative', marginBottom: '4px'
                         }}>
                             <div style={{
                                 fontFamily: MONO, fontSize: '9px', color: '#c8a96e', fontWeight: 700,
@@ -413,7 +413,7 @@ export default function InfrastructurePanel({
                             return (
                                 <div key={r.label} style={{
                                     background: '#09090c', border: `1px solid ${isWarn ? 'rgba(245,158,11,0.3)' : '#16161c'}`,
-                                    borderRadius: '5px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '2px'
+                                    borderRadius: '5px', padding: '4px 6px', display: 'flex', flexDirection: 'column', gap: '2px'
                                 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <span style={{ fontFamily: MONO, fontSize: '7px', color: '#555565', letterSpacing: '0.05em' }}>{r.label}</span>
@@ -629,72 +629,6 @@ export default function InfrastructurePanel({
                         </>
                     ) : (
                         <>
-                            {/* ── SATELLITE PASS ── */}
-                            {assetLat && assetLon && assetName && (
-                                <div style={{
-                                    background: 'linear-gradient(180deg, #111114 0%, rgba(200,169,110,0.01) 100%)',
-                                    border: '1px solid #1a1a1f', borderRadius: '10px', padding: '14px',
-                                    marginBottom: '14px', position: 'relative'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                                        <span style={{ fontSize: '11px', color: '#c8a96e' }}>🛰</span>
-                                        <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#555560' }}>ORBITAL DATA / PASS</span>
-                                    </div>
-
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        {telemetryRow({ label: 'SATELLITE', value: 'NISAR (NASA/ISRO)', dotColor: '#4CAF50' })}
-                                        {telemetryRow({ label: 'PASS DIRECTION', value: parsedMeta?.direction || 'Descending', dotColor: '#c8a96e' })}
-                                    </div>
-
-                                    {/* Timeline */}
-                                    {masterDateStr && slaveDateStr ? (
-                                        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #1a1a1f' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', padding: '0 8px' }}>
-                                                {/* Master Point */}
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
-                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#c8a96e', border: '2px solid #0a0a0a', boxShadow: '0 0 8px rgba(200,169,110,0.4)' }} />
-                                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#e8e8ec', marginTop: '4px', fontWeight: 600 }}>{masterDateStr}</div>
-                                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', letterSpacing: '0.05em' }}>MASTER</div>
-                                                </div>
-
-                                                {/* Animated Flow Track */}
-                                                <div style={{
-                                                    flex: 1, height: '2px', background: '#1a1a1f', margin: '0 8px',
-                                                    position: 'relative', top: '-10px', overflow: 'hidden', borderRadius: '2px'
-                                                }}>
-                                                    <div style={{
-                                                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                                                        background: 'linear-gradient(90deg, transparent, #c8a96e, transparent)',
-                                                        animation: 'timeline-flow 2s infinite linear'
-                                                    }} />
-                                                </div>
-
-                                                {/* Slave Point */}
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
-                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4CAF50', border: '2px solid #0a0a0a', boxShadow: '0 0 8px rgba(76,175,80,0.4)' }} />
-                                                    <div style={{ fontFamily: MONO, fontSize: '9px', color: '#e8e8ec', marginTop: '4px', fontWeight: 600 }}>{slaveDateStr}</div>
-                                                    <div style={{ fontFamily: MONO, fontSize: '7px', color: '#555560', letterSpacing: '0.05em' }}>SLAVE</div>
-                                                </div>
-                                            </div>
-
-                                            {baselineDays != null && (
-                                                <div style={{ textAlign: 'center', marginTop: '10px', fontFamily: MONO, fontSize: '9px' }}>
-                                                    <span style={{ color: '#555560' }}>TEMPORAL BASELINE: </span>
-                                                    <span style={{ color: '#c8a96e', fontWeight: 600 }}>{baselineDays} DAYS</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #1a1a1f' }}>
-                                            {telemetryRow({
-                                                label: 'ACQ DATE',
-                                                value: slaveDateStr || parsedMeta?.acquisitionDate || '—',
-                                                dotColor: (slaveDateStr || parsedMeta?.acquisitionDate) ? '#4CAF50' : '#333333',
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
                             {/* ── STRUCTURAL HEALTH ── */}
                             {s ? (

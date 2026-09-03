@@ -24,9 +24,12 @@ export function getGeoLocation(lat, lon) {
     const lLat = parseFloat(lat);
     const lLon = parseFloat(lon);
     
-    // Check if close to Kundra region
-    if (Math.abs(lLat - 18.788) < 0.1 && Math.abs(lLon - 82.600) < 0.1) {
-        return 'Kundra, Odisha, India';
+    // Check known geographic assets in Koraput / Odisha
+    if (Math.abs(lLat - 18.7883) < 0.08 && Math.abs(lLon - 82.6003) < 0.08) {
+        return 'Upper Kolab Reservoir, Odisha, India';
+    }
+    if (Math.abs(lLat - 18.9306) < 0.08 && Math.abs(lLon - 82.3885) < 0.08) {
+        return 'Kundra Block, Koraput, Odisha, India';
     }
     return `${lLat.toFixed(4)}° N, ${lLon.toFixed(4)}° E`;
 }

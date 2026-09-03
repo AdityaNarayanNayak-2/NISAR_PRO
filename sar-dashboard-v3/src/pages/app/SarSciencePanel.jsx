@@ -17,6 +17,9 @@ export default function SarSciencePanel({
     seedThresholdDb, setSeedThresholdDb,
     growthThresholdDb, setGrowthThresholdDb,
     minAreaPixels, setMinAreaPixels,
+    downloadProgress, handleAcquireAndProcess,
+    drawnAoi, setDrawnAoi, isDrawingAoi, setIsDrawingAoi,
+    setFlyToCenter,
 }) {
     const accent = C.accent.flood;
     const activeBg = 'rgba(42, 139, 145, 0.08)';
@@ -82,6 +85,54 @@ export default function SarSciencePanel({
             </>)}
 
             {dataMode === 'catalog' && (<>
+                {/* AOI Bounding Box Selector */}
+                <div style={{ marginBottom: '10px', padding: '8px 10px', background: C.bg1, border: `1px solid ${drawnAoi ? accent : C.bg3}`, borderRadius: '2px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            SEARCH AOI
+                        </span>
+                        {drawnAoi ? (
+                            <span style={{ fontFamily: MONO, fontSize: '9px', color: accent, fontWeight: 600 }}>CUSTOM BOX</span>
+                        ) : (
+                            <span style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim }}>VIEWPORT BBOX</span>
+                        )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsDrawingAoi && setIsDrawingAoi(!isDrawingAoi)}
+                            style={{
+                                flex: 1, padding: '6px', background: isDrawingAoi ? accent : 'transparent',
+                                border: `1px solid ${isDrawingAoi ? accent : C.bg3}`,
+                                color: isDrawingAoi ? C.bg0 : C.text,
+                                fontFamily: MONO, fontSize: '10px', fontWeight: 600, cursor: 'pointer', borderRadius: '2px'
+                            }}
+                        >
+                            {isDrawingAoi ? 'DRAWING (DRAG ON MAP)...' : drawnAoi ? 'REDRAW BOX' : 'DRAW AOI ON MAP'}
+                        </button>
+                        {drawnAoi && (
+                            <button
+                                type="button"
+                                onClick={() => setDrawnAoi && setDrawnAoi(null)}
+                                style={{
+                                    padding: '6px 10px', background: 'transparent',
+                                    border: `1px solid ${C.bg3}`, color: C.textDim,
+                                    fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px'
+                                }}
+                                title="Reset to current map view"
+                            >
+                                CLEAR
+                            </button>
+                        )}
+                    </div>
+                    {drawnAoi && (
+                        <div style={{ marginTop: '6px', fontFamily: MONO, fontSize: '9px', color: C.textMid, wordBreak: 'break-all' }}>
+                            {drawnAoi.minLon.toFixed(2)}°E, {drawnAoi.minLat.toFixed(2)}°N → {drawnAoi.maxLon.toFixed(2)}°E, {drawnAoi.maxLat.toFixed(2)}°N
+                        </div>
+                    )}
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                     <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, fontSize: '11px' }} />
                     <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, fontSize: '11px' }} />
@@ -89,7 +140,7 @@ export default function SarSciencePanel({
                 <button onClick={handleSearch} disabled={isSearching} style={{ width: '100%', padding: '8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '11px', cursor: 'pointer', borderRadius: '2px' }}
                     onMouseEnter={e => { e.target.style.borderColor = C.bg4; e.target.style.color = C.text; }}
                     onMouseLeave={e => { e.target.style.borderColor = C.bg3; e.target.style.color = C.textMid; }}
-                >{isSearching ? 'SEARCHING...' : 'SEARCH CATALOG'}</button>
+                >{isSearching ? 'SEARCHING CATALOG...' : 'SEARCH CATALOG'}</button>
                 {searchResults.length > 0 && (
                     <div style={{ marginTop: '10px' }}>
                         {searchResults.map(scene => (
@@ -98,13 +149,56 @@ export default function SarSciencePanel({
                                 borderLeft: selectedScene?.id === scene.id ? `3px solid ${accent}` : '3px solid transparent',
                                 paddingLeft: selectedScene?.id === scene.id ? '13px' : '8px',
                             }}>
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textMid, wordBreak: 'break-all' }}>{scene.id}</div>
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-                                    <span>{scene.date?.split('T')[0]}</span>
-                                    <span>{formatBytes(scene.size_bytes)}</span>
+                                <div style={{ fontFamily: MONO, fontSize: '10px', color: selectedScene?.id === scene.id ? C.text : C.textMid, wordBreak: 'break-all', fontWeight: selectedScene?.id === scene.id ? 600 : 400 }}>{scene.id}</div>
+                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>{scene.date?.split('T')[0]}</span>
+                                        {scene.platform && (
+                                            <span style={{ fontSize: '8px', padding: '1px 4px', background: C.bg2, borderRadius: '2px', color: accent }}>
+                                                {scene.platform.includes('(') ? scene.platform.split('(')[0].trim() : scene.platform}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span style={{ color: C.text, fontWeight: 500 }}>{formatBytes(scene.size_bytes)}</span>
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* Selected Granule Details & Live Download Progress */}
+                {selectedScene && (
+                    <div style={{ marginTop: '12px', padding: '10px', background: C.bg1, border: `1px solid ${C.bg3}`, borderRadius: '2px' }}>
+                        <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>SELECTED GRANULE</div>
+                        <div style={{ fontFamily: MONO, fontSize: '10px', color: C.text, wordBreak: 'break-all', marginBottom: '6px' }}>{selectedScene.id}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
+                            <span>SIZE: <strong style={{ color: C.text }}>{formatBytes(selectedScene.size_bytes)}</strong></span>
+                            <span>ACQUIRED: <strong style={{ color: C.text }}>{selectedScene.date?.split('T')[0]}</strong></span>
+                        </div>
+
+                        {/* Live Download Progress Indicator */}
+                        {downloadProgress && downloadProgress.granuleId === selectedScene.id && downloadProgress.status === 'downloading' && (
+                            <div style={{ marginTop: '8px', padding: '8px', background: C.bg2, borderRadius: '2px', border: `1px solid ${accent}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '10px', color: accent, marginBottom: '4px' }}>
+                                    <span>DOWNLOADING GRANULE...</span>
+                                    <span style={{ fontWeight: 600 }}>{downloadProgress.progress}%</span>
+                                </div>
+                                <div style={{ height: '3px', background: C.bg3, borderRadius: '1px', overflow: 'hidden', marginBottom: '4px' }}>
+                                    <div style={{ height: '100%', width: `${downloadProgress.progress}%`, background: accent, transition: 'width 0.2s linear' }} />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '9px', color: C.textDim }}>
+                                    <span>{formatBytes(downloadProgress.downloaded_bytes || 0)} / {formatBytes(downloadProgress.total_bytes || 0)}</span>
+                                    <span>{downloadProgress.speed_mbps || 0} MB/s {downloadProgress.eta_secs ? `(ETA ${downloadProgress.eta_secs}s)` : ''}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {downloadProgress && downloadProgress.granuleId === selectedScene.id && downloadProgress.status === 'download_complete' && (
+                            <div style={{ marginTop: '8px', padding: '6px 8px', background: 'rgba(61, 255, 154, 0.08)', border: '1px solid rgba(61, 255, 154, 0.3)', borderRadius: '2px', fontFamily: MONO, fontSize: '10px', color: C.stable, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span>●</span>
+                                <span>CACHED ON LOCAL DISK</span>
+                            </div>
+                        )}
                     </div>
                 )}
             </>)}
@@ -140,13 +234,51 @@ export default function SarSciencePanel({
                     ▸ CROP REGION
                 </div>
                 
+                {/* Quick Target Presets */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setCropLat('18.7883');
+                            setCropLon('82.6003');
+                            if (setFlyToCenter) setFlyToCenter([18.7883, 82.6003]);
+                        }}
+                        style={{
+                            flex: 1, padding: '5px 4px', fontFamily: MONO, fontSize: '9px',
+                            background: (cropLat === '18.7883' && cropLon === '82.6003') ? 'rgba(0, 229, 255, 0.15)' : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${(cropLat === '18.7883' && cropLon === '82.6003') ? accent : 'rgba(255,255,255,0.08)'}`,
+                            color: (cropLat === '18.7883' && cropLon === '82.6003') ? accent : C.textMid,
+                            cursor: 'pointer', textAlign: 'center', borderRadius: '2px'
+                        }}
+                    >
+                        Kolab Dam
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setCropLat('18.9306');
+                            setCropLon('82.3885');
+                            if (setFlyToCenter) setFlyToCenter([18.9306, 82.3885]);
+                        }}
+                        style={{
+                            flex: 1, padding: '5px 4px', fontFamily: MONO, fontSize: '9px',
+                            background: (cropLat === '18.9306' && cropLon === '82.3885') ? 'rgba(0, 229, 255, 0.15)' : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${(cropLat === '18.9306' && cropLon === '82.3885') ? accent : 'rgba(255,255,255,0.08)'}`,
+                            color: (cropLat === '18.9306' && cropLon === '82.3885') ? accent : C.textMid,
+                            cursor: 'pointer', textAlign: 'center', borderRadius: '2px'
+                        }}
+                    >
+                        Kundra Block
+                    </button>
+                </div>
+
                 {/* Lat / Lon text inputs */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
                     <div>
                         <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>LATITUDE</div>
                         <input
                             type="text" value={cropLat || ''} onChange={e => setCropLat(e.target.value)}
-                            placeholder="18.7692"
+                            placeholder="18.7883"
                             style={inputStyle}
                         />
                     </div>
@@ -154,7 +286,7 @@ export default function SarSciencePanel({
                         <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>LONGITUDE</div>
                         <input
                             type="text" value={cropLon || ''} onChange={e => setCropLon(e.target.value)}
-                            placeholder="82.8334"
+                            placeholder="82.6003"
                             style={inputStyle}
                         />
                     </div>
@@ -270,14 +402,36 @@ export default function SarSciencePanel({
             <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />
 
             {/* EXECUTE */}
-            <button onClick={startJob} disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline} style={{
+            <button onClick={startJob} disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline || downloadProgress?.status === 'downloading'} style={{
                 width: '100%', padding: '10px', background: accent, color: C.bg0,
                 fontFamily: MONO, fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '2px',
-                cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 'not-allowed' : 'pointer',
-                opacity: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline) ? 0.3 : 1,
+                cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline || downloadProgress?.status === 'downloading') ? 'not-allowed' : 'pointer',
+                opacity: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline || downloadProgress?.status === 'downloading') ? 0.3 : 1,
             }}>
-                {runningJobs.length > 0 ? 'PROCESSING...' : 'START PROCESSING'}
+                {downloadProgress?.status === 'downloading'
+                    ? `DOWNLOADING (${downloadProgress.progress}%)...`
+                    : runningJobs.length > 0
+                        ? 'PROCESSING...'
+                        : dataMode === 'catalog'
+                            ? 'DOWNLOAD & PROCESS'
+                            : 'START PROCESSING'}
             </button>
+
+            {dataMode === 'catalog' && selectedScene && downloadProgress?.status !== 'downloading' && (
+                <button
+                    onClick={() => handleAcquireAndProcess && handleAcquireAndProcess(false)}
+                    disabled={runningJobs.length > 0 || !gatewayOnline}
+                    style={{
+                        width: '100%', marginTop: '6px', padding: '6px', background: 'transparent',
+                        border: `1px solid ${C.bg3}`, color: C.textDim, fontFamily: MONO,
+                        fontSize: '10px', cursor: 'pointer', borderRadius: '2px'
+                    }}
+                    onMouseEnter={e => { e.target.style.borderColor = C.bg4; e.target.style.color = C.text; }}
+                    onMouseLeave={e => { e.target.style.borderColor = C.bg3; e.target.style.color = C.textDim; }}
+                >
+                    DOWNLOAD TO LOCAL DISK ONLY
+                </button>
+            )}
             {runningJobs.length > 0 && (
                 <div style={{ marginTop: '8px', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
                     <div>ELAPSED  {formatElapsed(elapsed[runningJobs[0]?.id])}</div>
