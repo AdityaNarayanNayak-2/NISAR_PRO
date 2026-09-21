@@ -67,6 +67,18 @@ pub async fn start_job_handler(
     }))
 }
 
+pub async fn list_jobs_handler(
+    State(state): State<crate::AppState>,
+) -> Json<Vec<crate::jobs::JobResponse>> {
+    let jobs = state.jobs.read().await;
+    let mut list = Vec::new();
+    for metadata_lock in jobs.values() {
+        let metadata = metadata_lock.read().await;
+        list.push(metadata.to_response());
+    }
+    Json(list)
+}
+
 pub async fn get_job_handler(
     State(state): State<crate::AppState>,
     Path(id): Path<String>,
@@ -74,14 +86,7 @@ pub async fn get_job_handler(
     let jobs = state.jobs.read().await;
     if let Some(metadata_lock) = jobs.get(&id) {
         let metadata = metadata_lock.read().await;
-        Ok(Json(crate::jobs::JobResponse {
-            id: metadata.id.clone(),
-            status: metadata.status.clone(),
-            output_path: metadata.output_path.clone(),
-            bbox: metadata.bbox.clone(),
-            flood_report_path: metadata.flood_report_path.clone(),
-            flood_geojson_path: metadata.flood_geojson_path.clone(),
-        }))
+        Ok(Json(metadata.to_response()))
     } else {
         Err(StatusCode::NOT_FOUND)
     }
@@ -707,17 +712,18 @@ pub async fn download_stream_handler(
     tokio::fs::create_dir_all("data").await.ok();
 
     // Determine normalized filename
-    let filename = if id.ends_with(".h5") || id.ends_with(".nc") || id.ends_with(".tif") {
-        id.clone()
-    } else if let Some(url_filename) = url.split('?').next().and_then(|u| u.split('/').last()).filter(|f| f.contains('.')) {
-        url_filename.to_string()
-    } else {
-        let extension = if url.contains(".nc") { "nc" } else { "h5" };
-        if id.contains("-GUNW-") {
-            format!("{}.{}", id.replace("-GUNW-", "_GUNW_"), extension)
-        } else {
-            format!("{}.{}", id, extension)
-        }
+    let extension = if url.contains(".nc") { "nc" } else { "h5" };
+    let url_file = url
+        .split('?')
+        .next()
+        .and_then(|u| u.split('/').last())
+        .filter(|f| f.contains('.'));
+
+    let filename = match url_file {
+        _ if id.ends_with(".h5") || id.ends_with(".nc") || id.ends_with(".tif") => id.clone(),
+        Some(f) => f.to_string(),
+        None if id.contains("-GUNW-") => format!("{}.{}", id.replace("-GUNW-", "_GUNW_"), extension),
+        None => format!("{}.{}", id, extension),
     };
 
     let filepath = format!("data/{}", filename);
@@ -809,10 +815,9 @@ pub async fn download_stream_handler(
 
         if !response.status().is_success() {
             let status_code = response.status();
-            let err_msg = if status_code.as_u16() == 401 || status_code.as_u16() == 403 {
-                "Earthdata authentication failed (401/403). Please verify your Earthdata credentials or Token.".to_string()
-            } else {
-                format!("HTTP error status: {}", status_code)
+            let err_msg = match status_code.as_u16() {
+                401 | 403 => "Earthdata authentication failed (401/403). Please verify your Earthdata credentials or Token.".to_string(),
+                code => format!("HTTP error status: {}", code),
             };
             let _ = tx.send(Ok(Event::default().json_data(json!({
                 "status": "error",

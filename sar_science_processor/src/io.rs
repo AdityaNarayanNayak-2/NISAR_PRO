@@ -1452,7 +1452,8 @@ pub fn save_flood_geojson(
                     },
                     "properties": {
                         "confidence": conf_str,
-                        "class_code": class
+                        "class_code": class,
+                        "class_name": conf_str
                     }
                 });
                 features.push(feature);

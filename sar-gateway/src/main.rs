@@ -39,7 +39,7 @@ async fn main() {
         .route("/search/nisar", get(handlers::search_nisar_handler))
         .route("/assets/search", get(handlers::search_assets_handler))
         .route("/context", get(handlers::context_handler))
-        .route("/jobs", post(handlers::start_job_handler))
+        .route("/jobs", get(handlers::list_jobs_handler).post(handlers::start_job_handler))
         .route("/upload", post(handlers::upload_handler))
         .route("/jobs/health-ping", get(|| async { axum::Json(serde_json::json!({ "status": "ok" })) }))
         .route("/jobs/:id", get(handlers::get_job_handler))

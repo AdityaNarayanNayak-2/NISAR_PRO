@@ -35,7 +35,7 @@ pub struct SarJobStatus {
     pub message: String,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum JobStatus {
     Queued,
@@ -74,6 +74,71 @@ pub struct JobResponse {
     pub bbox: Option<GeoBbox>,
     pub flood_report_path: Option<String>,
     pub flood_geojson_path: Option<String>,
+}
+
+impl JobMetadata {
+    pub fn get_bbox_with_fallback(&self) -> Option<GeoBbox> {
+        if let Some(ref bb) = self.bbox {
+            return Some(bb.clone());
+        }
+        if self.status == JobStatus::Completed {
+            if let Some(ref report_path) = self.flood_report_path {
+                let fs_path = report_path.trim_start_matches('/');
+                let candidates = [
+                    std::path::PathBuf::from(fs_path),
+                    std::path::PathBuf::from("results").join(fs_path.trim_start_matches("results/")),
+                ];
+                for path in &candidates {
+                    if let Ok(content) = std::fs::read_to_string(path) {
+                        if let Ok(report_json) = serde_json::from_str::<serde_json::Value>(&content) {
+                            if let Some(bbox_val) = report_json.get("georef_bbox") {
+                                if let Ok(bbox) = serde_json::from_value::<GeoBbox>(bbox_val.clone()) {
+                                    return Some(bbox);
+                                }
+                            }
+                            if let Some(crop) = report_json.get("crop") {
+                                if let (Some(center_lat), Some(center_lon)) = (
+                                    crop.get("center_lat").and_then(|v| v.as_f64()),
+                                    crop.get("center_lon").and_then(|v| v.as_f64()),
+                                ) {
+                                    let preset = crop.get("preset").and_then(|v| v.as_str()).unwrap_or("5x5km");
+                                    let (lat_half_km, lon_half_km) = match preset {
+                                        "1x1km" => (0.5, 0.5),
+                                        "5x5km" => (2.5, 2.5),
+                                        "1x2km" => (0.5, 1.0),
+                                        "10x10km" => (5.0, 5.0),
+                                        "20x20km" => (10.0, 10.0),
+                                        _ => (2.5, 2.5),
+                                    };
+                                    let lat_radius = lat_half_km / 111.0;
+                                    let cos_lat = center_lat.to_radians().cos().abs().max(0.01);
+                                    let lon_radius = lon_half_km / (111.0 * cos_lat);
+                                    return Some(GeoBbox {
+                                        south: center_lat - lat_radius,
+                                        north: center_lat + lat_radius,
+                                        west: center_lon - lon_radius,
+                                        east: center_lon + lon_radius,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn to_response(&self) -> JobResponse {
+        JobResponse {
+            id: self.id.clone(),
+            status: self.status.clone(),
+            output_path: self.output_path.clone(),
+            bbox: self.get_bbox_with_fallback(),
+            flood_report_path: self.flood_report_path.clone(),
+            flood_geojson_path: self.flood_geojson_path.clone(),
+        }
+    }
 }
 
 // Convert SarJobStatus phase to internal JobStatus
@@ -409,6 +474,14 @@ async fn spawn_local_job(
             } else {
                 m.output_path = Some(format!("/results/{}.tif", job_id));
             }
+
+            // Fallback: If bbox was not captured via SSE georef event, read from flood report JSON
+            if m.bbox.is_none() {
+                if let Some(fb_bbox) = m.get_bbox_with_fallback() {
+                    m.bbox = Some(fb_bbox);
+                }
+            }
+
             let _ = m.tx.send("[SYSTEM] PROCESS_COMPLETED".to_string());
             info!("Job {} completed successfully", job_id);
         } else {

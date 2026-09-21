@@ -828,6 +828,12 @@ fn main() -> Result<()> {
                     "center_lon": crop_lon,
                     "preset": cli.crop_preset
                 },
+                "georef_bbox": bbox.as_ref().map(|bb| serde_json::json!({
+                    "south": bb.south,
+                    "north": bb.north,
+                    "west": bb.west,
+                    "east": bb.east
+                })),
                 "areas": {
                     "total_area_acres": total_area_acres,
                     "permanent_water_acres": permanent_water_acres,

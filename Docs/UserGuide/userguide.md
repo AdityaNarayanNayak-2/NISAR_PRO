@@ -211,3 +211,49 @@ When you run an InSAR job, `sar_processor` goes through these processing steps:
 
 ### ❌ Dashboard says: `GATEWAY: DISCONNECTED`
 * **Fix**: The frontend can't reach the backend. Check the terminal window running `sar-gateway` (Step 2.3) and make sure the server is still running on port 3000.
+
+---
+
+## ⚡ 7. Tactical Operations & Keyboard Shortcuts (Phase 2 Command Center)
+
+The dashboard includes tactical control features for fast-paced analysis:
+
+### 7.1 Real-Time 5-Stage Progress Tracker
+When processing begins, a telemetry bar appears below the header tracking the 5 internal pipeline phases in real-time:
+* **`1: LOADING ACTIVE`**: Ingesting active pass SLC/GCOV metadata and bounding boxes.
+* **`2: LOADING BASELINE`**: Aligning reference baseline scene.
+* **`3: DETECTING`**: Computing log-ratio changes and running multi-threshold region growing.
+* **`4: OUTPUTS`**: Exporting transparent GeoTIFF overlays, GeoJSON vector contours, and audit reports.
+* **`5: COMPLETE`**: Finalizing artifacts and readying map layers.
+
+### 7.2 Map Layer Controls & Opacity Slider
+A floating tactical panel (`top: 90px`, left side of the map) allows tuning the visual overlay:
+* **Overlay Opacity Slider**: Fine-tune transparency of satellite rasters against base maps from 0% to 100%.
+* **Classification Toggles**: Independently enable or disable specific water/flood categories:
+  * 🔵 **Permanent Water** (Baseline reference water bodies)
+  * 🔴 **High Confidence Flood** (Direct specular reflection anomalies)
+  * 🟠 **Moderate Confidence Flood** (Region growing expansion zones)
+  * 🟡 **Low Confidence Flood** (Border inundation fringes)
+
+### 7.3 Recent Runs Sidebar
+Located directly below the layer controls, this panel displays all processing jobs:
+* **Status Indicators**: 🟢 Completed, 🟡 In-Progress (pulsing), 🔴 Failed.
+* **Instant Inspection**: Click any historical run to immediately load its polygons and rasters onto the map and center the viewport.
+
+### 7.4 Keyboard Shortcuts Reference
+Navigate the dashboard without reaching for the mouse:
+
+| Key | Action | Description |
+|:---:|---|---|
+| <kbd>T</kbd> | **Toggle Terminal** | Opens or minimizes the streaming processor log drawer. |
+| <kbd>Esc</kbd> | **Close Overlays** | Closes report modals or slides down the terminal. |
+| <kbd>N</kbd> | **New Run** | Clears the active result and returns to configuration. |
+| <kbd>R</kbd> | **View Report** | Opens the comprehensive flood assessment report. |
+| <kbd>1</kbd> | **Map View** | Jump to the primary satellite GIS map view. |
+| <kbd>2</kbd> | **Time Series** | Open multi-temporal flood evolution graphs. |
+| <kbd>3</kbd> | **Regions View** | Explore tabular polygon flood areas and confidence metrics. |
+| <kbd>4</kbd> | **Processing Telemetry** | Inspect backend processor parameters and timings. |
+| <kbd>5</kbd> | **Data Exports** | Access downloadable GeoJSON, GeoTIFF, and PDF reports. |
+
+*(Note: Shortcuts are automatically paused when typing into any search bar, coordinate input, or form field).*
+
