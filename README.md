@@ -1,187 +1,117 @@
-# NISAR Pro — Synthetic Aperture Radar (SAR) Analysis Suite
+# NISAR Pro
 
-> **Zero-Upload · Local-First Edge Processing · Dual-Profile Visualization**
+**Flood maps, dam deformation, and SAR science — computed locally from NASA–ISRO NISAR data.**
 
-A high-performance Synthetic Aperture Radar (SAR) processing platform written in **pure Rust**, designed for the NASA-ISRO NISAR mission ecosystem. From raw HDF5 orbital data to millimeter-level georeferenced displacement maps — without leaving your local environment.
+NISAR Pro is a local-first SAR analysis workspace. You pick a flood event or a dam, the dashboard finds the relevant NISAR L2 granules, and the Rust compute engine on your own machine turns them into change maps, inundation polygons, and millimeter-level displacement plots. Your data never leaves your hardware.
 
-![End-to-End Architecture](Docs/assets/architecture_overview.png)
+## What it looks like
 
----
+**[Live demo → https://nisar-pro.pages.dev](https://nisar-pro.pages.dev)**
 
-## ⚡ Core Capabilities
+A real flood run on the Upper Kolab Reservoir — 145.45 acres of new inundation detected from a 12-day GCOV pair:
 
-| Capability | Technical Realization |
-|:---|:---|
-| **High-Fidelity Parser** | Multi-channel HDF5 parser handling RSLC, GSLC, GCOV, and GUNW products with zero-copy operations. |
-| **InSAR & PS-InSAR** | Phase unwrapping, coherence estimation, and persistent scatterer (PS) identification down to millimeter-scale accuracy. |
-| **Millimeter Scaling** | Physical deformation extraction using wavelength-specific phase conversion: $\text{disp}_{mm} = \frac{\phi \cdot \lambda \cdot 1000}{4\pi}$. |
-| **Interoperable GeoTIFFs** | Export of results with standard ASCII tags (including GDAL NoData `42113`) for seamless GIS integration. |
-| **Integrals-CFAR Detection** | O(1) integral-image-accelerated CA-CFAR target classifier for real-time maritime tracking. |
-| **Dynamic Web Dashboard** | Modern React + Leaflet control plane with real-time Server-Sent Events (SSE) streaming logs and TiTiler COG rendering. |
+![Flood analysis result](sar-dashboard-v3/public/landing/flood-analysis-result.png)
 
----
+The full workspace — search AOI, acquisition slots, and the pipeline monitor:
 
-## 🏗️ Dual-Profile Architecture
+![Flood workspace](sar-dashboard-v3/public/landing/flood-workspace-full.png)
 
-NISAR Pro utilizes a **Cloud-Control / Local-Compute** architecture. The client-side dashboard acts as a control plane while the heavy computation takes place entirely on your local machine, ensuring absolute data sovereignty and security.
+Infrastructure monitoring profile (dam deformation / persistent scatterers):
 
-```
-┌────────────────────────────────────────┐         ┌──────────────────────────────┐
-│  Cloud Control Plane (Static SPA)      │  HTTP   │  Local Compute Engine        │
-│  ───────────────────────────────────   │ ──────► │  ──────────────────────────  │
-│  - GitHub Pages / GitLab Pages Hosting │  :3000  │  - Axum HTTP Gateway (:3000) │
-│  - Leaflet Map (TiTiler COG Layer)     │         │  - Rust CLI Processor        │
-│  - SSE Live Log Terminal & Legend      │         │  - Raw HDF5 Data Storage     │
-└────────────────────────────────────────┘         └──────────────────────────────┘
-                                                    ▲ Data never leaves your machine!
-```
+![Infrastructure monitoring](sar-dashboard-v3/public/landing/infra-monitoring-result.png)
 
-### 🛰️ 1. Infrastructure Monitoring Profile
-* **Target Application**: Structural integrity, land subsidence, and reservoir dam tracking (e.g. Hirakud Dam).
-* **Processing Pipeline**: GUNW InSAR fast-path or multi-baseline coherence processing.
-* **Visualization**: Interactive colormapped deformation maps (`-20` to `+20` mm scaling) overlaying colored Persistent Scatterer (PS) dots classified by structural risk level (Stable, Caution, Alert, Critical).
+System architecture at a glance:
 
-### 🔬 2. SAR Science Profile
-* **Target Application**: Environmental classification, biomass estimation, and polarimetric land-cover scans.
-* **Processing Pipeline**: GCOV covariance processing, amplitude mapping, and polarimetric Pauli RGB decomposition.
-* **Visualization**: Raw radar backscatter imagery served as Cloud-Optimized GeoTIFFs (COGs).
+![Architecture overview](Docs/assets/architecture_overview.png)
 
----
+## What it does
 
-## 🚀 Quick Start (Local Run)
+- **Flood detection** — multi-temporal change detection on GCOV pairs: radiometric calibration, speckle suppression, log-ratio change, adaptive thresholding, two-threshold region growing, and confidence scoring (7-stage pipeline in `flood_detect.rs`).
+- **Dam & infrastructure monitoring** — InSAR (GUNW) processing and persistent-scatterer classification to track deformation down to millimeter scale.
+- **SAR science** — covariance processing, amplitude mapping and polarization analysis from GCOV / GSLC / RSLC products.
+- **ASF catalog integration** — search and stream-download NISAR granules with progress, straight from the dashboard (NASA CATALOG mode).
 
-### Windows PowerShell
+The dashboard talks to a local gateway over HTTP/SSE; the gateway shells out to the Rust CLI worker. Both run on your machine.
 
-Use three terminals. The processor is a worker launched by the gateway; it is not a separate long-running server.
+## Quick start
 
-**Terminal 1 — build the flood processor once:**
+### Windows (recommended)
+
+Run three terminals:
 
 ```powershell
-cd D:\nisar\nisar_pro\sar_science_processor
+# Terminal 1 — build the compute engine once
+cd sar_science_processor
 cargo build
-```
 
-**Terminal 2 — start the gateway:**
-
-```powershell
-cd D:\nisar\nisar_pro\sar-gateway
+# Terminal 2 — start the local gateway
+cd sar-gateway
 $env:LOCAL_MODE = "true"
 $env:RUST_LOG = "info"
 cargo run
+
+# Terminal 3 — start the dashboard
+cd sar-dashboard-v3
+npm install
+npm run dev
 ```
 
-**Terminal 3 — start the dashboard:**
+Open <http://127.0.0.1:5173/>. Keep Terminals 2 and 3 open while using the app.
 
-```powershell
-cd D:\nisar\nisar_pro\sar-dashboard-v3
-npm.cmd install
-npm.cmd run dev
-```
+### Linux / macOS
 
-Open <http://127.0.0.1:5173/>. Keep Terminals 2 and 3 open while using the app. See the full [Windows local run guide](Docs/UserGuide/windows-local-run.md) for troubleshooting.
-
-### System Dependencies
 ```bash
-# Ubuntu / Debian
-sudo apt update && sudo apt install -y libhdf5-dev
+# 1. compute engine
+cd sar_science_processor && cargo build
 
-# macOS (Homebrew)
-brew install hdf5
-```
-
-### 1. Compile the Compute Engine
-```bash
-cd sar_processor
-cargo build --release
-```
-
-### 2. Run the Gateway
-```bash
+# 2. gateway
 cd ../sar-gateway
-LOCAL_MODE=true RUST_LOG=info cargo run --release
-```
+LOCAL_MODE=true RUST_LOG=info cargo run
 
-### 3. Launch the Frontend
-The React Dashboard is built and served via Vite:
-```bash
+# 3. dashboard
 cd ../sar-dashboard-v3
 npm install
 npm run dev
-# Open http://localhost:5173/app
 ```
 
----
+### Earthdata credentials
 
-## 📂 Codebase Directory Structure
+Catalog search and download need NASA Earthdata credentials. Set them in `sar-gateway/.env` (this file is git-ignored, never commit it):
 
 ```
-sar_analyzer/
-├── sar_processor/          → High-performance Rust compute engine
-│   ├── src/
-│   │   ├── main.rs         → CLI dispatcher & processor coordinator
-│   │   ├── gunw_parser.rs  → NISAR GUNW unwrapped product parser
-│   │   ├── nisar_parser.rs → NISAR HDF5 reader & coordinate transformer
-│   │   ├── coregister.rs   → Sinc-interpolation sub-pixel image coregistrator
-│   │   ├── insar.rs        → Coherence estimator & interferogram generator
-│   │   ├── infra_health.rs → Persistent Scatterer classification (PS-InSAR)
-│   │   ├── ship_detection.rs → O(1) Integral-image CA-CFAR detector
-│   │   └── io.rs           → Cloud-Optimized GeoTIFF & PNG tiles output engine
-│   └── archive/            → Legacy modules (RDA, RCMC) kept for reference
-│
-├── sar-gateway/            → Axum-based web gateway (REST + SSE)
-│   └── src/
-│       ├── handlers.rs     → HTTP request/response handlers & stream builders
-│       └── jobs.rs         → Subprocess job supervisor
-│
-├── sar-dashboard-v3/       → Modern React + Vite control plane
-│   └── src/
-│       ├── pages/app/      → AppDashboard, Infrastructure, & SAR Science panels
-│       └── config/api.js   → Multi-environment backend URL mapper
-│
-└── .gitlab-ci.yml          → Parallelized GitLab CI/CD workflow
+EARTHDATA_USERNAME=you@example.com
+EARTHDATA_PASSWORD=...
+
+# or a single bearer token:
+EARTHDATA_TOKEN=...
 ```
 
----
+If you're set up for ESA S-band data, add `ESA_USERNAME` / `ESA_PASSWORD` likewise.
 
-## 🔧 CLI Syntax Examples
+## Repository layout
 
-To run the SAR Processor directly from the terminal:
-
-### 1. Process GUNW InSAR Product (Infrastructure Monitoring)
-```bash
-./target/release/sar_processor \
-  --input /path/to/NISAR_L2_PR_GUNW_..._001.h5 \
-  --output ./results/dam_displacement.tif \
-  --crop-lat 21.5339 --crop-lon 83.8751 --crop-radius-km 10.0
+```
+nisar_pro/
+├── sar-dashboard-v3/       React + Leaflet + Vite dashboard (workspace, landing, /docs)
+├── sar-gateway/            Async Axum gateway — REST + SSE, job supervisor, ASF/ESA clients
+├── sar_science_processor/  Pure-Rust science engine (flood detection, InSAR)
+├── sar_processor/          Processor build tree (CLI workers)
+├── sar_operator_v2/        Kubernetes operator (job CRDs)
+├── Docs/                   The documentation hub
+└── .github/                Workflow automation
 ```
 
-### 2. Process GCOV Product (SAR Science)
-```bash
-./target/release/sar_processor \
-  --input /path/to/NISAR_L2_PR_GCOV_..._001.h5 \
-  --output ./results/gcov_science.tif
-```
+## Documentation
 
-### 3. Run CA-CFAR Ship Detection
-```bash
-./target/release/sar_processor \
-  --input /path/to/scene.h5 \
-  --ship-detect \
-  --cfar-max-detections 100
-```
+The docs live in [`Docs/`](Docs/README.md) and are also rendered inside the dashboard at the `/docs` route.
 
----
+- **User guides** — [Getting Started](Docs/UserGuide/getting-started.md), [Windows local run](Docs/UserGuide/windows-local-run.md), the [friendly manual](Docs/UserGuide/userguide.md), [API reference](Docs/UserGuide/api-reference.md), and an [InSAR verification log](Docs/UserGuide/insar-verification-log.md).
+- **Architecture** — the [7-stage flood pipeline](Docs/Architecture/flood_detection_pipeline.md), [processor internals](Docs/Architecture/sar_processor_internals.md), [gateway orchestration](Docs/Architecture/gateway_orchestration.md), and a [design index](Docs/Architecture/architecture-diagrams.md).
 
-## 📚 Technical Documentation
+## Tech stack
 
-For a deeper dive into the system implementation, review our technical docs:
+Rust (HDF5/ndarray) · Axum + tokio · React + Leaflet + Vite · TiTiler COGs · SSE streaming
 
-* **Architecture**: [Project Journey](Docs/Architecture/project_journey.md) · [Processor Internals](Docs/Architecture/sar_processor_internals.md) · [Gateway Internals](Docs/Architecture/sar_gateway_internals.md)
-* **Algorithms**: [CFAR Ship Detection](Docs/Algorithms/cfar_ship_detection.md) · [InSAR Processing](Docs/Algorithms/insar_processing.md)
-* **Diagrams**: [System Architecture Diagrams](Docs/Architecture/architecture-diagrams.md)
+## License
 
----
-
-## 🛡️ License
-
-See [LICENSE](LICENSE) for details.
+See [LICENSE](LICENSE).

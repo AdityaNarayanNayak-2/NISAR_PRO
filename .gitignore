@@ -29,3 +29,5 @@ SarScienceFrontendExample/
 .env
 *.secret.yaml
 .png
+# Cloudflare Pages local state
+.wrangler/
