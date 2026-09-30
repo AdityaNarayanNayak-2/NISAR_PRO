@@ -89,6 +89,17 @@ The HTTP gateway integrates the flood mapping pipeline within `spawn_processing_
 - **API Request Payload**: Expands `ProcessRequest` in `models.rs` to support the optional parameters `gunw_file`, `min_change_db`, `seed_threshold_db`, `growth_threshold_db`, and `min_area_pixels`.
 - **Subprocess Dispatch**: Translates `pipeline: Some("flood")` and `processor: Some("science")` into the CLI execution call `./target/release/sar_science_processor --mode flood`, forwarding any custom threshold specifications.
 - **Dynamic Artifact Paths**: Modifies job response payloads (`JobResponse` / `JobMetadata`) to directly return the generated report and vector overlay paths (`flood_report_path` and `flood_geojson_path`), eliminating hardcoded layout path logic on client frontends.
+
+### Verified artifact set (real run)
+A completed flood job writes files into `results/`, all derived from the job id `<id>`:
+- `<id>_flood.png` — transparent RGBA overlay (Leaflet image overlay).
+- `<id>_flood.json` — classification report (`flood_report_path`).
+- `<id>_flood.geo.json` — GeoJSON feature collection (`flood_geojson_path`).
+- `<id>_flood_baseline.png` / `<id>_flood_active.png` — baseline/active visualizations (`flood_baseline_path` / `flood_active_path`).
+- `<id>_flood_class.tif` — classification GeoTIFF. Written by the processor, but **not advertised** in `GET /jobs/:id`. The dashboard derives its export link from the report-path basename.
+
+### Memory reality for flood runs
+Flood detection needs **two** GCOV products (active + baseline). Real GCOV files are 8–10 GB each and are read into RAM as f32 before cropping (no partial reads), so a full-scale run needs ~60–80 GB peak RAM this way — beyond an 8 GB laptop. The small bundled test products are the ones that run locally today; a chunked-read fix is planned to make real products feasible.
 - **Structured Progress Streams**: Intercepts stdout log messages from the child process. The processor emits JSON progress events:
   ```json
   {"event":"progress","stage":"SUBMITTED"|"PROCESSING"|"GENERATING_OUTPUTS"|"COMPLETE"|"FAILED","message":"..."}

@@ -16,7 +16,7 @@ function getStageIndex(currentStage) {
     return idx >= 0 ? idx : 0;
 }
 
-export default function ProcessingProgressBar({ profile = 'flood' }) {
+export default function ProcessingProgressBar({ profile = 'flood', onCancel }) {
     const activeJobId = useJobStore(state => state.activeJobId);
     const jobs = useJobStore(state => state.jobs);
     const activeJobStage = useJobStore(state => state.activeJobStage);
@@ -131,6 +131,28 @@ export default function ProcessingProgressBar({ profile = 'flood' }) {
                     );
                 })}
             </div>
+            <button
+                onClick={() => onCancel?.(activeJob.id)}
+                style={{
+                    marginLeft: '8px',
+                    padding: '4px 10px',
+                    background: 'transparent',
+                    border: '1px solid rgba(192, 57, 43, 0.7)',
+                    color: '#C0392B',
+                    fontFamily: MONO,
+                    fontSize: '9px',
+                    fontWeight: 600,
+                    letterSpacing: '0.06em',
+                    cursor: 'pointer',
+                    borderRadius: '2px',
+                    flexShrink: 0,
+                }}
+                onMouseEnter={e => { e.target.style.background = 'rgba(192, 57, 43, 0.15)'; }}
+                onMouseLeave={e => { e.target.style.background = 'transparent'; }}
+                title="Send cancel request to the gateway"
+            >
+                ✕ CANCEL
+            </button>
         </div>
     );
 }

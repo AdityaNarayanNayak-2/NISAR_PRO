@@ -19,6 +19,7 @@ export default function FloodConfigPanel({
     growthThresholdDb, setGrowthThresholdDb,
     minAreaPixels, setMinAreaPixels,
     downloadProgress, handleAcquireAndProcess,
+    onCancel,
 }) {
     const accent = C.accent.flood;
     const activeBg = 'rgba(42, 139, 145, 0.08)';
@@ -418,9 +419,15 @@ export default function FloodConfigPanel({
                 </button>
             )}
             {runningJobs.length > 0 && (
-                <div style={{ marginTop: '8px', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
+                <div style={{ marginTop: '8px', padding: '8px', background: C.bg1, border: '1px solid rgba(230, 168, 23, 0.4)', borderRadius: '2px', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
                     <div>ELAPSED  {formatElapsed(elapsed[runningJobs[0]?.id])}</div>
                     <div>JOB ID   {runningJobs[0]?.id?.slice(0, 8)}</div>
+                    <button
+                        onClick={() => onCancel && onCancel(runningJobs[0]?.id)}
+                        style={{ width: '100%', marginTop: '6px', padding: '5px 8px', background: 'transparent', border: '1px solid rgba(192, 57, 43, 0.8)', color: '#C0392B', fontFamily: MONO, fontSize: '10px', fontWeight: 600, cursor: 'pointer', borderRadius: '2px' }}
+                        onMouseEnter={e => { e.target.style.background = 'rgba(192, 57, 43, 0.15)'; }}
+                        onMouseLeave={e => { e.target.style.background = 'transparent'; }}
+                    >✕ CANCEL RUN</button>
                 </div>
             )}
 
@@ -441,6 +448,11 @@ export default function FloodConfigPanel({
                                 {elapsed[job.id] != null && formatElapsed(elapsed[job.id])}
                             </span>
                         </div>
+                        {job.status === 'failed' && (
+                            <div style={{ marginTop: '6px', fontFamily: MONO, fontSize: '9px', color: C.critical, wordBreak: 'break-all', lineHeight: 1.5 }}>
+                                {job.error || 'Processing failed'}
+                            </div>
+                        )}
                         {job.status === 'completed' && (
                             <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
                                 <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, floodReport: job.floodReport, floodGeoJson: job.floodGeoJson, floodReportPath: job.floodReportPath, floodGeoJsonPath: job.floodGeoJsonPath, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}

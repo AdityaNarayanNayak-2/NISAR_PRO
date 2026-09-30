@@ -50,3 +50,27 @@ export const formatElapsed = (secs) => {
     const s = secs % 60;
     return m > 0 ? `${m}m ${s}s` : `${s}s`;
 };
+
+// The gateway serializes JobStatus::Failed as an object {"failed":"message"}.
+// Normalize any inbound status (object or string) to a stable string value.
+export function normalizeJobStatus(status) {
+    if (status && typeof status === 'object') {
+        if ('failed' in status) return 'failed';
+        if ('cancelled' in status) return 'failed';
+        return 'unknown';
+    }
+    const norm = String(status ?? '').toLowerCase();
+    if (norm === 'failed' || norm === 'cancelled') return 'failed';
+    if (norm === 'queued' || norm === 'running' || norm === 'completed') return norm;
+    return norm || 'unknown';
+}
+
+// Extract a human-readable error message from a job status value, if present.
+export function jobErrorMessage(status) {
+    if (status && typeof status === 'object') {
+        if (typeof status.failed === 'string') return status.failed;
+        if (typeof status.cancelled === 'string') return status.cancelled;
+        if (typeof status.error === 'string') return status.error;
+    }
+    return null;
+}

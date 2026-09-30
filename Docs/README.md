@@ -2,75 +2,66 @@
 
 Welcome to the documentation index for **NISAR Pro** — a high-performance Synthetic Aperture Radar (SAR) processing platform. This directory acts as the central map for developers, operators, and DevOps engineers navigating the technical architecture, algorithms, and deployment workflows.
 
+> TIP: The dashboard also renders these documents at the `/docs` route — the same markdown, live.
+
 ---
 
 ## 📚 Documentation Index
 
-### 🏁 1. Operational & Setup Guides (`Docs/Guides/`)
-Step-by-step instructions on setting up, operating, testing, and deploying the application.
+### 🏁 1. Operational & Setup Guides (`Docs/UserGuide/`)
+Step-by-step instructions on setting up, running, and verifying the platform.
 
 | Document | Description | Target Audience |
 | :--- | :--- | :--- |
-| 🚀 [Getting Started](./Guides/getting-started.md) | Setup local environments, compile binary dependencies, run developer servers. | Developers |
-| 📡 [InSAR Analyst Guide](./Guides/insar_analyst_guide.md) | Operations manual for monitoring reservoir dam displacement and land deformation. | Operators / Analysts |
-| 🔌 [API Reference](./Guides/api-reference.md) | Detailed endpoints, SSE schemas, and payload specifications for the gateway. | Integrators / Devs |
-| ☸️ [Deployment Guide](./Guides/deployment.md) | Infrastructure provision via Terraform, K3s, and Flux CD GitOps loops on AWS. | DevOps Engineers |
-| 🧪 [Verification Guide](./Guides/verification-guide.md) | Automated and manual validation routines for core engine services. | QA / DevOps |
-| 📝 [InSAR Verification Log](./Guides/insar-verification-log.md) | Real-world testing findings (e.g. Upper Kolab Dam run) and historical bug fixes. | QA / Developers |
-| 🔬 [ISCE3 Integration](./Guides/isce3-integration.md) | Architecture notes on integration options with NASA-JPL's C++ ISCE3 library. | Radar Scientists |
+| 🪟 [Getting Started](./UserGuide/getting-started.md) | Prerequisites, clone, running the dashboard and gateway, and environment variables. | Developers |
+| 💻 [Windows Local Run](./UserGuide/windows-local-run.md) | The recommended PowerShell workflow: build once, gateway on port 3000, dashboard on 5173. | Developers / Operators |
+| 🛰️ [Friendly User Guide](./UserGuide/userguide.md) | Companion manual: install, GCOV vs GUNW cheat sheet, monitoring a dam, the math made simple, troubleshooting, keyboard shortcuts. | Everyone |
+| 🧪 [Verification & Testing Guide](./UserGuide/verification-guide.md) | Phase-by-phase service startup checks and health verification routines. | QA / DevOps |
+| 📝 [InSAR Verification Log](./UserGuide/insar-verification-log.md) | Real-world testing findings (e.g. Upper Kolab Dam run) and historical bug fixes. | QA / Developers |
+| ☸️ [Deployment Guide](./UserGuide/DevOpsGuide.md) | Terraform AWS IaC, K3s cluster, Flux CD GitOps, ingress/TLS via sslip.io, GitLab CI, and a monthly cost breakdown. | DevOps Engineers |
+| 🧱 [Dam & Infrastructure Monitoring](./UserGuide/dam_monitoring.md) | Reservoir safety, virtual sensor concept, processing workflow, and visualization. | Operators / Analysts |
+| 🔌 [API Reference](./UserGuide/api-reference.md) | Gateway REST endpoints, SSE schemas, and payload specifications. | Integrators / Devs |
 
 ---
 
 ### 🏗️ 2. Architectural Design (`Docs/Architecture/`)
-Deeper dives into the structural layout and internals of individual system modules.
+Deeper dives into the structural layout and internals of individual system modules. Algorithm math (coherence, phase unwrapping, deramping, and ship-detection CFAR) is covered in [Core SAR Mathematics](./Architecture/core_sar_mathematics.md); the 7-stage flood engine in [Flood Detection Pipeline](./Architecture/flood_detection_pipeline.md).
 
 | Document | Description | Key Topics Covered |
 | :--- | :--- | :--- |
-| 🗺️ [Project Journey](./Architecture/project_journey.md) | Timeline of design iterations, architectural shifts, and technical decisions. | Evolution, Tech choices |
-| 📐 [Architecture Diagrams](./Architecture/architecture-diagrams.md) | Mermaid visuals of data pathways, component relationships, and deployment trees. | Topology, UML |
-| 🔬 [Processor Internals](./Architecture/sar_processor_internals.md) | Low-level design of the pure-Rust math engine, HDF5 parsing, and GeoTIFF generation. | ndarray, rustyhdf5, deramping |
-| 📥 [Processor Ingestion Walkthrough](./Architecture/processor_ingestion.md) | Trace of CLI parsing, HDF5 reads, spatial cropping, and invalid pixel masking. | clap, rustyhdf5, hyperslabs |
-| 🧮 [Core SAR Mathematics Walkthrough](./Architecture/core_sar_mathematics.md) | Deep dive into 2D deramping, phase unwrapping algorithms, SAT, and CFAR. | Rust, Rayon, CFAR, SAT |
-| 📤 [Data Export & Health Walkthrough](./Architecture/data_export_and_health.md) | Breakdown of PS-InSAR MAD thresholding, raw GeoTIFF construction, and SSE emission. | IFD Tags, JSON, stdout |
-| 🦀 [Processor Code Walkthrough](./Architecture/sar_processor_walkthrough.md) | Exhaustive line-by-line guide of main.rs execution loops and supportive module bindings. | Rust variables, Rayon, H5 |
-| 🎛️ [Gateway Internals](./Architecture/sar_gateway_internals.md) | Thread safety design, tokio-spawn local supervisors, and K8s CRD job interfaces. | Axum, SSE, jobs scheduler |
-| 🎛️ [Gateway Orchestration Walkthrough](./Architecture/gateway_orchestration.md) | Line-by-line breakdown of Axum routes, job spawning, and SSE logs. | Axum, tokio, SSE |
-| 🖥️ [Dashboard Internals](./Architecture/sar_dashboard_internals.md) | Leaflet map layer structures, localStorage API bridges, and TiTiler COG pipelines. | react-leaflet, sslip.io, state |
+| 🗺️ [Platform Architecture & Ecosystem Blueprint](./Architecture/architecture-diagrams.md) | Mermaid topology, dual-path InSAR pipeline, math foundations, air-gapped security, multi-mission roadmap. | Topology, pipeline, security |
+| 🛤️ [Project Journey](./Architecture/project_journey.md) | Timeline of design iterations, architectural shifts, and technical decisions. | Evolution, tech choices |
+| 🎛️ [Gateway Internals](./Architecture/sar_gateway_internals.md) | Thread safety, tokio-spawn local supervisors, K8s CRD job interfaces. | Axum, SSE, jobs scheduler |
+| 🎛️ [Gateway Orchestration Walkthrough](./Architecture/gateway_orchestration.md) | Line-by-line breakdown of Axum routes, job spawning, and SSE log streaming. | Axum, tokio, SSE |
+| 🔬 [SAR Processor Internals](./Architecture/sar_processor_internals.md) | Pure-Rust math engine, HDF5 parsing, and GeoTIFF generation. | ndarray, rustyhdf5, deramping |
+| 🦀 [Processor Code Walkthrough](./Architecture/sar_processor_walkthrough.md) | Exhaustive line-by-line guide of main.rs execution loops and module bindings. | Rust, Rayon, H5 |
+| 📥 [Processor Ingestion & Subsetting](./Architecture/processor_ingestion.md) | CLI parsing, HDF5 reads, spatial cropping, invalid-pixel masking. | clap, rustyhdf5, read-then-slice (no hyperslabs) |
+| 🧮 [Core SAR Mathematics](./Architecture/core_sar_mathematics.md) | Interferogram & coherence (SAT), quality-guided phase unwrapping, deramping, CA-CFAR ship detection. | Rust, Rayon, CFAR, SAT |
+| 📤 [Data Export & Health Analysis](./Architecture/data_export_and_health.md) | PS-InSAR MAD thresholding, raw GeoTIFF construction, SSE emission. | IFD tags, JSON, stdout |
+| 🌊 [Flood Detection Pipeline](./Architecture/flood_detection_pipeline.md) | End-to-end 7-stage flood/inundation engine, output exporters, gateway + dashboard integration. | flood_detect.rs, exporters |
 | 🌊 [GUNW Data Flow](./Architecture/gunw_data_flow.md) | End-to-end trace of a GUNW file from upload to Leaflet and TiTiler rendering. | HDF5, Axum, udev, flow |
-| 📊 [Feasibility Analysis](./Architecture/feasibility_analysis.md) | Hardware requirements, memory footprints, and compute profiles for SAR science. | CPU/RAM margins, storage |
+| 🖥️ [Dashboard Internals](./Architecture/sar_dashboard_internals.md) | Leaflet map layer structures, localStorage API bridges, TiTiler COG pipelines. | react-leaflet, sslip.io, state |
 
 ---
 
-### 🧮 3. Core Algorithms (`Docs/Algorithms/`)
-Mathematical formulations, signal processing kernels, and classifier details.
-
-| Document | Description | Core Math |
-| :--- | :--- | :--- |
-| ⛰️ [InSAR Processing](./Algorithms/insar_processing.md) | Coherence estimation, baseline subtraction, phase unwrapping, and millimeters-scaling. | Wavelength phase conversion |
-| 🚢 [CFAR Ship Detection](./Algorithms/cfar_ship_detection.md) | O(1) constant-time CA-CFAR classifier accelerated by Summed Area Tables (Integral Images). | Thresholding, Pfa, SAT bounds |
+### 🖼️ 3. Diagrams & Assets (`Docs/assets/`)
+Visuals referenced throughout the docs — architecture overview, the recommended user workflow, and real flood-run screenshots.
 
 ---
 
-### 🌾 4. Operational Use Cases (`Docs/UseCases/`)
-Domain applications and profiles mapped to regional targets.
-
-| Document | Description | Primary Targets |
-| :--- | :--- | :--- |
-| 🧱 [Dam & Infrastructure Monitoring](./UseCases/dam_monitoring.md) | Reservoir safety tracking, displacement severity levels, and structural alerts. | Earthen/masonry dams |
-| ⚓ [Maritime Surveillance](./UseCases/maritime_surveillance.md) | Vessel tracking, dark ship detection, and coastal traffic monitoring. | EEZs, open sea lanes |
-
----
-
-## 🏗️ Repository Codebase Map
+## 🗺️ Repository Codebase Map
 
 For reference, the source code components are laid out as follows:
 
 ```
-sar_analyzer/
-├── sar_processor/      → High-performance pure-Rust compute engine (ndarray, rustyhdf5)
-├── sar-gateway/        → Async Axum REST/SSE api gateway (tokio, udev, kube-rs)
-├── sar-dashboard-v3/   → React client, Leaflet viewer, theme panels, connection checkers
-├── infra/              → Terraform files for provisioning AWS EC2, VPC, and GP3 EBS volumes
-├── k8s/                → Kubernetes deployment manifests and Flux CD GitOps sync policies
-└── Docs/               → Comprehensive documentation (You are here!)
+nisar_pro/
+├── sar_science_processor/  → Pure-Rust SAR science engine (RDA / InSAR / flood detection)
+├── sar_processor/          → SAR processing engine builds (CLI worker)
+├── sar-gateway/            → Async Axum REST/SSE API gateway (tokio, kube-rs)
+├── sar-dashboard-v3/       → React client, Leaflet viewer, /docs route
+├── sar_operator_v2/        → Kubernetes operator (job CRDs)
+├── Docs/                   → Comprehensive documentation (You are here!)
+└── .github/                → Workflow automation
 ```
+
+Note: `Docs/Archive/` and `Docs/Hireme/` are historical/out-of-band material and are not part of the active documentation index.

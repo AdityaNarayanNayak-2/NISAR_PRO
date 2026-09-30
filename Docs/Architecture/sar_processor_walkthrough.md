@@ -37,7 +37,7 @@ The parser opens the HDF5 file using `rustyhdf5::File::open`. It attempts to rea
 * `/science/LSAR/GUNW/grids/frequencyA/unwrappedInterferogram/yCoordinates` (Latitudes)
 
 **2. Calculating Crop Indices (Lines 154-227)**
-To avoid loading a 30 GB dataset into memory, the system uses the 1D coordinate arrays to calculate matrix bounds. 
+To find where the crop sits without touching the heavy pixel datasets, the system uses only the lightweight 1D coordinate arrays to calculate matrix bounds (this keeps the *validation* step cheap — the pixel read in step 3 still loads the whole grid).
 * It calculates `lat_radius` and `lon_radius` in degrees.
 * Calls `find_index_range(ys, lat_min, lat_max)` to find `row_start` and `row_end`.
 * Returns `crop_range = Some((row_start, row_end, col_start, col_end))`.

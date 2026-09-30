@@ -2,24 +2,24 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, ImageOverlay, GeoJSON, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { api, getGatewayUrl } from '../../config/api';
+import { api } from '../../config/api';
 import { Terminal, Play, ChevronDown, CheckCircle, AlertTriangle, Loader, Search, FolderOpen, Satellite, Eye, Download, ArrowLeft, MapPin, Calendar, Layers, X, Anchor, Crosshair, Waves, Palette, WifiOff, Clock, Info, Ship, FileText } from 'lucide-react';
 
-import { MONO, SANS, C, PROFILES, TM } from './constants';
-import { parseNisarFilename, sevColor, dispColor, formatBytes, formatElapsed } from './helpers';
+import { MONO, SANS, C, PROFILES, TM, INFRA_LAYOUT } from './constants';
+import { parseNisarFilename, normalizeJobStatus, jobErrorMessage } from './helpers';
 import { MapFlyTo, MapFlyToBounds, MapEventTracker, MapResizer, MapAoiDrawer } from './MapComponents';
 import L from 'leaflet';
 import InfrastructurePanel from './InfrastructurePanel';
 import WorkspaceSidebar from './flood/WorkspaceSidebar';
 import FloodInsightPanel from './flood/FloodInsightPanel';
 import FloodConfigPanel from './flood/FloodConfigPanel';
-import { parseFloodReport } from './flood/floodReportHelpers';
 import AnalysisReportModal from './flood/AnalysisReportModal';
 import TimeSeriesView from './flood/TimeSeriesView';
 import RegionsView from './flood/RegionsView';
 import ProcessingView from './flood/ProcessingView';
 import DataExportsView from './flood/DataExportsView';
 import SettingsView from './flood/SettingsView';
+import FloodEventReplay from './flood/FloodEventReplay';
 
 import { useGatewayStore } from './stores/useGatewayStore';
 import { useMapStore } from './stores/useMapStore';
@@ -39,7 +39,6 @@ function AppDashboard() {
     const gatewayOnline = useGatewayStore(state => state.gatewayOnline);
     const setGatewayOnline = useGatewayStore(state => state.setGatewayOnline);
 
-    const mouseCoords = useMapStore(state => state.mouseCoords);
     const setMouseCoords = useMapStore(state => state.setMouseCoords);
     const mapBounds = useMapStore(state => state.mapBounds);
     const setMapBounds = useMapStore(state => state.setMapBounds);
@@ -59,27 +58,25 @@ function AppDashboard() {
     const showHighConf = useMapStore(state => state.showHighConf);
     const showMedConf = useMapStore(state => state.showMedConf);
     const showLowConf = useMapStore(state => state.showLowConf);
+    const [replayPhase, setReplayPhase] = useState('detected');
 
     const jobs = useJobStore(state => state.jobs);
     const setJobs = useJobStore(state => state.setJobs);
-    const activeJobId = useJobStore(state => state.activeJobId);
     const setActiveJobId = useJobStore(state => state.setActiveJobId);
-    const logs = useJobStore(state => state.logs);
     const setLogs = useJobStore(state => state.setLogs);
-    const terminalOpen = useJobStore(state => state.terminalOpen);
     const setTerminalOpen = useJobStore(state => state.setTerminalOpen);
     const elapsed = useJobStore(state => state.elapsed);
     const setElapsed = useJobStore(state => state.setElapsed);
 
     // ── Panel & Form State (PRESERVED) ──
     const [dataMode, setDataMode] = useState('local');
-    const [localFilePath, setLocalFilePath] = useState('/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_026_055_A_011_4005_DHDH_A_20260724T000130_20260724T000204_P05023_N_F_J_001.h5');
+    // Keep file inputs portable: users choose paths that exist on their own machine.
+    const [localFilePath, setLocalFilePath] = useState('');
     const [selectedScene, setSelectedScene] = useState(null);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
-    const [pipeline, setPipeline] = useState('standard_rda');
     const terminalRef = useRef(null);
     const userScrolledUp = useRef(false);
     const [errorToast, setErrorToast] = useState(null);
@@ -100,7 +97,12 @@ function AppDashboard() {
     const [profile, setProfileState] = useState(initialProfile);
     const setProfile = useCallback((newProfile) => {
         setProfileState(newProfile);
-        try { localStorage.setItem('nisarpro_active_profile', newProfile); } catch (e) {}
+        if (newProfile === 'infrastructure') {
+            setDataMode('local');
+        }
+        try { localStorage.setItem('nisarpro_active_profile', newProfile); } catch (error) {
+            console.warn('Unable to persist active profile:', error);
+        }
     }, []);
     const [reportModalOpen, setReportModalOpen] = useState(paramReport);
     const [downloadProgress, setDownloadProgress] = useState(null);
@@ -113,12 +115,11 @@ function AppDashboard() {
     const [visibleLayers, setVisibleLayers] = useState({ deformation: true, coherence: false, amplitude: false });
     // Derive activeLayer for TileLayer: deformation takes priority
     const activeLayer = visibleLayers.deformation ? 'deformation' : visibleLayers.coherence ? 'coherence' : 'amplitude';
-    const [slaveFilePath, setSlaveFilePath] = useState('/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_009_055_A_011_4005_DHDH_A_20260101T000132_20260101T000206_X05009_N_F_J_001.h5');
+    const [slaveFilePath, setSlaveFilePath] = useState('');
     const [assetSearch, setAssetSearch] = useState('');
     const [assetResults, setAssetResults] = useState([]);
     const [assetSearchOpen, setAssetSearchOpen] = useState(false);
     const [assetState, setAssetState] = useState('');
-    const [contextFetchedAt, setContextFetchedAt] = useState(null);
 
     // ── SAR Science InSAR crop state ──
     const [cropLat, setCropLat] = useState('18.7883');
@@ -188,7 +189,7 @@ function AppDashboard() {
             const newUrl = `${window.location.pathname}?${currentParams.toString()}`;
             window.history.replaceState(null, '', newUrl);
         }
-    }, [viewingResult?.id, reportModalOpen, profile, activeView]);
+    }, [viewingResult?.id, reportModalOpen, profile, activeView, paramJobId]);
 
     // Ensure GeoJSON is fetched for persisted viewingResult if missing
     useEffect(() => {
@@ -202,18 +203,16 @@ function AppDashboard() {
                 })
                 .catch(console.error);
         }
-    }, [viewingResult?.id]);
+    }, [viewingResult, setViewingResult]);
 
     // Reset active view and selected region when changing profile, and preload completed flood runs from gateway
     useEffect(() => {
         if (profile === 'flood') {
             setSelectedRegion(null);
-            fetch(api('/jobs'))
+fetch(api('/jobs'))
                 .then(r => r.ok ? r.json() : [])
                 .then(async (allJobs) => {
-                    const jobsToProcess = (Array.isArray(allJobs) && allJobs.length > 0)
-                        ? allJobs
-                        : [{ id: 'sar-e4efe049', output_path: '/results/sar-e4efe049_flood.png', flood_report_path: '/results/sar-e4efe049_flood.json', flood_geojson_path: '/results/sar-e4efe049_flood.geo.json' }];
+                    const jobsToProcess = (Array.isArray(allJobs) && allJobs.length > 0) ? allJobs : [];
 
                     const loadedJobs = {};
                     for (const j of jobsToProcess) {
@@ -222,9 +221,7 @@ function AppDashboard() {
                             const floodReport = await fetch(api(j.flood_report_path)).then(r => r.ok ? r.json() : null);
                             if (!floodReport) continue;
                             const jobBounds = j.bbox ? [[j.bbox.south, j.bbox.west], [j.bbox.north, j.bbox.east]] : null;
-                            const label = j.id === 'sar-e4efe049'
-                                ? 'UPPER KOLAB FLOOD EVENT (HISTORICAL)'
-                                : (floodReport.crop?.preset ? `RUN: ${floodReport.crop.preset} (${j.id.slice(0, 8)})` : `RUN (${j.id.slice(0, 8)})`);
+                            const label = floodReport.crop?.preset ? `RUN: ${floodReport.crop.preset} (${j.id.slice(0, 8)})` : `RUN (${j.id.slice(0, 8)})`;
 
                             loadedJobs[j.id] = {
                                 id: j.id,
@@ -234,6 +231,9 @@ function AppDashboard() {
                                 floodReport,
                                 floodReportPath: j.flood_report_path,
                                 floodGeoJsonPath: j.flood_geojson_path,
+                                floodBaselinePath: j.flood_baseline_path,
+                                floodActivePath: j.flood_active_path,
+                                floodReplayAvailable: Boolean(j.flood_baseline_path && j.flood_active_path && floodReport.replay?.available),
                                 pipeline: 'flood',
                                 bbox: j.bbox,
                                 bounds: jobBounds,
@@ -246,9 +246,9 @@ function AppDashboard() {
                     if (Object.keys(loadedJobs).length > 0) {
                         setJobs(prev => ({ ...prev, ...loadedJobs }));
 
-                        // Determine which job to display: URL param > current persisted result > historical default
-                        const targetId = paramJobId || useMapStore.getState().viewingResult?.id || 'sar-e4efe049';
-                        const targetJob = loadedJobs[targetId] || loadedJobs['sar-e4efe049'] || Object.values(loadedJobs)[0];
+                        // Determine which job to display: URL param > current persisted result > most recent
+                        const targetId = paramJobId || useMapStore.getState().viewingResult?.id;
+                        const targetJob = (targetId && loadedJobs[targetId]) || Object.values(loadedJobs)[0];
                         if (targetJob && (!useMapStore.getState().viewingResult || targetJob.id === paramJobId)) {
                             fetch(api(targetJob.floodGeoJsonPath))
                                 .then(r => r.ok ? r.json() : null)
@@ -257,6 +257,9 @@ function AppDashboard() {
                                         ...targetJob,
                                         url: api(targetJob.output_path),
                                         floodGeoJson: geoJson,
+                                        floodBaselinePath: targetJob.floodBaselinePath,
+                                        floodActivePath: targetJob.floodActivePath,
+                                        floodReplayAvailable: targetJob.floodReplayAvailable,
                                     });
                                     if (targetJob.bounds) {
                                         const [[south, west], [north, east]] = targetJob.bounds;
@@ -274,7 +277,7 @@ function AppDashboard() {
                 })
                 .catch(console.error);
         }
-    }, [profile]);
+    }, [profile, paramJobId, setFlyToCenter, setJobs, setSelectedRegion, setViewingResult]);
 
     // Center map to bounds of newly active results
     useEffect(() => {
@@ -282,17 +285,17 @@ function AppDashboard() {
             const [[south, west], [north, east]] = viewingResult.bounds;
             setFlyToCenter([(south + north) / 2, (west + east) / 2]);
         }
-    }, [viewingResult]);
+    }, [viewingResult, setFlyToCenter]);
 
     // ── Gateway Health Check (PRESERVED) ──
     useEffect(() => {
         const check = async () => {
-            try { await fetch(api('/jobs/health-ping'), { signal: AbortSignal.timeout(2000) }); setGatewayOnline(true); }
-            catch { try { await fetch(api('/'), { signal: AbortSignal.timeout(2000) }); setGatewayOnline(true); } catch { setGatewayOnline(false); } }
+            try { const res = await fetch(api('/jobs/health-ping'), { signal: AbortSignal.timeout(2000) }); setGatewayOnline(res.ok); }
+            catch { try { const res = await fetch(api('/jobs'), { signal: AbortSignal.timeout(2000) }); setGatewayOnline(res.ok); } catch { setGatewayOnline(false); } }
         };
         check(); const interval = setInterval(check, 15000);
         return () => clearInterval(interval);
-    }, []);
+    }, [setGatewayOnline]);
 
     // ── Elapsed timer (PRESERVED) ──
     useEffect(() => {
@@ -306,7 +309,7 @@ function AppDashboard() {
             });
         }, 1000);
         return () => clearInterval(interval);
-    }, [jobs]);
+    }, [jobs, setElapsed]);
 
     // ── Helpers (PRESERVED) ──
     const metadata = parseNisarFilename(localFilePath);
@@ -374,6 +377,35 @@ function AppDashboard() {
         }).catch(error => console.error('Unable to load flood artifacts:', error));
     };
 
+    // ── Apply a terminal (completed / failed / cancelled) state to a job ──
+    const applyTerminalState = (id, status, error) => {
+        useJobStore.getState().setActiveJobStage(null);
+        setJobs(prev => {
+            const job = prev[id];
+            if (job) {
+                const fin = Date.now();
+                const dur = job.startedAt ? Math.floor((fin - job.startedAt) / 1000) : null;
+                setElapsed(e => ({ ...e, [id]: dur }));
+                return { ...prev, [id]: { ...job, status, error } };
+            }
+            return prev;
+        });
+    };
+
+    // ── Cancel a running job ──
+    const cancelJob = async (jobId) => {
+        if (!jobId) return;
+        try {
+            const res = await fetch(api(`/jobs/${jobId}/cancel`), { method: 'POST' });
+            if (!res.ok) {
+                const msg = await res.text().catch(() => '');
+                throw new Error(msg || `Cancel rejected (HTTP ${res.status})`);
+            }
+        } catch (err) {
+            showError(`Cancel failed: ${err.message || 'gateway rejected the request'}`);
+        }
+    };
+
     // ── Start Job (PRESERVED) ──
     const startJob = async () => {
         if (dataMode === 'catalog' && selectedScene) {
@@ -383,7 +415,7 @@ function AppDashboard() {
         const inputFile = getInputFile();
         if (!inputFile) return;
         if (!gatewayOnline) { showError('Gateway is offline. Start it with: LOCAL_MODE=true RUST_LOG=info cargo run --release'); return; }
-        const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'flood' ? 'flood' : pipeline;
+        const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'flood' ? 'flood' : 'standard_rda';
 
         try {
             const body = {
@@ -443,14 +475,26 @@ function AppDashboard() {
                         } else if (parsed.event === 'flood_report' && parsed.path) {
                             loadFloodArtifacts(id, parsed.path);
                         }
-                    } catch (err) { /* not JSON */ }
+                    } catch (parseError) {
+                        // Processor logs are mostly plain text; only some lines are JSON events.
+                        void parseError;
+                    }
                 }
                 setLogs(prev => ({ ...prev, [id]: [...(prev[id] || []), line] }));
                 if (terminalRef.current && !userScrolledUp.current) { terminalRef.current.scrollTop = terminalRef.current.scrollHeight; }
-                if (line.includes('[SYSTEM] PROCESS_COMPLETED') || line.includes('[SYSTEM] PROCESS_FAILED')) {
-                    useJobStore.getState().setActiveJobStage(null);
+                if (line.includes('[SYSTEM] PROCESS_COMPLETED')) {
                     sse.close();
-                    setTimeout(() => { setJobs(prev => { const job = prev[id]; if (job) { const fin = Date.now(); const dur = job.startedAt ? Math.floor((fin - job.startedAt) / 1000) : null; setElapsed(e => ({ ...e, [id]: dur })); } return prev; }); }, 500);
+                    setTimeout(() => applyTerminalState(id, 'completed'), 500);
+                } else if (line.includes('[SYSTEM] PROCESS_CANCELLED')) {
+                    sse.close();
+                    setTimeout(() => applyTerminalState(id, 'failed', 'Job cancelled by user'), 500);
+                } else if (line.includes('[SYSTEM] PROCESS_TIMEOUT')) {
+                    sse.close();
+                    setTimeout(() => applyTerminalState(id, 'failed', 'Job timed out after 30 minutes'), 500);
+                } else if (line.includes('[SYSTEM] PROCESS_FAILED')) {
+                    const msg = line.split('PROCESS_FAILED')[1]?.replace(/^:\s*/, '').trim() || 'Processing failed';
+                    sse.close();
+                    setTimeout(() => applyTerminalState(id, 'failed', msg), 500);
                 }
             };
             sse.onerror = () => { showError('Lost connection to processing stream'); sse.close(); };
@@ -460,7 +504,7 @@ function AppDashboard() {
     // ── Start job from path (for ASF download flow) ──
     const startJobFromPath = async (filePath) => {
         if (!filePath) return;
-        const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'flood' ? 'flood' : pipeline;
+        const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'flood' ? 'flood' : 'standard_rda';
         try {
             const body = {
                 input_file: filePath,
@@ -518,7 +562,9 @@ function AppDashboard() {
                         } else if (parsed.event === 'flood_report' && parsed.path) {
                             loadFloodArtifacts(id, parsed.path);
                         }
-                    } catch { }
+                    } catch (parseError) {
+                        void parseError;
+                    }
                 }
                 setLogs(prev => ({ ...prev, [id]: [...(prev[id] || []), line] }));
                 if (terminalRef.current && !userScrolledUp.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
@@ -590,11 +636,13 @@ function AppDashboard() {
             for (const id of activeIds) {
                 try {
                     const res = await fetch(api(`/jobs/${id}`)); const data = await res.json();
-                    if (data.status === 'completed' && currentJobs[id].status !== 'completed') {
-                        const jobBounds = currentJobs[id].bounds || (data.bbox ? [[data.bbox.south, data.bbox.west], [data.bbox.north, data.bbox.east]] : null);
-                        if (currentJobs[id].pipeline === 'flood' && data.flood_report_path) {
-                            const reportUrl = api(`/${data.flood_report_path}`);
-                            const geoJsonUrl = api(`/${data.flood_geojson_path}`);
+                    const status = normalizeJobStatus(data.status);
+                    const prevJob = currentJobs[id];
+                    if (status === 'completed' && prevJob.status !== 'completed') {
+                        const jobBounds = prevJob.bounds || (data.bbox ? [[data.bbox.south, data.bbox.west], [data.bbox.north, data.bbox.east]] : null);
+                        if (prevJob.pipeline === 'flood' && data.flood_report_path) {
+                            const reportUrl = api(data.flood_report_path);
+                            const geoJsonUrl = api(data.flood_geojson_path);
                             Promise.all([
                                 fetch(reportUrl).then(r => r.json()),
                                 fetch(geoJsonUrl).then(r => r.ok ? r.json() : null)
@@ -619,6 +667,9 @@ function AppDashboard() {
                                         floodGeoJson,
                                         floodReportPath: data.flood_report_path,
                                         floodGeoJsonPath: data.flood_geojson_path,
+                                        floodBaselinePath: data.flood_baseline_path,
+                                        floodActivePath: data.flood_active_path,
+                                        floodReplayAvailable: Boolean(data.flood_baseline_path && data.flood_active_path && floodReport.replay?.available),
                                         pipeline: 'flood',
                                         elapsed: elapsedRef.current[id] || null,
                                         bbox: data.bbox || null
@@ -640,27 +691,32 @@ function AppDashboard() {
                         }
                         setVisibleLayers({ deformation: true, coherence: false, amplitude: false });
                     }
-                    setJobs(prev => ({
+setJobs(prev => ({
                         ...prev,
                         [id]: {
                             ...prev[id],
-                            status: data.status,
+                            status: status === 'failed' ? 'failed' : status,
+                            error: status === 'failed' ? (jobErrorMessage(data.status) || prevJob.error) : prevJob.error,
                             output_path: data.output_path,
                             floodReportPath: data.flood_report_path || prev[id]?.floodReportPath,
-                            floodGeoJsonPath: data.flood_geojson_path || prev[id]?.floodGeoJsonPath
+                            floodGeoJsonPath: data.flood_geojson_path || prev[id]?.floodGeoJsonPath,
+                            floodBaselinePath: data.flood_baseline_path || prev[id]?.floodBaselinePath,
+                            floodActivePath: data.flood_active_path || prev[id]?.floodActivePath,
+                            floodReplayAvailable: Boolean(data.flood_baseline_path && data.flood_active_path) || prev[id]?.floodReplayAvailable
                         }
                     }));
-                } catch (e) { }
+                } catch (error) {
+                    console.warn('Job status polling failed:', error);
+                }
             }
         }, 3000);
         return () => clearInterval(interval);
-    }, []);
+    }, [setJobs, setViewingResult]);
 
     // ── Terminal scroll (PRESERVED) ──
-    const handleTerminalScroll = () => { if (!terminalRef.current) return; const el = terminalRef.current; userScrolledUp.current = !(el.scrollHeight - el.scrollTop - el.clientHeight < 40); };
 
     // ── Fetch environmental context ──
-    const fetchContext = async () => {
+    const fetchContext = useCallback(async () => {
         if (!assetLat || !assetLon) return;
         setFetchingContext(true);
         try {
@@ -673,7 +729,6 @@ function AppDashboard() {
             const data = await res.json();
             console.log("Fetched environmental context successfully:", data);
             setEnvContext(data);
-            setContextFetchedAt(new Date());
         } catch (err) {
             console.error("Failed to fetch environmental context:", err);
             showError(`Failed to fetch environmental context: ${err.message}`);
@@ -682,7 +737,7 @@ function AppDashboard() {
         finally {
             setFetchingContext(false);
         }
-    };
+    }, [assetLat, assetLon, assetType, showError]);
 
 
     // ── Search infrastructure assets via Nominatim ──
@@ -696,20 +751,8 @@ function AppDashboard() {
         } catch { setAssetResults([]); }
     };
 
-    const allPipelines = [
-        { id: 'standard_rda', label: 'Standard SAR Focus', desc: 'Range-Doppler + RCMC + speckle filter' },
-        { id: 'polsar', label: 'Polarimetric', desc: 'Pauli decomposition RGB (HH, HV, VV)' },
-        { id: 'insar', label: 'InSAR Analysis', desc: 'Interferometric phase + displacement' },
-        { id: 'flood', label: 'Flood & Inundation', desc: 'Multi-temporal log-ratio + region growing' },
-    ];
-    const pipelines = profile === 'flood'
-        ? allPipelines.filter(p => p.id === 'flood')
-        : allPipelines;
-
     const runningJobs = Object.values(jobs).filter(j => j.status === 'running');
-    const activeJob = activeJobId ? jobs[activeJobId] : null;
     const activeProfile = PROFILES[profile] || PROFILES['infrastructure'];
-    const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'flood' ? 'flood' : pipeline;
 
     // Auto-fetch context when asset coordinates are set
     useEffect(() => {
@@ -717,22 +760,7 @@ function AppDashboard() {
             const timer = setTimeout(fetchContext, 500);
             return () => clearTimeout(timer);
         }
-    }, [assetLat, assetLon]);
-
-    // Force pipeline when switching profiles
-    useEffect(() => {
-        if (profile === 'infrastructure') {
-            setPipeline('insar');
-            setDataMode('local');
-        } else if (profile === 'flood') {
-            setPipeline('flood');
-        } else if (profile === 'sar_science') {
-            setPipeline('standard_rda');
-        } else if (profile === 'insar') {
-            setPipeline('insar');
-        }
-        setVisibleLayers({ deformation: true, coherence: false, amplitude: false });
-    }, [profile]);
+    }, [assetLat, assetLon, profile, fetchContext]);
 
     // Auto-center map when a completed result is loaded
     useEffect(() => {
@@ -745,11 +773,7 @@ function AppDashboard() {
             const [[south, west], [north, east]] = viewingResult.bounds;
             setFlyToCenter([(south + north) / 2, (west + east) / 2]);
         }
-    }, [viewingResult]);
-
-    const ribbonData = (profile === 'flood' && viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport)
-        ? parseFloodReport(viewingResult.floodReport)
-        : null;
+    }, [viewingResult, setFlyToCenter]);
 
     return (
         <div style={{ width: '100%', height: '100vh', position: 'relative', backgroundColor: C.bg0, overflow: 'hidden' }}>
@@ -901,13 +925,12 @@ function AppDashboard() {
             <TopBar profile={profile} setProfile={setProfile} onOpenReport={() => setReportModalOpen(true)} />
 
             {/* ═══ REAL-TIME PROCESSING PROGRESS BAR ═══ */}
-            <ProcessingProgressBar profile={profile} />
+            <ProcessingProgressBar profile={profile} onCancel={cancelJob} />
 
             {/* ═══ MAP LAYER CONTROLS ═══ */}
             <MapLayerControls profile={profile} activeView={activeView} />
 
             {/* ═══ RUN HISTORY SIDEBAR ═══ */}
-            <RunHistorySidebar profile={profile} activeView={activeView} />
 
             {/* ═══ FULL-SCREEN MAP ═══ */}
             <MapContainer
@@ -917,9 +940,9 @@ function AppDashboard() {
                     display: (profile === 'flood' && activeView !== 'map') ? 'none' : 'block',
                     position: 'absolute',
                     top: '42px',
-                    left: profile === 'infrastructure' ? '240px' : profile === 'flood' ? `${TM.side}px` : '0px',
+                    left: profile === 'infrastructure' ? `${INFRA_LAYOUT.left}px` : profile === 'flood' ? `${TM.side}px` : '0px',
                     right: profile === 'infrastructure' ? '0px' : (profile === 'flood' && activeView === 'map') ? `${TM.panel}px` : '0px',
-                    bottom: profile === 'infrastructure' ? '80px' : (viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport) ? '32px' : '0px',
+                    bottom: profile === 'infrastructure' ? `${INFRA_LAYOUT.bottom}px` : (viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport) ? '32px' : '0px',
                     cursor: 'crosshair',
                     zIndex: 0
                 }}
@@ -927,13 +950,21 @@ function AppDashboard() {
                 attributionControl={false}
             >
                 <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}" />
-                {viewingResult && viewingResult.url && viewingResult.bounds && (
+                {viewingResult && viewingResult.url && viewingResult.bounds && !(viewingResult.floodReplayAvailable && replayPhase !== 'detected') && (
                     <ImageOverlay
                         url={viewingResult.url}
                         bounds={viewingResult.bounds}
                         opacity={layerOpacity}
                     />
                 )}
+                <FloodEventReplay
+                    result={viewingResult}
+                    report={viewingResult?.floodReport}
+                    bounds={viewingResult?.bounds}
+                    floodGeoJson={viewingResult?.floodGeoJson}
+                    onPhaseChange={setReplayPhase}
+                    onReplayUnavailable={() => setReplayPhase('detected')}
+                />
                 <MapResizer />
                 <MapEventTracker setCoords={setMouseCoords} setMapBounds={setMapBounds} />
                 <MapAoiDrawer
@@ -1057,12 +1088,13 @@ function AppDashboard() {
                     />
                 )}
 
-                {profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && (
+                {profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && (!viewingResult.floodReplayAvailable || replayPhase === 'detected') && (
                     <GeoJSON
                         key={`${viewingResult.floodGeoJsonPath || viewingResult.url}-${layerOpacity}-${showPermanentWater}-${showHighConf}-${showMedConf}-${showLowConf}`}
                         data={viewingResult.floodGeoJson}
                         style={feature => {
-                            const classCode = feature?.properties?.class_code;
+                            const raw = feature?.properties?.class_code;
+                            const classCode = (raw === undefined || raw === null || raw === '') ? null : Number(raw);
                             const isSelected = selectedRegion?.id === feature?.id;
 
                             // Visibility filtering by class
@@ -1079,7 +1111,7 @@ function AppDashboard() {
                                 return { fillOpacity: 0, opacity: 0, stroke: false };
                             }
 
-                            const color = classCode === 1 ? '#2563eb' : classCode === 2 ? '#ff2800' : classCode === 3 ? '#ffa000' : '#ffe600';
+                            const color = classCode === 1 ? '#2166c1' : classCode === 2 ? '#00a6c7' : classCode === 3 ? '#42c6d5' : '#91d9dc';
                             return { fillOpacity: isSelected ? 0.75 : 0.42, fillColor: color, color, weight: isSelected ? 2 : 0.5 };
                         }}
                         onEachFeature={(feature, layer) => {
@@ -1163,13 +1195,10 @@ function AppDashboard() {
                     envContext={envContext}
                     fetchingContext={fetchingContext}
                     fetchContext={fetchContext}
-                    contextFetchedAt={contextFetchedAt}
                     localFilePath={localFilePath}
                     setLocalFilePath={setLocalFilePath}
-                    metadata={metadata}
                     slaveFilePath={slaveFilePath}
                     setSlaveFilePath={setSlaveFilePath}
-                    activeLayer={activeLayer}
                     visibleLayers={visibleLayers}
                     setVisibleLayers={setVisibleLayers}
                     startJob={startJob}
@@ -1215,8 +1244,7 @@ function AppDashboard() {
                         </button>
                         <button
                             onClick={() => {
-                                const floodJob = Object.values(jobs).find(j => j.pipeline === 'flood' && j.floodReport)
-                                    || jobs['sar-e4efe049'];
+                                const floodJob = Object.values(jobs).find(j => j.pipeline === 'flood' && j.floodReport);
                                 if (floodJob) {
                                     setViewingResult({
                                         url: api(floodJob.output_path),
@@ -1225,6 +1253,9 @@ function AppDashboard() {
                                         floodGeoJson: floodJob.floodGeoJson,
                                         floodReportPath: floodJob.floodReportPath,
                                         floodGeoJsonPath: floodJob.floodGeoJsonPath,
+                                        floodBaselinePath: floodJob.floodBaselinePath,
+                                        floodActivePath: floodJob.floodActivePath,
+                                        floodReplayAvailable: floodJob.floodReplayAvailable,
                                         pipeline: 'flood',
                                         elapsed: floodJob.elapsed || 42,
                                         bbox: floodJob.bbox
@@ -1316,6 +1347,7 @@ function AppDashboard() {
                             setMinAreaPixels={setMinAreaPixels}
                             downloadProgress={downloadProgress}
                             handleAcquireAndProcess={handleAcquireAndProcess}
+                            onCancel={cancelJob}
                         />
                     )
                 )}
@@ -1374,7 +1406,7 @@ function AppDashboard() {
             <CoordinatesHud profile={profile} activeView={activeView} metadata={metadata} />
 
             {/* ═══ TERMINAL DRAWER ═══ */}
-            <TerminalDrawer profile={profile} activeView={activeView} />
+            <TerminalDrawer profile={profile} activeView={activeView} onCancel={cancelJob} />
 
             {/* ═══ ANALYSIS REPORT MODAL ═══ */}
             {reportModalOpen && viewingResult && viewingResult.floodReport && (
@@ -1386,7 +1418,7 @@ function AppDashboard() {
 
             {/* ═══ WORKSPACE SIDEBAR NAVIGATION (profile === 'flood') ═══ */}
             {profile === 'flood' && (
-                <div style={{ position: 'absolute', left: 0, top: '42px', bottom: 0, width: `${TM.side}px`, zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
+                <div className="flood-left-rail" style={{ '--flood-side': `${TM.side}px` }}>
                     <WorkspaceSidebar
                         activeView={activeView}
                         onSelectView={setActiveView}
@@ -1397,8 +1429,9 @@ function AppDashboard() {
                                 showError('Run or select a completed flood analysis to open its report.');
                             }
                         }}
-                        gatewayOnline={gatewayOnline}
-                    />
+                    >
+                        <RunHistorySidebar profile={profile} activeView={activeView} onCancel={cancelJob} />
+                    </WorkspaceSidebar>
                 </div>
             )}
 

@@ -77,6 +77,10 @@ async fn preload_completed_jobs(state: AppState) {
                         
                         let png_path = results_dir.join(&png_name);
                         let geojson_path = results_dir.join(&geojson_name);
+                        let baseline_name = format!("{}_flood_baseline.png", job_id);
+                        let active_name = format!("{}_flood_active.png", job_id);
+                        let baseline_path = results_dir.join(&baseline_name);
+                        let active_path = results_dir.join(&active_name);
                         
                         if png_path.exists() && geojson_path.exists() {
                             if let Ok(content) = std::fs::read_to_string(&path) {
@@ -117,6 +121,8 @@ async fn preload_completed_jobs(state: AppState) {
                                         bbox,
                                         flood_report_path: Some(format!("/results/{}", filename)),
                                         flood_geojson_path: Some(format!("/results/{}", geojson_name)),
+                                        flood_baseline_path: baseline_path.exists().then(|| format!("/results/{}", baseline_name)),
+                                        flood_active_path: active_path.exists().then(|| format!("/results/{}", active_name)),
                                         created_at: std::time::Instant::now(),
                                         cancel_tx: None,
                                     }));

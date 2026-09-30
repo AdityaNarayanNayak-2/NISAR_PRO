@@ -36,7 +36,7 @@ sequenceDiagram
 
     Note over CL: gunw_parser::parse_gunw opens file
     Note over CL: Reads phase, coherence, coordinates via rustyhdf5
-    Note over CL: Crops bounding box via H5 hyperslabs
+    Note over CL: Crops bounding box post-load (rustyhdf5 reads full grid, no hyperslabs)
     Note over CL: Filters connectedComponent == 0 & coherence < 0.3
     
     CL->>GW: Prints georef event {"event":"georef","bbox":...}
@@ -113,7 +113,7 @@ sequenceDiagram
   * It maps datasets:
     * Unwrapped Phase: `/science/LSAR/GUNW/grids/frequencyA/numberOfLooks1/unwrappedPhase`
     * Coherence: `/science/LSAR/GUNW/grids/frequencyA/numberOfLooks1/coherence`
-  * **Hyperslab Cropping**: If `crop_lat` and `crop_lon` were supplied, the parser maps coordinates to grid column/row offsets. Rather than reading the entire 30 GB file, it loads only the cropped sub-matrix indices via sliced HDF5 hyper-slab reads.
+  * **Crop After Load**: If `crop_lat` and `crop_lon` were supplied, the parser maps coordinates to grid column/row offsets and slices the full read matrix afterwards. Note: the entire dataset is read into RAM first — `rustyhdf5` has no partial/hyper-slab reads — so peak RSS is the whole file, and cropping only reduces the retained slice.
 * **Data Masking**:
   * Unwrapping failures are identified by connected component IDs equal to 0 and are masked out as `f32::NAN`.
   * Pixels with coherence values less than 0.3 are masked out to filter out water and dense vegetation noise.

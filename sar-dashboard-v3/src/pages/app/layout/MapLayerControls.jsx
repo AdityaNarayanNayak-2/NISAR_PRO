@@ -1,5 +1,6 @@
-import React from 'react';
-import { MONO, C } from '../constants';
+import React, { useState } from 'react';
+import { Layers, X } from 'lucide-react';
+import { MONO, C, TM } from '../constants';
 import { useMapStore } from '../stores/useMapStore';
 
 export default function MapLayerControls({ profile = 'flood', activeView = 'map' }) {
@@ -19,6 +20,7 @@ export default function MapLayerControls({ profile = 'flood', activeView = 'map'
 
     const showLowConf = useMapStore(state => state.showLowConf);
     const setShowLowConf = useMapStore(state => state.setShowLowConf);
+    const [isOpen, setIsOpen] = useState(false);
 
     // Only render when on flood profile map view with an active flood result
     if (profile !== 'flood' || activeView !== 'map' || !viewingResult || viewingResult.pipeline !== 'flood') {
@@ -26,27 +28,58 @@ export default function MapLayerControls({ profile = 'flood', activeView = 'map'
     }
 
     const layers = [
-        { label: 'Permanent Water', color: '#2563eb', value: showPermanentWater, onChange: () => setShowPermanentWater(!showPermanentWater) },
-        { label: 'High Conf', color: '#ff2800', value: showHighConf, onChange: () => setShowHighConf(!showHighConf) },
-        { label: 'Med Conf', color: '#ffa000', value: showMedConf, onChange: () => setShowMedConf(!showMedConf) },
-        { label: 'Low Conf', color: '#ffe600', value: showLowConf, onChange: () => setShowLowConf(!showLowConf) },
+        { label: 'Permanent Water', color: '#2166c1', value: showPermanentWater, onChange: () => setShowPermanentWater(!showPermanentWater) },
+        { label: 'High Conf', color: '#00a6c7', value: showHighConf, onChange: () => setShowHighConf(!showHighConf) },
+        { label: 'Med Conf', color: '#42c6d5', value: showMedConf, onChange: () => setShowMedConf(!showMedConf) },
+        { label: 'Low Conf', color: '#91d9dc', value: showLowConf, onChange: () => setShowLowConf(!showLowConf) },
     ];
 
     return (
         <div style={{
             position: 'absolute',
-            top: '90px',
-            left: '216px',
+            top: '54px',
+            left: `calc(${TM.side}px + 12px)`,
             zIndex: 1000,
-            width: '200px',
-            background: 'rgba(17, 17, 17, 0.85)',
+            fontFamily: MONO,
+        }}>
+            <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-controls="flood-layer-controls"
+                onClick={() => setIsOpen(value => !value)}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    minHeight: '34px',
+                    padding: '0 11px',
+                    color: isOpen ? '#f4fafc' : C.textMid,
+                    background: isOpen ? 'rgba(7, 32, 42, 0.96)' : 'rgba(7, 20, 28, 0.88)',
+                    border: `1px solid ${isOpen ? 'rgba(66, 198, 213, .55)' : 'rgba(255, 255, 255, .14)'}`,
+                    boxShadow: '0 8px 22px rgba(0, 0, 0, .28)',
+                    backdropFilter: 'blur(10px)',
+                    cursor: 'pointer',
+                    font: 'inherit',
+                    fontSize: '9px',
+                    letterSpacing: '.12em',
+                }}
+            >
+                <Layers size={14} color={C.accent.flood} />
+                <span>LAYERS</span>
+                {isOpen ? <X size={13} /> : <span style={{ color: C.textDim }}>·</span>}
+            </button>
+
+            {isOpen && <div
+                id="flood-layer-controls"
+                style={{
+            marginTop: '7px',
+            width: '220px',
+            background: 'rgba(7, 20, 28, 0.96)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            borderRadius: '2px',
+            border: '1px solid rgba(66, 198, 213, 0.24)',
             padding: '12px 14px',
             boxSizing: 'border-box',
-            fontFamily: MONO,
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
         }}>
             {/* Header */}
@@ -160,6 +193,7 @@ export default function MapLayerControls({ profile = 'flood', activeView = 'map'
                     </div>
                 ))}
             </div>
+            </div>}
         </div>
     );
 }

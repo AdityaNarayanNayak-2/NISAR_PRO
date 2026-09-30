@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp, History } from 'lucide-react';
+import { ChevronDown, ChevronUp, History, X } from 'lucide-react';
 import { MONO, C } from '../constants';
 import { api } from '../../../config/api';
 import { useJobStore } from '../stores/useJobStore';
 import { useMapStore } from '../stores/useMapStore';
 
-export default function RunHistorySidebar({ profile = 'flood', activeView = 'map' }) {
+export default function RunHistorySidebar({ profile = 'flood', activeView = 'map', onCancel }) {
     const [collapsed, setCollapsed] = useState(false);
     const [hoveredId, setHoveredId] = useState(null);
 
@@ -32,7 +32,7 @@ export default function RunHistorySidebar({ profile = 'flood', activeView = 'map
     const handleJobClick = (job) => {
         setActiveJobId(job.id);
 
-        if (job.status === 'running') {
+        if (job.status === 'running' || job.status === 'failed') {
             setTerminalOpen(true);
             return;
         }
@@ -47,6 +47,9 @@ export default function RunHistorySidebar({ profile = 'flood', activeView = 'map
                 floodGeoJson: job.floodGeoJson,
                 floodReportPath: job.floodReportPath,
                 floodGeoJsonPath: job.floodGeoJsonPath,
+                floodBaselinePath: job.floodBaselinePath,
+                floodActivePath: job.floodActivePath,
+                floodReplayAvailable: job.floodReplayAvailable,
                 pipeline: job.pipeline || 'flood',
                 elapsed: job.elapsed,
             };
@@ -65,15 +68,12 @@ export default function RunHistorySidebar({ profile = 'flood', activeView = 'map
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
             style={{
-                position: 'absolute',
-                top: '254px',
-                left: '216px',
-                zIndex: 1000,
-                width: '200px',
-                background: 'rgba(17, 17, 17, 0.85)',
+                position: 'relative',
+                width: '100%',
+                background: 'rgba(7, 20, 28, 0.96)',
                 backdropFilter: 'blur(8px)',
                 WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(66, 198, 213, 0.18)',
                 borderRadius: '2px',
                 boxSizing: 'border-box',
                 fontFamily: MONO,
@@ -164,7 +164,6 @@ export default function RunHistorySidebar({ profile = 'flood', activeView = 'map
 
                                 const isCompleted = job.status === 'completed';
                                 const isRunning = job.status === 'running';
-                                const isFailed = job.status === 'failed';
 
                                 const dotColor = isCompleted
                                     ? C.stable
@@ -236,6 +235,27 @@ export default function RunHistorySidebar({ profile = 'flood', activeView = 'map
                                                 {displayTitle}
                                             </span>
                                         </div>
+
+                                        {/* Cancel action for running jobs */}
+                                        {isRunning && onCancel && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onCancel(job.id); }}
+                                                title="Cancel job"
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: C.critical,
+                                                    cursor: 'pointer',
+                                                    padding: '2px',
+                                                    flexShrink: 0,
+                                                    marginLeft: '4px',
+                                                    display: 'flex',
+                                                    alignItems: 'center'
+                                                }}
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
 
                                         {/* Timestamp badge */}
                                         <span style={{

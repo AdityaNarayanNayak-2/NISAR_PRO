@@ -3,7 +3,7 @@ import { Map, TrendingUp, Layers, FileCode, Cpu, HardDrive, Settings } from 'luc
 import { motion } from 'framer-motion';
 import { MONO, SANS, C, TM } from '../constants';
 
-export default function WorkspaceSidebar({ activeView, onSelectView, onOpenReport, gatewayOnline }) {
+export default function WorkspaceSidebar({ activeView, onSelectView, onOpenReport, children }) {
     const mainNavItems = [
         { id: 'map', label: 'Map', icon: Map, key: 'M' },
         { id: 'timeseries', label: 'Time Series', icon: TrendingUp, key: 'T' },
@@ -40,7 +40,7 @@ export default function WorkspaceSidebar({ activeView, onSelectView, onOpenRepor
         padding: '0 8px 8px 8px',
     };
 
-    const navButtonStyle = (isActive) => ({
+    const navButtonStyle = () => ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -81,7 +81,7 @@ export default function WorkspaceSidebar({ activeView, onSelectView, onOpenRepor
                                             onSelectView(item.id);
                                         }
                                     }}
-                                    style={navButtonStyle(isActive)}
+                                    style={navButtonStyle()}
                                     animate={{
                                         color: isActive ? C.accent.flood : 'rgba(237, 237, 237, 0.55)',
                                         background: isActive ? 'rgba(15, 150, 156, 0.14)' : 'rgba(255, 255, 255, 0.0)',
@@ -124,7 +124,7 @@ export default function WorkspaceSidebar({ activeView, onSelectView, onOpenRepor
                                 <motion.button
                                     key={item.id}
                                     onClick={() => onSelectView(item.id)}
-                                    style={navButtonStyle(isActive)}
+                                    style={navButtonStyle()}
                                     animate={{
                                         color: isActive ? C.accent.flood : 'rgba(237, 237, 237, 0.55)',
                                         background: isActive ? 'rgba(15, 150, 156, 0.14)' : 'rgba(255, 255, 255, 0.0)',
@@ -155,6 +155,8 @@ export default function WorkspaceSidebar({ activeView, onSelectView, onOpenRepor
                         })}
                     </nav>
                 </div>
+
+                {children}
             </div>
 
             {/* Footer System Status Panel */}

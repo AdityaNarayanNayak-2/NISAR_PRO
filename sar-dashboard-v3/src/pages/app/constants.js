@@ -45,3 +45,13 @@ export const TM = {
   panel: 340,
   bottom: 36,
 };
+
+// Infrastructure has a deliberately different shell from Flood Monitoring.
+// Keep its geometry in one place so AppDashboard and InfrastructurePanel do
+// not drift apart through independent pixel values.
+export const INFRA_LAYOUT = {
+  top: 42,
+  left: 250,
+  right: 320,
+  bottom: 80,
+};

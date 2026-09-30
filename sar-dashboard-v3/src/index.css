@@ -99,3 +99,105 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(42, 139, 145, 0.35);
 }
+
+/* Flood workspace accessibility and action affordances */
+.flood-panel-action:focus-visible,
+[role="button"]:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #58c7cc;
+  outline-offset: 2px;
+}
+
+.flood-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: -5px 0 14px;
+  color: #9ba7b4;
+  font: 10px/1.4 "IBM Plex Mono", monospace;
+}
+
+.route-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: #42c6d5;
+  background: #07141c;
+  font: 11px/1.4 "JetBrains Mono", monospace;
+  letter-spacing: .12em;
+}
+
+.flood-replay-control {
+  position: absolute;
+  left: 232px;
+  bottom: 48px;
+  z-index: 1000;
+  width: min(460px, calc(100vw - 280px));
+  padding: 14px 16px;
+  color: #f4fafc;
+  background: rgba(7, 20, 28, 0.94);
+  border: 1px solid rgba(66, 198, 213, 0.32);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* The flood workspace owns one stable left rail. Navigation and run history
+   live inside it; map utilities begin only after the rail boundary. */
+.flood-left-rail {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  bottom: 0;
+  /* Below TopBar (1100) so the profile selector can open over the rail. */
+  z-index: 1000;
+  width: var(--flood-side, 196px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.infrastructure-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+}
+
+.flood-replay-kicker { color: #42c6d5; font-size: 9px; letter-spacing: .14em; font-weight: 700; }
+.flood-replay-title { margin-top: 5px; font-size: 12px; letter-spacing: .05em; font-weight: 700; }
+.flood-replay-date { margin-top: 4px; color: #9db4bd; font-size: 10px; }
+.flood-replay-track { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: 16px 0 12px; }
+.flood-replay-step { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 8px 6px; color: #6f8993; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.08); text-align: left; font: inherit; font-size: 9px; cursor: pointer; }
+.flood-replay-step.is-active { color: #f4fafc; border-color: #42c6d5; background: rgba(66,198,213,.12); }
+.flood-replay-step small { overflow: hidden; color: #9db4bd; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.flood-replay-dot { width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; }
+.flood-replay-step.is-active .flood-replay-dot { background: #42c6d5; box-shadow: 0 0 9px #42c6d5; }
+.flood-replay-actions { display: flex; gap: 8px; }
+.flood-replay-actions button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; color: #d9edf1; background: transparent; border: 1px solid rgba(255,255,255,.13); font: inherit; font-size: 9px; cursor: pointer; }
+.flood-replay-actions button:hover:not(:disabled), .flood-replay-actions button:focus-visible { border-color: #42c6d5; color: #42c6d5; outline: none; }
+.flood-replay-actions button:disabled { cursor: not-allowed; opacity: .45; }
+.flood-replay-note { margin-top: 10px; color: #6f8993; font-size: 8px; line-height: 1.45; }
+
+@media (max-width: 760px) {
+  .flood-replay-control { left: 16px; bottom: 42px; width: calc(100vw - 32px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flood-replay-control *, .flood-replay-control *::before, .flood-replay-control *::after { transition: none !important; animation: none !important; }
+}
+
+.flood-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.flood-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}

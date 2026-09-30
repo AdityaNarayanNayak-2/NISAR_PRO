@@ -1,10 +1,10 @@
 import React, { useRef, useEffect } from 'react';
 import { Terminal, X } from 'lucide-react';
-import { MONO, C, TM } from '../constants';
+import { MONO, C, TM, INFRA_LAYOUT } from '../constants';
 import { useJobStore } from '../stores/useJobStore';
 import { useMapStore } from '../stores/useMapStore';
 
-export default function TerminalDrawer({ profile, activeView = 'map' }) {
+export default function TerminalDrawer({ profile, activeView = 'map', onCancel }) {
     const logs = useJobStore(state => state.logs);
     const activeJobId = useJobStore(state => state.activeJobId);
     const jobs = useJobStore(state => state.jobs);
@@ -36,8 +36,8 @@ export default function TerminalDrawer({ profile, activeView = 'map' }) {
             {/* ═══ TERMINAL DRAWER ═══ */}
             <div style={{
                 position: 'absolute',
-                bottom: profile === 'infrastructure' ? '80px' : 0,
-                left: profile === 'infrastructure' ? '240px' : profile === 'flood' ? `${TM.side}px` : 0,
+                bottom: profile === 'infrastructure' ? `${INFRA_LAYOUT.bottom}px` : 0,
+                left: profile === 'infrastructure' ? `${INFRA_LAYOUT.left}px` : profile === 'flood' ? `${TM.side}px` : 0,
                 right: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map')) ? 0 : `${TM.panel}px`,
                 zIndex: 1000,
                 height: terminalOpen ? '240px' : '0px',
@@ -55,6 +55,26 @@ export default function TerminalDrawer({ profile, activeView = 'map' }) {
                         )}
                         {currentLogs.length > 0 && (
                             <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', marginLeft: '4px' }}>{currentLogs.length} LINES</span>
+                        )}
+                        {activeJob?.status === 'running' && onCancel && (
+                            <button
+                                onClick={() => onCancel(activeJob.id)}
+                                style={{
+                                    marginLeft: '8px',
+                                    padding: '2px 8px',
+                                    background: 'transparent',
+                                    border: '1px solid rgba(192, 57, 43, 0.7)',
+                                    color: '#C0392B',
+                                    fontFamily: MONO,
+                                    fontSize: '9px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    borderRadius: '2px',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(192, 57, 43, 0.15)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                                title="Send cancel request to the gateway"
+                            >✕ CANCEL</button>
                         )}
                     </div>
                     <button onClick={() => setTerminalOpen(false)} style={{ background: 'none', border: 'none', color: '#555555', cursor: 'pointer', padding: '4px' }}
@@ -94,7 +114,7 @@ export default function TerminalDrawer({ profile, activeView = 'map' }) {
                                         displayLine = `[SYSTEM] Classification raster generated: ${parsed.path}`;
                                         isSys = true;
                                     }
-                                } catch (e) {}
+                                } catch { void 0; }
                             }
                             
                             const color = isErr ? '#C0392B' : isSucc ? '#4CAF50' : isSys ? '#7EB8D4' : isCfar ? '#E6A817' : isInSar ? '#9B8EC4' : '#555555';
@@ -116,7 +136,7 @@ export default function TerminalDrawer({ profile, activeView = 'map' }) {
                     style={{
                         position: 'absolute',
                         bottom: (viewingResult?.pipeline === 'flood' && viewingResult.floodReport) ? '40px' : '8px',
-                        right: `${TM.panel + 12}px`,
+                        right: profile === 'infrastructure' ? '12px' : `${TM.panel + 12}px`,
                         zIndex: 960,
                         background: 'rgba(17,17,17,0.9)', border: '1px solid #2A2A2A', borderRadius: '2px',
                         padding: '5px 10px', color: '#888888', fontFamily: MONO, fontSize: '10px',

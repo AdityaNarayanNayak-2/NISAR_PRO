@@ -13,4 +13,9 @@ function resolveBase() {
 export default defineConfig({
   plugins: [react()],
   base: resolveBase(),
+  server: {
+    fs: {
+      allow: ['.', '..'],
+    },
+  },
 })

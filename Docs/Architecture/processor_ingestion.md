@@ -66,10 +66,12 @@ In `gunw_parser.rs`, the engine uses `find_index_range()`:
 
 ### Memory Reclamation Strategy
 Because `rustyhdf5` does not natively support HDF5 "hyperslabs" (partial reads from disk), the engine implements a strict memory management pattern inside `read_2d_f32_cropped`:
-1. Load the *entire* 30 GB 1D vector into RAM.
+1. Load the *entire* product grid into RAM as `f32` (an 8–10 GB GCOV reads as roughly 30–40 GB of RAM; a 25–30 GB RSLC reads as 100+ GB).
 2. Reshape it into an `ndarray::Array2`.
 3. Slice the array: `let cropped = full_arr.slice(s![row_start..row_end, col_start..col_end]).to_owned();`
-4. The function returns, and Rust's RAII (Resource Acquisition Is Initialization) immediately `drop()`s the massive `full_arr`, reclaiming all memory in seconds. The program proceeds holding only the ~1 MB cropped array.
+4. The function returns, and Rust's RAII (Resource Acquisition Is Initialization) immediately `drop()`s the massive `full_arr`, reclaiming all memory in seconds. The program proceeds holding only the ~cropped array.
+
+> **Verified note (real products, real runs):** the *peak* RSS is the full pre-slice datacube (step 1), so a small crop does **not** reduce peak memory. GCOV grids are f32 (~4× the on-disk file size); RSLC products are larger still (complex data). This is the current hard ceiling for local processing on workstations with modest RAM — real GCOV/RSLC products require a chunked/hyperslab read (planned) or a machine with RAM ≥ ~4× the product size.
 
 ---
 

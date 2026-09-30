@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FolderOpen, Upload } from 'lucide-react';
-import { MONO, SANS, C } from './constants';
-import { parseNisarFilename, sevColor, formatElapsed } from './helpers';
+import { MONO, SANS, C, INFRA_LAYOUT } from './constants';
+import { sevColor, formatElapsed } from './helpers';
 import { api } from '../../config/api';
 
 export default function InfrastructurePanel({
@@ -26,13 +26,10 @@ export default function InfrastructurePanel({
     envContext,
     fetchingContext,
     fetchContext,
-    contextFetchedAt,
     localFilePath,
     setLocalFilePath,
-    metadata,
     slaveFilePath,
     setSlaveFilePath,
-    activeLayer,
     visibleLayers,
     setVisibleLayers,
     startJob,
@@ -53,22 +50,6 @@ export default function InfrastructurePanel({
     const isGunw = !localFilePath || localFilePath.toLowerCase().includes('_gunw') || localFilePath.toLowerCase().endsWith('.h5') || localFilePath.toLowerCase().endsWith('.he5');
 
     // ── PARSED METADATA ──
-    const parsedMeta = parseNisarFilename(localFilePath) || parseNisarFilename(viewingResult?.url) || parseNisarFilename(viewingResult?.input_file);
-
-    // ── DATE PARSING FOR TIMELINE ──
-    const dateMatches = (localFilePath || '').match(/(\d{8})/g) || [];
-    const fmtDate = (d) => {
-        if (!d || d.length !== 8) return null;
-        const dt = new Date(d.slice(0, 4), parseInt(d.slice(4, 6)) - 1, d.slice(6, 8));
-        if (isNaN(dt)) return null;
-        return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-    };
-    const masterDateStr = dateMatches[0] ? fmtDate(dateMatches[0]) : null;
-    const slaveDateStr = dateMatches[1] ? fmtDate(dateMatches[1]) : (parsedMeta?.acquisitionDate ? fmtDate(parsedMeta.acquisitionDate.replace(/-/g, '')) : null);
-    const baselineDays = (masterDateStr && slaveDateStr && dateMatches[0] && dateMatches[1])
-        ? Math.round((new Date(dateMatches[1].slice(0, 4), parseInt(dateMatches[1].slice(4, 6)) - 1, dateMatches[1].slice(6, 8)) - new Date(dateMatches[0].slice(0, 4), parseInt(dateMatches[0].slice(4, 6)) - 1, dateMatches[0].slice(6, 8))) / 86400000)
-        : null;
-
     // ── STATUS (Ratio & Proportion Based Evaluation) ──
     let statusText = 'NO DATA';
     let statusColor = '#555555';
@@ -86,13 +67,6 @@ export default function InfrastructurePanel({
         else if (critPct >= 1 || alertPct >= 10 || cautionPct >= 25) { statusText = 'CAUTION'; statusColor = '#e6a817'; }
         else { statusText = 'NORMAL'; statusColor = '#4ade80'; }
     }
-
-    // ── SATELLITE PASS ──
-    const satellitePassRows = [
-        { label: 'SATELLITE', value: 'NISAR (NASA/ISRO)', dotColor: '#4CAF50' },
-        { label: 'PASS', value: parsedMeta?.direction || 'Descending', dotColor: '#333333' },
-        { label: 'DATE', value: parsedMeta?.acquisitionDate || viewingResult?.date || '—', dotColor: (parsedMeta?.acquisitionDate || viewingResult?.date) ? '#4CAF50' : '#333333' },
-    ];
 
     // ── ENVIRONMENTAL CONTEXT ROWS ──
     const envRows = [];
@@ -122,20 +96,6 @@ export default function InfrastructurePanel({
         .slice(0, 10) : [];
 
 
-    const filename = (viewingResult?.url || localFilePath || '').toUpperCase();
-    const productVal = filename.includes('_GUNW_') ? 'GUNW — Pre-computed InSAR'
-        : filename.includes('_GCOV_') ? 'GCOV — Geocoded Covariance'
-            : filename.includes('_RSLC_') ? 'RSLC — Range SLC'
-                : 'NISAR Product';
-
-    const acquisitionRows = [
-        { label: 'SATELLITE', value: 'NISAR (NASA/ISRO)' },
-        { label: 'PIPELINE', value: (viewingResult?.pipeline || 'insar') === 'insar' ? 'InSAR Analysis' : 'SAR Focus' },
-        { label: 'PRODUCT', value: productVal },
-        { label: 'BAND', value: 'L-Band (1.26 GHz)' },
-        { label: 'ORBIT', value: 'Descending' },
-    ];
-
     const layerOptions = [
         { key: 'amplitude', label: 'AMPLITUDE' },
         { key: 'deformation', label: 'DEFORMATION' },
@@ -162,14 +122,6 @@ export default function InfrastructurePanel({
         }
     };
 
-    const dotColorForStatus = (status) => {
-        if (status === 'ok') return C.stable;
-        if (status === 'warn') return C.caution;
-        if (status === 'data') return C.data;
-        if (status === 'accent') return C.accent.infra;
-        return '#333333';
-    };
-
     const pillStyle = (sev) => {
         const base = { fontFamily: MONO, fontSize: '8px', fontWeight: 600, padding: '2px 6px', borderRadius: '1px', letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0 };
         if (sev === 'CRITICAL') return { ...base, background: C.critical, color: '#F0F0F0' };
@@ -178,23 +130,15 @@ export default function InfrastructurePanel({
         return { ...base, background: 'transparent', color: C.stable, border: `1px solid ${C.stable}` };
     };
 
-    const telemetryRow = ({ label, value, dotColor }) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid #161616' }}>
-            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: dotColor, flexShrink: 0, boxShadow: dotColor !== '#333333' ? `0 0 4px ${dotColor}40` : 'none' }} />
-            <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555', width: '68px', flexShrink: 0 }}>{label}</span>
-            <span style={{ fontFamily: MONO, fontSize: '10px', color: value === '—' ? '#333333' : '#CCCCCC', lineHeight: 1.4, wordBreak: 'break-word', flex: 1 }}>{value}</span>
-        </div>
-    );
-
     return (
-        <>
+        <div className="infrastructure-shell" aria-label="Infrastructure monitoring workspace">
             {/* ═══════════════════════════════          {/* ════════════════════════════════════════════════════
                 ZONE 1: LEFT PANEL (250px) - Compact No-Scroll UI
                 ════════════════════════════════════════════════════ */}
             <div style={{
-                position: 'absolute', top: '42px', left: 0, bottom: '80px',
-                width: '250px', background: C.bg0,
-                borderRight: `1px solid ${C.bg3}`, zIndex: 100,
+                position: 'absolute', top: `${INFRA_LAYOUT.top}px`, left: 0, bottom: `${INFRA_LAYOUT.bottom}px`,
+                width: `${INFRA_LAYOUT.left}px`, background: C.bg0,
+                borderRight: `1px solid ${C.bg3}`, zIndex: 10, pointerEvents: 'auto',
                 overflowY: 'hidden', boxSizing: 'border-box',
                 padding: '8px 8px 12px', display: 'flex', flexDirection: 'column', gap: '6px'
             }}>
@@ -463,9 +407,9 @@ export default function InfrastructurePanel({
                 ZONE 3: BOTTOM BAR (80px)
                 ════════════════════════════════════════════════════ */}
             <div style={{
-                position: 'absolute', bottom: 0, left: '250px', right: 0,
-                height: '80px', background: '#111111',
-                borderTop: '1px solid #2A2A2A', zIndex: 100,
+                position: 'absolute', bottom: 0, left: `${INFRA_LAYOUT.left}px`, right: 0,
+                height: `${INFRA_LAYOUT.bottom}px`, background: '#111111',
+                borderTop: '1px solid #2A2A2A', zIndex: 10, pointerEvents: 'auto',
                 display: 'flex', alignItems: 'center',
                 padding: '0 20px', gap: '24px', boxSizing: 'border-box',
             }}>
@@ -550,9 +494,9 @@ export default function InfrastructurePanel({
                 ════════════════════════════════════════════════════ */}
             {(s || localFilePath || (assetLat && assetLon)) && (
                 <div style={{
-                    position: 'absolute', top: '42px', right: 0, bottom: '80px',
-                    width: '320px', background: '#111111',
-                    borderLeft: '1px solid #2A2A2A', zIndex: 100,
+                    position: 'absolute', top: `${INFRA_LAYOUT.top}px`, right: 0, bottom: `${INFRA_LAYOUT.bottom}px`,
+                    width: `${INFRA_LAYOUT.right}px`, background: '#111111',
+                    borderLeft: '1px solid #2A2A2A', zIndex: 10, pointerEvents: 'auto',
                     overflowY: 'auto', padding: '16px', boxSizing: 'border-box',
                 }}>
                     {selectedPoint ? (
@@ -827,6 +771,6 @@ export default function InfrastructurePanel({
                     )}
                 </div>
             )}
-        </>
+        </div>
     );
 }

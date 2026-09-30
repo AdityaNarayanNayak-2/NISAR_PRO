@@ -1,17 +1,105 @@
-/* App-specific styles - legacy cleanup */
-
-/* Remove old styles, using design-system.css now */
-/* Keeping minimal overrides only */
+/* Application-wide shell overrides. Marketing styles live with the landing page
+   in pages/marketing/landing-page.css so dashboard changes stay isolated. */
 
 .app {
     min-height: 100vh;
 }
 
-/* Responsive adjustments for footer grid */
-@media (max-width: 900px) {
-    footer>div>div:first-child {
-        grid-template-columns: 1fr 1fr !important;
-    }
+/* Shared marketing chrome. Dashboard chrome is isolated in its app styles. */
+.site-header {
+    position: fixed;
+    z-index: 1000;
+    top: 0;
+    right: 0;
+    left: 0;
+    padding: 22px 0;
+    border-bottom: 1px solid transparent;
+    transition: padding .2s ease, background .2s ease, border-color .2s ease;
+}
+
+.site-header.is-scrolled {
+    padding: 14px 0;
+    background: rgba(17, 17, 15, .9);
+    border-color: rgba(193, 151, 104, .16);
+    backdrop-filter: blur(16px);
+}
+
+.site-header.is-editorial {
+    color: #111a22;
+}
+
+.site-header.is-editorial.is-scrolled {
+    background: rgba(237, 236, 232, .92);
+    border-color: rgba(17, 26, 34, .14);
+}
+
+.site-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: min(1380px, calc(100% - 64px));
+    margin: 0 auto;
+}
+
+.site-brand {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 7px;
+    color: #f1eee6;
+    font: 700 14px/1 'IBM Plex Mono', ui-monospace, monospace;
+    letter-spacing: .1em;
+    text-decoration: none;
+}
+
+.site-header.is-editorial .site-brand { color: #111a22; }
+.site-header.is-editorial .site-brand b { color: #277d7b; }
+.site-header.is-editorial .site-nav a { color: #596069; }
+.site-header.is-editorial .site-nav a:hover,
+.site-header.is-editorial .site-nav a:focus-visible,
+.site-header.is-editorial .site-nav a.is-active { color: #111a22; }
+.site-header.is-editorial .site-nav-launch { color: #111a22 !important; border-color: rgba(17, 26, 34, .3); }
+.site-header.is-editorial .site-nav-launch:hover,
+.site-header.is-editorial .site-nav-launch:focus-visible { background: rgba(39, 125, 123, .1); }
+.site-header.is-editorial .site-menu-button { color: #111a22; border-color: rgba(17, 26, 34, .24); }
+
+.site-brand b { color: #c19768; font-size: 10px; letter-spacing: .16em; }
+.site-nav { display: flex; align-items: center; gap: 26px; }
+.site-nav a { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; color: #a9a399; font: 500 12px/1 system-ui, sans-serif; text-decoration: none; transition: color .2s ease; }
+.site-nav a:hover, .site-nav a:focus-visible, .site-nav a.is-active { color: #f1eee6; }
+.site-nav-launch { padding: 0 14px; border: 1px solid rgba(193, 151, 104, .42); color: #d4ae80 !important; font-family: 'IBM Plex Mono', ui-monospace, monospace !important; font-size: 10px !important; letter-spacing: .06em; }
+.site-nav-launch:hover, .site-nav-launch:focus-visible { background: rgba(193, 151, 104, .1); }
+.site-menu-button { display: none; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; color: #f1eee6; background: transparent; border: 1px solid rgba(193, 151, 104, .3); cursor: pointer; }
+
+.site-footer { background: #11110f; border-top: 1px solid rgba(193, 151, 104, .16); }
+.site-footer-inner { width: min(1240px, calc(100% - 64px)); margin: 0 auto; padding: 78px 0 26px; }
+.site-footer-top { display: grid; grid-template-columns: 1.3fr 1fr; gap: 80px; padding-bottom: 66px; }
+.site-brand-footer { margin-bottom: 18px; }
+.site-footer-brand p { max-width: 280px; margin: 0; color: #99958b; font: 400 14px/1.65 system-ui, sans-serif; }
+.site-footer-socials { display: flex; gap: 14px; margin-top: 24px; }
+.site-footer-socials a { display: grid; place-items: center; width: 36px; height: 36px; color: #a9a399; border: 1px solid rgba(193, 151, 104, .2); transition: color .2s ease, border-color .2s ease; }
+.site-footer-socials a:hover, .site-footer-socials a:focus-visible { color: #c19768; border-color: #c19768; }
+.site-footer-links { display: grid; grid-template-columns: repeat(2, 1fr); gap: 42px; }
+.site-footer-links h2 { margin: 0 0 18px; color: #c19768; font: 600 10px/1.2 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; }
+.site-footer-links ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.site-footer-links a { display: inline-flex; align-items: center; gap: 5px; color: #99958b; font: 400 13px/1.4 system-ui, sans-serif; text-decoration: none; }
+.site-footer-links a:hover, .site-footer-links a:focus-visible { color: #f1eee6; }
+.site-footer-bottom { display: flex; justify-content: space-between; gap: 24px; padding-top: 18px; color: #77736c; border-top: 1px solid rgba(193, 151, 104, .13); font: 10px/1.4 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: .04em; }
+
+@media (max-width: 1200px) {
+    .site-header { padding: 16px 0; }
+    .site-header-inner, .site-footer-inner { width: calc(100% - 32px); }
+    .site-menu-button { display: inline-flex; }
+    .site-nav { position: absolute; top: calc(100% + 1px); right: 16px; left: 16px; display: none; flex-direction: column; align-items: stretch; gap: 2px; padding: 10px; background: rgba(17, 17, 15, .98); border: 1px solid rgba(193, 151, 104, .25); box-shadow: 0 20px 40px rgba(0, 0, 0, .3); }
+    .site-nav.is-open { display: flex; }
+    .site-nav a { padding: 0 12px; }
+    .site-nav-launch { justify-content: center; margin-top: 7px; }
+    .site-footer-top { grid-template-columns: 1fr; gap: 50px; }
+    .site-footer-links { gap: 24px; }
+    .site-footer-bottom { flex-direction: column; gap: 7px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .site-header, .site-nav a, .site-footer-socials a { transition: none; }
 }
 
 @media (max-width: 600px) {

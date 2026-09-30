@@ -1,0 +1,22 @@
+.landing-story { background: #0b0f13; color: #e9e7e1; }
+.landing-story-track { position: relative; height: 700vh; }
+.landing-story-pin { position: sticky; top: 0; height: 100vh; overflow: hidden; }
+.landing-story-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.landing-story-pin::after { content: ''; position: absolute; inset: auto 0 0; height: 38%; background: linear-gradient(transparent, rgba(11, 15, 19, .92)); pointer-events: none; }
+.landing-story-badge { position: absolute; top: 88px; left: max(24px, calc((100% - 1240px) / 2)); z-index: 3; padding: 6px 10px; border: 1px solid rgba(233, 231, 225, .25); color: #9db5b7; font: 500 9px/1 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: .14em; }
+/* Keep in sync with HEAD_CLEAR()/y0 in storyScene.js — both exist so the fixed site header never overlaps the pipeline stage boxes or the panel. */
+.landing-story-badge.is-real { color: #3fe0a0; border-color: rgba(63, 224, 160, .5); }
+.landing-story-card { position: absolute; left: 50%; top: 48%; z-index: 2; width: min(84vw, 1000px); margin: 0; padding: 10px; transform: translate(-50%, -54%); background: #0e171e; border: 1px solid rgba(139, 194, 187, .3); box-shadow: 0 30px 80px rgba(0, 0, 0, .6); pointer-events: none; }
+.landing-story-card img { display: block; width: 100%; height: auto; }
+.landing-story-caption { position: absolute; z-index: 3; left: max(24px, calc((100% - 1240px) / 2)); bottom: 44px; max-width: 620px; padding-right: 24px; }
+.landing-story-caption .landing-label { color: #63cabe; margin-bottom: 12px; }
+.landing-story-caption h2 { margin: 0; font: 550 clamp(1.9rem, 3.6vw, 3.4rem)/1.02 system-ui, -apple-system, sans-serif; letter-spacing: -.05em; text-wrap: balance; animation: story-in .5s ease both; }
+.landing-story-caption p { margin: 12px 0 0; max-width: 520px; color: #a6b4b6; font: 400 clamp(.9rem, 1.1vw, 1.02rem)/1.6 system-ui, sans-serif; text-wrap: pretty; }
+@keyframes story-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.landing-story-dots { position: absolute; z-index: 3; right: 24px; top: 50%; display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; transform: translateY(-50%); }
+.landing-story-dots li { width: 6px; height: 6px; border-radius: 50%; background: rgba(233, 231, 225, .22); transition: background .3s, transform .3s; }
+.landing-story-dots li.done { background: rgba(99, 202, 190, .55); }
+.landing-story-dots li.on { background: #63cabe; transform: scale(1.7); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 680px) { .landing-story-caption { left: 16px; right: 16px; bottom: 28px; } .landing-story-badge { top: 72px; left: 16px; } .landing-story-dots { right: 10px; } .landing-story-card { width: 94vw; } }
+@media (prefers-reduced-motion: reduce) { .landing-story-caption h2 { animation: none; } .landing-story-dots li { transition: none; } }

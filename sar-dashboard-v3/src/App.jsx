@@ -1,48 +1,40 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
-import HomePage from './pages/HomePage'
-import DocsPage from './pages/DocsPage'
-import UseCasesPage from './pages/UseCasesPage'
 
-// App
-import AppLayout from './pages/app/AppLayout'
-import AppDashboard from './pages/app/AppDashboard'
+const HomePage = lazy(() => import('./pages/marketing/LandingPage'))
+const DocsPage = lazy(() => import('./pages/DocsPage'))
+const AppLayout = lazy(() => import('./pages/app/AppLayout'))
+const AppDashboard = lazy(() => import('./pages/app/AppDashboard'))
 
 import './App.css'
 
 function App() {
   const location = useLocation();
   const isAppDashboard = location.pathname.startsWith('/app');
-  const isImmersive = location.pathname === '/use-cases' || location.pathname.startsWith('/docs');
+  const isImmersive = location.pathname.startsWith('/docs');
   const hideChrome = isAppDashboard || isImmersive;
 
   return (
     <>
-      {/* Background Effects */}
-      {!hideChrome && (
-        <>
-          <div className="bg-gradient-mesh" />
-          <div className="bg-grid" />
-        </>
-      )}
-
       {!hideChrome && <Navbar />}
 
-      <AnimatePresence mode="wait">
-        <Routes>
-          {/* Marketing Pages */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/docs" element={<DocsPage />} />
-          <Route path="/use-cases" element={<UseCasesPage />} />
+      <Suspense fallback={<div className="route-loading" aria-live="polite">LOADING NISAR PRO...</div>}>
+        <AnimatePresence mode="wait">
+          <Routes>
+            {/* Marketing Pages */}
+            <Route path="/" element={<HomePage />} />
+<Route path="/docs" element={<DocsPage />} />
 
-          {/* App */}
-          <Route path="/app" element={<AppLayout />}>
-            <Route index element={<AppDashboard />} />
-          </Route>
-        </Routes>
-      </AnimatePresence>
+            {/* App */}
+            <Route path="/app" element={<AppLayout />}>
+              <Route index element={<AppDashboard />} />
+            </Route>
+          </Routes>
+        </AnimatePresence>
+      </Suspense>
 
       {!hideChrome && <Footer />}
     </>

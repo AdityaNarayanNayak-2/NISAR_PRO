@@ -1333,10 +1333,10 @@ pub fn save_colormap_png_f32(
 /// Saves a flood classification map as an RGBA PNG.
 ///
 /// - Class 0 (Dry land): transparent [0, 0, 0, 0]
-/// - Class 1 (Permanent water): blue [0, 100, 255, 140]
-/// - Class 2 (Flood High Conf): neon red [255, 40, 0, 220]
-/// - Class 3 (Flood Med Conf): orange [255, 160, 0, 180]
-/// - Class 4 (Flood Low Conf): yellow [255, 230, 0, 120]
+/// - Class 1 (Permanent water): deep ICEYE-inspired blue
+/// - Class 2 (Flood High Conf): saturated cyan
+/// - Class 3 (Flood Med Conf): medium cyan
+/// - Class 4 (Flood Low Conf): pale cyan
 pub fn save_flood_map_png(
     flood_map: ArrayView2<u8>,
     output_path: &str,
@@ -1351,32 +1351,28 @@ pub fn save_flood_map_png(
             let idx = (r * cols + c) * 4;
             match class {
                 1 => {
-                    // Permanent water: Blue
-                    img_buf[idx] = 0;
-                    img_buf[idx + 1] = 100;
-                    img_buf[idx + 2] = 255;
-                    img_buf[idx + 3] = 140;
+                    img_buf[idx] = 33;
+                    img_buf[idx + 1] = 102;
+                    img_buf[idx + 2] = 193;
+                    img_buf[idx + 3] = 180;
                 }
                 2 => {
-                    // Flood High: Neon Red
-                    img_buf[idx] = 255;
-                    img_buf[idx + 1] = 40;
-                    img_buf[idx + 2] = 0;
+                    img_buf[idx] = 0;
+                    img_buf[idx + 1] = 166;
+                    img_buf[idx + 2] = 199;
                     img_buf[idx + 3] = 220;
                 }
                 3 => {
-                    // Flood Med: Orange
-                    img_buf[idx] = 255;
-                    img_buf[idx + 1] = 160;
-                    img_buf[idx + 2] = 0;
-                    img_buf[idx + 3] = 180;
+                    img_buf[idx] = 66;
+                    img_buf[idx + 1] = 198;
+                    img_buf[idx + 2] = 213;
+                    img_buf[idx + 3] = 190;
                 }
                 4 => {
-                    // Flood Low: Yellow
-                    img_buf[idx] = 255;
-                    img_buf[idx + 1] = 230;
-                    img_buf[idx + 2] = 0;
-                    img_buf[idx + 3] = 120;
+                    img_buf[idx] = 145;
+                    img_buf[idx + 1] = 217;
+                    img_buf[idx + 2] = 220;
+                    img_buf[idx + 3] = 145;
                 }
                 _ => {
                     // Land: Transparent
@@ -1479,13 +1475,17 @@ mod tests {
     use ndarray::Array2;
     use num_complex::Complex32;
 
+    fn tmp_path(name: &str) -> String {
+        std::env::temp_dir().join(name).to_string_lossy().into_owned()
+    }
+
     #[test]
     fn test_save_geotiff_f32() {
         let rows = 16;
         let cols = 16;
         let data = Array2::from_elem((rows, cols), std::f32::consts::PI);
-        let path = "/tmp/test_f32.tif";
-        let res = save_geotiff_f32(data.view(), path, None);
+        let path = tmp_path("nisar_test_f32.tif");
+        let res = save_geotiff_f32(data.view(), &path, None);
         assert!(res.is_ok());
 
         // Verify TIFF magic bytes
@@ -1498,8 +1498,8 @@ mod tests {
         let rows = 16;
         let cols = 16;
         let data = Array2::from_elem((rows, cols), Complex32::new(1.0, 2.0));
-        let path = "/tmp/test_complex.tif";
-        let res = save_geotiff_complex(data.view(), path, Some([0.0, 0.0, 1.0, 1.0]));
+        let path = tmp_path("nisar_test_complex.tif");
+        let res = save_geotiff_complex(data.view(), &path, Some([0.0, 0.0, 1.0, 1.0]));
         assert!(res.is_ok());
 
         let bytes = fs::read(path).unwrap();
@@ -1512,11 +1512,11 @@ mod tests {
         let rows = 512usize;
         let cols = 512usize;
         let data = ndarray::Array2::<f32>::ones((rows, cols));
-        let path = "/tmp/test_gdal.tif";
+        let path = tmp_path("nisar_test_gdal.tif");
         let bbox = [-118.5f64, 33.5, -117.5, 34.5];
-        save_sar_geotiff(data.view(), path, bbox).unwrap();
+        save_sar_geotiff(data.view(), &path, bbox).unwrap();
 
-        let out = Command::new("gdalinfo").arg(path).output();
+        let out = Command::new("gdalinfo").arg(&path).output();
 
         if let Ok(o) = out {
             let stdout = String::from_utf8_lossy(&o.stdout);
@@ -1541,8 +1541,8 @@ mod tests {
         flood_map[[2, 2]] = 3; // Flood Med
         flood_map[[3, 3]] = 4; // Flood Low
 
-        let path = "/tmp/test_flood_map.png";
-        let res = save_flood_map_png(flood_map.view(), path);
+        let path = tmp_path("nisar_test_flood_map.png");
+        let res = save_flood_map_png(flood_map.view(), &path);
         assert!(res.is_ok());
 
         let bytes = fs::read(path).unwrap();
@@ -1555,9 +1555,9 @@ mod tests {
         flood_map[[1, 1]] = 2; // Flood High
         flood_map[[2, 2]] = 3; // Flood Med
 
-        let path = "/tmp/test_flood.json";
+        let path = tmp_path("nisar_test_flood.json");
         let bbox = [82.0, 18.0, 83.0, 19.0];
-        let res = save_flood_geojson(flood_map.view(), bbox, path);
+        let res = save_flood_geojson(flood_map.view(), bbox, &path);
         assert!(res.is_ok());
 
         let content = fs::read_to_string(path).unwrap();

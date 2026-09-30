@@ -123,3 +123,25 @@ The gateway uses `tokio::select!` to race multiple async futures against each ot
 3. A user cancellation request (`cancel_rx.recv()`).
 
 If the user clicks "Cancel" in the UI (hitting `POST /jobs/:id/cancel`), the gateway sends a signal down the `cancel_rx` channel. The `select!` block detects it, runs `child.kill().await`, and cleans up the memory, preventing zombie processes from eating RAM.
+
+---
+
+## 6. Verified Contract Details (real runs)
+
+Facts confirmed against the running gateway and the Vite dashboard:
+
+### Job status serialization quirk
+`JobStatus` uses `#[serde(rename_all = "snake_case")]`, and the `Failed` variant carries a `String`. As a result a failed job is serialized as **`{"status": {"failed": "<reason>"}}`** — an object, not a plain string. Clients must normalize this shape (the dashboard does via `normalizeJobStatus`); open/closed unions like `"failed"` / `"completed"` don't apply here.
+
+### Terminal/system events
+The SSE stream for `GET /jobs/:id/logs` replays cached logs first, then broadcasts live lines. On termination the gateway emits one of:
+- `[SYSTEM] PROCESS_COMPLETED`
+- `[SYSTEM] PROCESS_CANCELLED` (user cancel via `POST /jobs/:id/cancel`)
+- `[SYSTEM] PROCESS_TIMEOUT` (30-minute hard timeout)
+- `[SYSTEM] PROCESS_FAILED:<reason>`
+
+### Catalog failure → silent empty array
+Both `GET /search` (ESA) and `GET /search/nisar` (ASF) log the error but return `200 OK` with `[]` on failure. Auth problems for ESA appear as empty results — configure `ESA_USERNAME`/`ESA_PASSWORD`. ASF search is anonymous; only downloads need Earthdata credentials (`/asf/auth-status` reports the configured state).
+
+### Route map (incl. endpoints not in older docs)
+`/search`, `/search/nisar`, `/assets/search`, `/context`, `GET|POST /jobs`, `/upload`, `/jobs/health-ping`, `/jobs/:id`, `/jobs/:id/cancel`, `/jobs/:id/logs`, `/asf/download-stream` (streams a remote product into `data/`), `/asf/auth-status`, and a static `/results/*` file server over the local `results/` directory.

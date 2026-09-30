@@ -82,8 +82,11 @@ export function MapAoiDrawer({ isDrawing, setIsDrawing, drawnAoi, setDrawnAoi, a
         } else {
             map.dragging.enable();
             if (container) container.style.cursor = '';
-            setStartPt(null);
-            setCurrentPt(null);
+            const t = setTimeout(() => {
+                setStartPt(null);
+                setCurrentPt(null);
+            }, 0);
+            return () => clearTimeout(t);
         }
     }, [isDrawing, map]);
 

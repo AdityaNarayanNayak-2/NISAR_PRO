@@ -17,6 +17,13 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
         setSections(prev => ({ ...prev, [sec]: !prev[sec] }));
     };
 
+    const handleSectionKeyDown = (event, section) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleSection(section);
+        }
+    };
+
     const p = parseFloodReport(floodReport);
     if (!p) {
         return (
@@ -176,7 +183,7 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px 16px' }}>
 
                 {/* SECTION 1: FLOOD IMPACT */}
-                <div style={sectionHeaderStyle} onClick={() => toggleSection('impact')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>
+                <div role="button" tabIndex={0} aria-expanded={sections.impact} style={sectionHeaderStyle} onClick={() => toggleSection('impact')} onKeyDown={(event) => handleSectionKeyDown(event, 'impact')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: C.textMid }}>
                         <Activity size={12} style={{ color: C.accent.flood }} />
                         <span>SECTION 1: FLOOD IMPACT</span>
@@ -194,7 +201,7 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                         }} onClick={e => e.stopPropagation()}>
                             {p.activeDate.toUpperCase()}
                         </span>
-                        <motion.div animate={{ rotate: sections.impact ? 0 : 180 }} transition={{ duration: 0.2 }}>
+                        <motion.div aria-hidden="true" animate={{ rotate: sections.impact ? 0 : 180 }} transition={{ duration: 0.2 }}>
                             <ChevronDown size={12} color={C.textDim} />
                         </motion.div>
                     </div>
@@ -278,18 +285,23 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                                     <div style={{ width: `${medPct}%`, background: C.caution, transition: 'width 1s ease' }} title={`Medium Confidence: ${p.medConfAcres.toFixed(1)} ac`} />
                                     <div style={{ width: `${permPct}%`, background: '#5483b3', transition: 'width 1s ease' }} title={`Permanent Water: ${p.permWaterAcres.toFixed(1)} ac`} />
                                 </div>
+                                <div className="flood-legend" aria-label="Flood impact confidence legend">
+                                    <span><i style={{ background: C.accent.flood }} /> High confidence</span>
+                                    <span><i style={{ background: C.caution }} /> Medium confidence</span>
+                                    <span><i style={{ background: '#5483b3' }} /> Permanent water</span>
+                                </div>
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
 
                 {/* SECTION 2: ACQUISITION */}
-                <div style={sectionHeaderStyle} onClick={() => toggleSection('acquisition')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>
+                <div role="button" tabIndex={0} aria-expanded={sections.acquisition} style={sectionHeaderStyle} onClick={() => toggleSection('acquisition')} onKeyDown={(event) => handleSectionKeyDown(event, 'acquisition')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: C.textMid }}>
                         <Radio size={12} style={{ color: C.accent.flood }} />
                         <span>SECTION 2 · ACQUISITION</span>
                     </div>
-                    <motion.div animate={{ rotate: sections.acquisition ? 0 : 180 }} transition={{ duration: 0.2 }}>
+                    <motion.div aria-hidden="true" animate={{ rotate: sections.acquisition ? 0 : 180 }} transition={{ duration: 0.2 }}>
                         <ChevronDown size={12} color={C.textDim} />
                     </motion.div>
                 </div>
@@ -336,12 +348,12 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                 </AnimatePresence>
 
                 {/* SECTION 3: DETECTION */}
-                <div style={sectionHeaderStyle} onClick={() => toggleSection('methodology')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>
+                <div role="button" tabIndex={0} aria-expanded={sections.methodology} style={sectionHeaderStyle} onClick={() => toggleSection('methodology')} onKeyDown={(event) => handleSectionKeyDown(event, 'methodology')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: C.textMid }}>
                         <Cpu size={12} style={{ color: C.accent.flood }} />
                         <span>SECTION 3 · DETECTION</span>
                     </div>
-                    <motion.div animate={{ rotate: sections.methodology ? 0 : 180 }} transition={{ duration: 0.2 }}>
+                    <motion.div aria-hidden="true" animate={{ rotate: sections.methodology ? 0 : 180 }} transition={{ duration: 0.2 }}>
                         <ChevronDown size={12} color={C.textDim} />
                     </motion.div>
                 </div>
@@ -376,12 +388,12 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                 </AnimatePresence>
 
                 {/* SECTION 4: DATA & REPORTS */}
-                <div style={sectionHeaderStyle} onClick={() => toggleSection('actions')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>
+                <div role="button" tabIndex={0} aria-expanded={sections.actions} style={sectionHeaderStyle} onClick={() => toggleSection('actions')} onKeyDown={(event) => handleSectionKeyDown(event, 'actions')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: C.textMid }}>
                         <FileText size={12} style={{ color: C.accent.flood }} />
                         <span>SECTION 4: DATA & REPORTS</span>
                     </div>
-                    <motion.div animate={{ rotate: sections.actions ? 0 : 180 }} transition={{ duration: 0.2 }}>
+                    <motion.div aria-hidden="true" animate={{ rotate: sections.actions ? 0 : 180 }} transition={{ duration: 0.2 }}>
                         <ChevronDown size={12} color={C.textDim} />
                     </motion.div>
                 </div>
@@ -395,7 +407,7 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                             transition={{ duration: 0.2 }}
                             style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px', overflow: 'hidden' }}
                         >
-                            <motion.button
+                            <motion.button className="flood-panel-action flood-panel-action-primary"
                                 onClick={onExportGeoJson}
                                 style={{
                                     width: '100%',
@@ -421,7 +433,7 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                                 <span>EXPORT GEOMETRIES (GEOJSON)</span>
                             </motion.button>
 
-                            <motion.button
+                            <motion.button className="flood-panel-action"
                                 onClick={handleExportReportJson}
                                 style={{
                                     width: '100%',
@@ -447,7 +459,7 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                             </motion.button>
 
                             {onViewReport && (
-                                <motion.button
+                                <motion.button className="flood-panel-action flood-panel-action-solid"
                                     onClick={onViewReport}
                                     style={{
                                         width: '100%',

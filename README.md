@@ -50,6 +50,36 @@ NISAR Pro utilizes a **Cloud-Control / Local-Compute** architecture. The client-
 
 ## 🚀 Quick Start (Local Run)
 
+### Windows PowerShell
+
+Use three terminals. The processor is a worker launched by the gateway; it is not a separate long-running server.
+
+**Terminal 1 — build the flood processor once:**
+
+```powershell
+cd D:\nisar\nisar_pro\sar_science_processor
+cargo build
+```
+
+**Terminal 2 — start the gateway:**
+
+```powershell
+cd D:\nisar\nisar_pro\sar-gateway
+$env:LOCAL_MODE = "true"
+$env:RUST_LOG = "info"
+cargo run
+```
+
+**Terminal 3 — start the dashboard:**
+
+```powershell
+cd D:\nisar\nisar_pro\sar-dashboard-v3
+npm.cmd install
+npm.cmd run dev
+```
+
+Open <http://127.0.0.1:5173/>. Keep Terminals 2 and 3 open while using the app. See the full [Windows local run guide](Docs/UserGuide/windows-local-run.md) for troubleshooting.
+
 ### System Dependencies
 ```bash
 # Ubuntu / Debian

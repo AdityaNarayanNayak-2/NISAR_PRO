@@ -2,15 +2,26 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Download, HardDrive, Info } from 'lucide-react';
 import { MONO, SANS, C } from '../constants';
+import { api } from '../../../config/api';
 
 export default function DataExportsView({ viewingResult }) {
     const flood = viewingResult?.pipeline === 'flood' ? viewingResult : null;
-    const downloads = flood ? [
-        ['Flood overlay PNG', flood.url],
-        ['Flood report JSON', flood.floodReportPath && flood.url.replace(/_flood\.png$/, '_flood.json')],
-        ['Flood polygons GeoJSON', flood.floodGeoJsonPath && flood.url.replace(/_flood\.png$/, '_flood.geo.json')],
-        ['Classification GeoTIFF', flood.url?.replace(/_flood\.png$/, '_flood_class.tif')],
-    ].filter(([, url]) => url) : [];
+    const downloads = [];
+    if (flood) {
+        const reportPath = flood.floodReportPath
+            || (flood.output_path ? flood.output_path.replace(/_flood\.png$/, '_flood.json') : null);
+        const pngUrl = flood.url || (flood.output_path ? api(flood.output_path) : null);
+        const geoJsonUrl = flood.floodGeoJsonPath
+            ? api(flood.floodGeoJsonPath)
+            : (reportPath ? api(reportPath.replace(/\.json$/, '.geo.json')) : null);
+
+        if (pngUrl) downloads.push(['Flood overlay PNG', pngUrl]);
+        if (reportPath) {
+            downloads.push(['Flood report JSON', api(reportPath)]);
+            downloads.push(['Flood polygons GeoJSON', geoJsonUrl]);
+            downloads.push(['Classification GeoTIFF', api(reportPath.replace(/\.json$/, '_class.tif'))]);
+        }
+    }
 
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 180, damping: 20 }} style={{ flex: 1, background: '#0a0d10', padding: '24px', overflowY: 'auto', boxSizing: 'border-box' }}>

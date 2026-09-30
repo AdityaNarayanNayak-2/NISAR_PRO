@@ -27,7 +27,7 @@ Performs a lightweight system check to confirm the gateway is online.
 ### `GET /assets/search`
 Queries pre-defined critical infrastructure coordinates and metadata matching a text query.
 * **Query Parameters**:
-  * `query` (string, required): Search term (e.g. `Kolab`, `Hirakud`).
+  * `q` (string, required): Search term (e.g. `Kolab`, `Hirakud`).
 * **Response Status**: `200 OK`
 * **JSON Payload**:
   ```json
@@ -66,21 +66,38 @@ Queries dynamic telemetry data (weather, soil anomalies, seismicity) for a geogr
 ## 2. Satellite Catalog Search Endpoints
 
 ### `GET /search`
-Queries the ESA Copernicus OData catalog for Sentinel-1 scenes matching criteria.
+Queries the ESA Copernicus OData catalog for Sentinel-1 scenes matching criteria. **Requires `ESA_USERNAME` / `ESA_PASSWORD` in the gateway environment, even for search.**
 * **Query Parameters**:
   * `lat` (float, required): Latitude of target location.
   * `lon` (float, required): Longitude of target location.
   * `start_date` (string, optional): ISO-8601 start date (e.g. `2026-01-01`).
   * `end_date` (string, optional): ISO-8601 end date.
 * **Response Status**: `200 OK`
+* **Note**: On catalog errors the gateway returns an empty array `[]` with `200 OK`, not an error status.
 
 ### `GET /search/nisar`
-Queries the NASA Alaska Satellite Facility (ASF) catalog for NISAR H5 products matching a bounding box.
+Queries the NASA Alaska Satellite Facility (ASF) catalog for NISAR H5 products matching a bounding box. **Search is anonymous — no credentials needed; only the download step requires Earthdata auth.**
 * **Query Parameters**:
   * `bbox` (string, required): Bounding box format `west,south,east,north` (e.g. `82.5,18.7,82.7,18.9`).
   * `start_date` (string, optional): ISO-8601 start datetime (e.g. `2026-01-01T00:00:00Z`).
   * `end_date` (string, optional): ISO-8601 end datetime.
+  * `platform` (string, optional): e.g. `NISAR`.
+  * `processing_level` (string, optional): e.g. `GCOV`, `RSLC`, `GUNW`.
 * **Response Status**: `200 OK`
+* **Note**: On catalog errors the gateway returns an empty array `[]` with `200 OK`, not an error status.
+
+### `GET /asf/auth-status`
+Reports whether Earthdata download credentials are configured in the gateway environment (takes `EARTHDATA_*` fallback `ASF_*`).
+* **Response Status**: `200 OK`
+* **JSON Payload**:
+  ```json
+  {
+    "authenticated": false,
+    "auth_type": "none",
+    "has_token": false,
+    "has_credentials": false
+  }
+  ```
 * **JSON Payload**:
   ```json
   [
@@ -107,15 +124,21 @@ Submits a SAR processing task to the queue.
 * **JSON Request Properties**:
   * `input_file` (string, required): Absolute local path or remote URL to the master HDF5 file.
   * `slave_file` (string, optional): Absolute path to the secondary (slave) H5 product for InSAR.
-  * `pipeline` (string, required): Target pipeline module (`insar`, `cfar`, or `standard_rda`).
+  * `pipeline` (string, required): Target pipeline module (`flood` for flood-detection, or `insar`, `cfar`, `standard_rda`).
+  * `processor` (string, optional): `science` selects `sar_science_processor` (required for `flood`); omit/other values select the standard `sar_processor` for `Infrastructure`/`Standard RDA` profiles.
   * `crop_lat` (float, optional): Center latitude to crop processing domain.
   * `crop_lon` (float, optional): Center longitude to crop processing domain.
   * `crop_radius_km` (float, optional): Radius of crop circle in kilometers (defaults to `10.0`).
-* **Response Status**: `201 Created`
+  * `crop_preset` (string, optional): Preset crop size for flood pipeline (e.g. `10x10km`, `20x20km`).
+  * `gunw_file` (string, optional): Coherence GUNW path fused into flood confidence scoring.
+  * `min_change_db` / `seed_threshold_db` / `growth_threshold_db` (float, optional): Flood threshold overrides.
+  * `min_area_pixels` (int, optional): Flood region area floor (default `8`).
+* **Response Status**: `200 OK`
 * **JSON Payload**:
   ```json
   {
-    "job_id": "sar-f83d2a1b"
+    "job_id": "sar-f83d2a1b",
+    "status": "queued"
   }
   ```
 
@@ -133,14 +156,20 @@ Retrieves the execution status and output products of a submitted job.
       "north": 18.854,
       "west": 82.511,
       "east": 82.689
-    }
+    },
+    "flood_report_path": "results/sar-f83d2a1b_flood.json",
+    "flood_geojson_path": "results/sar-f83d2a1b_flood.geo.json",
+    "flood_baseline_path": "results/sar-f83d2a1b_flood_baseline.png",
+    "flood_active_path": "results/sar-f83d2a1b_flood_active.png"
   }
   ```
-* **Status Variants**: `queued`, `running`, `completed`, `failed(string_reason)`.
+* **Status Variants**: `queued`, `running`, `completed`, and a `failed` **object**: the failed reason is serialized as `{"failed": "<reason>"}` (not a plain string). Clients must normalize this shape.
+* **Note**: The processor also writes `<id>_flood_class.tif` (the classification GeoTIFF) to `results/`, but it is **not** advertised in this response; derive it from the report path basename.
 
 ### `POST /jobs/:id/cancel`
 Terminates an active processing task.
-* **Response Status**: `200 OK`
+* **Response Status**: `200 OK` with `{"status": "cancelled"}`; `400 Bad Request` if the job is unknown/unwritable.
+* **Effect**: Kills the child process; the SSE stream finalizes with `[SYSTEM] PROCESS_CANCELLED` (timeouts end with `[SYSTEM] PROCESS_TIMEOUT`).
 
 ### `POST /upload`
 Uploads a local HDF5 product from the browser via multipart form data.
@@ -167,7 +196,9 @@ Establishes a persistent, uni-directional Server-Sent Events (SSE) stream return
     * `{"event":"georef","bbox":{"south":...,"north":...}}` - Sets Leaflet bounds.
     * `{"event":"insar_report","path":"results/sar-xxx_insar.json"}` - Identifies Persistent Scatterers.
     * `{"event":"ships_detected","path":"results/sar-xxx_ships.json"}` - Identifies CFAR vessel coordinate markers.
-  * System hooks report terminations: `[SYSTEM] PROCESS_COMPLETED` or `[SYSTEM] PROCESS_FAILED`.
+    * `{"event":"progress","stage":"SUBMITTED"|"PROCESSING"|"GENERATING_OUTPUTS"|"COMPLETE"|"FAILED","message":"..."}` - Flood pipeline stage progress.
+    * `{"event":"output","path":"results/sar-xxx_flood.png"}` and `{"event":"flood_report","path":"results/sar-xxx_flood.json"}` - Flood artifact pointers.
+  * System hooks report terminations, including the reason: `[SYSTEM] PROCESS_COMPLETED`, `[SYSTEM] PROCESS_CANCELLED`, `[SYSTEM] PROCESS_TIMEOUT`, `[SYSTEM] PROCESS_FAILED:<reason>`.
 
 ---
 

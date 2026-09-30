@@ -186,7 +186,7 @@ When you run an InSAR job, `sar_processor` goes through these processing steps:
 [HDF5 File] ──> [AOI Crop] ──> [CC Masking] ──> [Coherence Filter] ──> [Deramping] ──> [Displacement mm]
 ```
 
-1. **AOI Cropping**: Loads only the selected region of interest (AOI) into memory, keeping RAM usage low.
+1. **AOI Cropping**: The crop rectangle is applied **after** the full HDF5 datacube has been read into RAM and sliced (`rustyhdf5` has no partial/hyperslab reads). The peak memory footprint is therefore the *entire* product, not the crop. Real products are large: a GCOV is 8–10 GB on disk and reads as f32 (~4× that size in RAM), an RSLC is 25–30 GB. Cropping only trims the retained slice, it does **not** lower the load peak.
 2. **Connected Components Masking**: Filters out areas where phase unwrapping failed (typically over forests or water), setting those pixels to `NaN` (Not a Number).
 3. **Coherence Masking**: Filters out pixels with coherence $< 0.3$ to remove water noise and vegetation clutter.
 4. **Iterative Robust Quadratic Deramping**: Satellite orbit drift can introduce a tilt (phase ramp) across the image. The processor fits a quadratic equation to estimate this tilt:
@@ -207,7 +207,7 @@ When you run an InSAR job, `sar_processor` goes through these processing steps:
 * **Fix**: The coordinates selected on the map don't match the coverage area of the loaded satellite data. Zoom out on the map to find the correct data bounding box.
 
 ### ❌ Processor exits abruptly / Out of Memory (OOM)
-* **Fix**: The crop area (AOI) selected on the map is too large. Reduce the crop radius (e.g., to 5km or 10km) to lower the memory footprint.
+* **Fix**: Real NISAR products are far larger than the crop you select — the whole file is loaded into RAM before cropping, so reducing the crop radius alone will **not** prevent an OOM. GCOV files are 8–10 GB (≈30–40 GB RAM as f32) and RSLC files are 25–30 GB (≈100+ GB RAM). On a typical 8–16 GB workstation these cannot be processed as-is; use the small bundled test products, a machine with adequate RAM, or the upcoming chunked-read fix.
 
 ### ❌ Dashboard says: `GATEWAY: DISCONNECTED`
 * **Fix**: The frontend can't reach the backend. Check the terminal window running `sar-gateway` (Step 2.3) and make sure the server is still running on port 3000.

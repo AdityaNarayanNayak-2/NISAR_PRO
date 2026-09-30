@@ -84,3 +84,21 @@ To re-run this exact verification test in the future:
    * Click **FETCH CONTEXT** to query reservoir and weather telemetry.
    * Paste the GUNW file path and click **START PROCESSING**.
    * Verify that the terminal logs stream correctly, the green dots populate, and the deformation/coherence layers toggle as expected.
+
+---
+
+## 4. Verification Session: Real-Data Contract Checks (September 29, 2026)
+
+Findings recorded against the actual gateway, processor binary, and a NASA/ASF search:
+
+* **Real product sizes (authoritative):** GCOV ≈ 8–10 GB, RSLC ≈ 25–30 GB. Both are read fully into RAM before any crop (`rustyhdf5` has no partial reads), so peak RSS ≈ 4× on-disk for f32 GCOV grids (~30–40 GB) and far more for RSLC. An 8 GB laptop can only run the small bundled test products; a chunked/hyperslab-read fix is planned.
+* **Frontend fixes applied this session:**
+  * `src/config/api.js` collapses double slashes — fixed the `//results/` double-slash 404 on flood reload.
+  * `normalizeJobStatus`/`jobErrorMessage` in `helpers.js` — the gateway serializes a failed job as `{"status": {"failed": "<reason>"}}` (object, not string); the UI now normalizes it everywhere (poller, SSE, details drawer, exports).
+  * Removed the phantom demo job `sar-e4efe049` from the dashboard chained-run preload; no `results/` files existed for it.
+  * Health check now requires `res.ok` against `/jobs/health-ping` (fallback `/jobs`) — no more false `GATEWAY: DISCONNECTED` against the root path.
+  * SSE handlers finalize on `PROCESS_COMPLETED` / `PROCESS_CANCELLED` / `PROCESS_TIMEOUT` / `PROCESS_FAILED:<msg>`; cancel buttons wired through `POST /jobs/:id/cancel` in the progress bar, terminal drawer, run history, and flood config panel.
+  * Data exports derive PNG/JSON/GeoJSON/GeoTIFF links from the advertised `floodReportPath` instead of string-mangling `flood.url` — `_flood_class.tif` is written by the processor but not advertised in `GET /jobs/:id`, and the GeoTIFF export was previously broken.
+  * GeoJSON `class_code` coerced with `Number()`; `catch (e) {}` → `catch { void 0; }`; deferred setState-in-effect resets in `MapComponents.jsx`.
+* **Gateway facts verified:** route map in `main.rs:37-52` includes `/jobs/health-ping`, `/jobs/:id/cancel`, `/asf/download-stream`, `/asf/auth-status`, and a static `/results/*` server (`ServeDir::new("results")`). `/search` (ESA) needs `ESA_USERNAME`/`ESA_PASSWORD` even to search; `/search/nisar` (ASF) searches anonymously and downloads need Earthdata creds. Both catalog handlers return `200 OK` with `[]` on error.
+* **Flood artifacts verified:** `<id>_flood.{png,json,geo.json,_baseline.png,_active.png,_class.tif}` in `results/`; gateway advertises the four named paths, processor writes the `.tif` unadvertised.

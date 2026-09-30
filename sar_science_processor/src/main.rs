@@ -763,6 +763,20 @@ fn main() -> Result<()> {
             let png_path = format!("{}_flood.png", base);
             sar_science_processor::io::save_flood_map_png(class_map.view(), &png_path)?;
 
+            // Replay source imagery. These are the actual loaded GCOV observations,
+            // rendered only for presentation; the validated detection path above is
+            // unchanged. Both previews use the same crop/grid and therefore share the
+            // flood mask bounds exactly.
+            let active_preview_path = format!("{}_flood_active.png", base);
+            sar_science_processor::io::save_sar_image(active_slc.view(), &active_preview_path)?;
+            let baseline_preview_path = if let Some(baseline) = baseline_slc {
+                let path = format!("{}_flood_baseline.png", base);
+                sar_science_processor::io::save_sar_image(baseline.view(), &path)?;
+                Some(path)
+            } else {
+                None
+            };
+
             // Save GeoJSON flood polygons
             let geojson_path = format!("{}_flood.geo.json", base);
             if let Some(bbox_val) = bbox_opt {
@@ -834,6 +848,17 @@ fn main() -> Result<()> {
                     "west": bb.west,
                     "east": bb.east
                 })),
+                "replay": {
+                    "available": baseline_preview_path.is_some(),
+                    "baseline_preview": baseline_preview_path,
+                    "active_preview": active_preview_path,
+                    "mask_preview": png_path,
+                    "rows": class_map.nrows(),
+                    "columns": class_map.ncols(),
+                    "row_order": "north_to_south",
+                    "observation_model": "two_observations_plus_derived_detection",
+                    "intermediate_observations": false
+                },
                 "areas": {
                     "total_area_acres": total_area_acres,
                     "permanent_water_acres": permanent_water_acres,

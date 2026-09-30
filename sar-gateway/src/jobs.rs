@@ -62,6 +62,8 @@ pub struct JobMetadata {
     pub bbox: Option<GeoBbox>,
     pub flood_report_path: Option<String>,
     pub flood_geojson_path: Option<String>,
+    pub flood_baseline_path: Option<String>,
+    pub flood_active_path: Option<String>,
     pub created_at: std::time::Instant,
     pub cancel_tx: Option<tokio::sync::mpsc::Sender<()>>,
 }
@@ -74,6 +76,8 @@ pub struct JobResponse {
     pub bbox: Option<GeoBbox>,
     pub flood_report_path: Option<String>,
     pub flood_geojson_path: Option<String>,
+    pub flood_baseline_path: Option<String>,
+    pub flood_active_path: Option<String>,
 }
 
 impl JobMetadata {
@@ -137,6 +141,8 @@ impl JobMetadata {
             bbox: self.get_bbox_with_fallback(),
             flood_report_path: self.flood_report_path.clone(),
             flood_geojson_path: self.flood_geojson_path.clone(),
+            flood_baseline_path: self.flood_baseline_path.clone(),
+            flood_active_path: self.flood_active_path.clone(),
         }
     }
 }
@@ -187,6 +193,8 @@ pub async fn spawn_processing_job(
         bbox: None,
         flood_report_path: None,
         flood_geojson_path: None,
+        flood_baseline_path: None,
+        flood_active_path: None,
         created_at: std::time::Instant::now(),
         cancel_tx: None, // Will be set if local mode
     }));
@@ -467,6 +475,8 @@ async fn spawn_local_job(
                 m.output_path = Some(format!("/results/{}_flood.png", job_id));
                 m.flood_report_path = Some(format!("/results/{}_flood.json", job_id));
                 m.flood_geojson_path = Some(format!("/results/{}_flood.geo.json", job_id));
+                m.flood_baseline_path = Some(format!("/results/{}_flood_baseline.png", job_id));
+                m.flood_active_path = Some(format!("/results/{}_flood_active.png", job_id));
             } else if use_science && (pipeline.as_deref() == Some("gcov") || pipeline.is_none()) {
                 m.output_path = Some(format!("/results/{}.png", job_id));
             } else if use_science && pipeline.as_deref() == Some("insar") {
@@ -504,9 +514,14 @@ fn find_processor_binary() -> String {
         if std::path::Path::new(p).exists() {
             return p.to_string();
         }
+        // Windows builds produce <name>.exe
+        let exe = format!("{}.exe", p);
+        if std::path::Path::new(&exe).exists() {
+            return exe;
+        }
     }
 
-    // Fallback: assume it's in PATH
+    // Fallback: assume it's in PATH (Command resolves the .exe there automatically)
     "sar_processor".to_string()
 }
 
@@ -521,6 +536,11 @@ fn find_science_processor_binary() -> String {
     for p in &possible_paths {
         if std::path::Path::new(p).exists() {
             return p.to_string();
+        }
+        // Windows builds produce <name>.exe
+        let exe = format!("{}.exe", p);
+        if std::path::Path::new(&exe).exists() {
+            return exe;
         }
     }
 
