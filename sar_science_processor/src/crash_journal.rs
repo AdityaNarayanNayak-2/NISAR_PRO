@@ -41,8 +41,27 @@ impl std::fmt::Display for MemSnapshot {
     }
 }
 
-/// Read current system memory from /proc/meminfo (Linux only).
+/// Read current system memory. Works on Windows and Linux; `None` elsewhere.
+///
+/// Windows uses `GlobalMemoryStatusEx` from kernel32 (no extra crate).
+/// Linux uses `/proc/meminfo`.
 pub fn read_system_memory() -> Option<MemSnapshot> {
+    #[cfg(target_os = "windows")]
+    {
+        read_system_memory_windows()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        read_system_memory_linux()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        None
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn read_system_memory_linux() -> Option<MemSnapshot> {
     let content = fs::read_to_string("/proc/meminfo").ok()?;
     let mut total = 0u64;
     let mut available = 0u64;
@@ -71,6 +90,62 @@ pub fn read_system_memory() -> Option<MemSnapshot> {
     })
 }
 
+#[cfg(target_os = "windows")]
+fn read_system_memory_windows() -> Option<MemSnapshot> {
+    use std::mem;
+
+    #[repr(C)]
+    struct MemoryStatusEx {
+        dw_length: u32,
+        dw_memory_load: u32,
+        ull_total_phys: u64,
+        ull_avail_phys: u64,
+        ull_total_page_file: u64,
+        ull_avail_page_file: u64,
+        ull_total_virtual: u64,
+        ull_avail_virtual: u64,
+        ull_avail_extended_virtual: u64,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GlobalMemoryStatusEx(lp_buffer: *mut MemoryStatusEx) -> i32;
+    }
+
+    unsafe {
+        let mut status = MemoryStatusEx {
+            dw_length: mem::size_of::<MemoryStatusEx>() as u32,
+            dw_memory_load: 0,
+            ull_total_phys: 0,
+            ull_avail_phys: 0,
+            ull_total_page_file: 0,
+            ull_avail_page_file: 0,
+            ull_total_virtual: 0,
+            ull_avail_virtual: 0,
+            ull_avail_extended_virtual: 0,
+        };
+
+        if GlobalMemoryStatusEx(&mut status) == 0 {
+            return None;
+        }
+
+        let mib: u64 = 1024 * 1024;
+        let total = status.ull_total_phys / mib;
+        let available = status.ull_avail_phys / mib;
+
+        // Commit limit minus physical RAM approximates the page file.
+        let swap_total = status.ull_total_page_file.saturating_sub(status.ull_total_phys) / mib;
+        let swap_free = status.ull_avail_page_file.saturating_sub(status.ull_avail_phys) / mib;
+
+        Some(MemSnapshot {
+            total_mb: total,
+            available_mb: available,
+            swap_total_mb: swap_total,
+            swap_free_mb: swap_free,
+        })
+    }
+}
+
 /// Initialize the crash journal at a given directory.
 /// Call this once from main() before any processing begins.
 pub fn init_journal(output_dir: &Path) {
@@ -93,7 +168,7 @@ pub fn init_journal(output_dir: &Path) {
             std::process::id(),
             read_system_memory()
                 .map(|m| m.to_string())
-                .unwrap_or_else(|| "unknown (not Linux?)".to_string()),
+                .unwrap_or_else(|| "unknown (unsupported platform)".to_string()),
         ),
     );
 
@@ -173,6 +248,60 @@ pub fn checkpoint_after_free(operation: &str) {
     );
 }
 
+/// Reserve capacity for `additional` elements, turning a would-be allocation failure into a
+/// clean, journaled error instead of a process abort.
+///
+/// `Vec::resize`/`extend_from_slice` abort the process when the allocator fails, which on
+/// Windows kills the run with no crash-journal entry. `try_reserve` returns `Err` instead, so
+/// we can log the failure and surface it as a normal error.
+pub fn try_reserve_checked<T>(
+    buf: &mut Vec<T>,
+    additional: usize,
+    operation: &str,
+) -> anyhow::Result<()> {
+    let elem_size = std::mem::size_of::<T>() as u64;
+    let bytes = (additional as u64).saturating_mul(elem_size);
+
+    match buf.try_reserve_exact(additional) {
+        Ok(()) => {
+            write_entry(
+                "ALLOC_OK",
+                &format!(
+                    "{} — reserved {} MB ({} elems x {} B)",
+                    operation,
+                    bytes / (1024 * 1024),
+                    additional,
+                    elem_size
+                ),
+            );
+            Ok(())
+        }
+        Err(e) => {
+            let msg = format!(
+                "{} — ALLOCATION FAILED for {} MB ({} elems x {} B): {}",
+                operation,
+                bytes / (1024 * 1024),
+                additional,
+                elem_size,
+                e
+            );
+            write_entry("ALLOC_FAIL", &msg);
+            anyhow::bail!("{}", msg)
+        }
+    }
+}
+
+/// Byte-oriented wrapper around [`try_reserve_checked`].
+pub fn try_reserve_bytes_checked<T>(
+    buf: &mut Vec<T>,
+    bytes: usize,
+    operation: &str,
+) -> anyhow::Result<()> {
+    let elem_size = std::mem::size_of::<T>();
+    let elems = if elem_size == 0 { bytes } else { bytes / elem_size };
+    try_reserve_checked(buf, elems, operation)
+}
+
 /// Check if a planned allocation is safe given current available memory.
 /// Returns Ok(()) if safe, Err with a detailed message if it would likely OOM.
 ///
@@ -186,7 +315,7 @@ pub fn guard_allocation(operation: &str, estimated_bytes: u64) -> anyhow::Result
         None => {
             // Can't read memory — log warning but proceed
             warn!(
-                "[MEMORY_GUARD] Cannot read /proc/meminfo, skipping safety check for: {}",
+                "[MEMORY_GUARD] Cannot read system memory, skipping safety check for: {}",
                 operation
             );
             return Ok(());
@@ -212,7 +341,7 @@ pub fn guard_allocation(operation: &str, estimated_bytes: u64) -> anyhow::Result
              \n\
              DEFICIT: {} MB\n\
              \n\
-             This allocation would likely trigger the Linux OOM killer.\n\
+             This allocation would likely exhaust available memory.\n\
              Try a smaller --crop-preset (e.g., 5x5km instead of 10x10km)\n\
              or close other applications to free RAM.",
             operation,
@@ -321,5 +450,57 @@ pub fn timed_scope(name: &str) -> TimedScope {
     TimedScope {
         name: name.to_string(),
         start: Instant::now(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_system_memory_returns_sane_values() {
+        let mem = read_system_memory();
+        assert!(
+            mem.is_some(),
+            "system memory must be readable on Windows and Linux"
+        );
+        let m = mem.unwrap();
+        assert!(m.total_mb > 0, "total_mb should be non-zero: {:?}", m);
+        assert!(
+            m.available_mb <= m.total_mb,
+            "available should not exceed total: {:?}",
+            m
+        );
+    }
+
+    #[test]
+    fn try_reserve_checked_rejects_impossible_allocation() {
+        let mut buf: Vec<f32> = Vec::new();
+        let result = try_reserve_checked(&mut buf, usize::MAX / 4, "unit-test-impossible");
+        assert!(
+            result.is_err(),
+            "an impossible allocation must return Err, never abort"
+        );
+    }
+
+    #[test]
+    fn try_reserve_bytes_checked_succeeds_for_small_request() {
+        let mut buf: Vec<u8> = Vec::new();
+        assert!(try_reserve_bytes_checked(&mut buf, 4096, "unit-test-small").is_ok());
+        assert!(buf.capacity() >= 4096);
+    }
+
+    #[test]
+    fn guard_allocation_blocks_absurd_request() {
+        // 10 TiB exceeds free RAM + swap on every machine we target, so the
+        // guard must return Err instead of letting the allocation through.
+        // This also proves read_system_memory() actually works: if it returned
+        // None the guard fails open and this test would catch that regression.
+        let absurd: u64 = 10 * 1024 * 1024 * 1024 * 1024;
+        let result = guard_allocation("unit-test-absurd", absurd);
+        assert!(
+            result.is_err(),
+            "guard_allocation must block a 10 TiB request on Windows and Linux"
+        );
     }
 }

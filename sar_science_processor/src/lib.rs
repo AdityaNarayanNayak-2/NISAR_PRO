@@ -8,6 +8,8 @@
 //! - GCOV: Geocoded Covariance → Speckle Filter → Colormapped PNG
 
 pub mod crash_journal;
+pub mod sha256;
+pub mod windowed;
 pub mod errors;
 pub mod io;
 pub mod nisar_parser;
