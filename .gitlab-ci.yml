@@ -18,6 +18,7 @@ variables:
       - sar_processor/target/
       - sar_operator_v2/target/
       - sar-gateway/target/
+      - sar_science_processor/target/
 
 .node_cache: &node_cache
   cache:
@@ -73,6 +74,18 @@ build_operator:
     paths:
       - sar_operator_v2/target/release/sar_operator_v2
     expire_in: 1 week
+
+build_science_processor:
+  stage: build
+  image: rust:latest
+  <<: *rust_cache
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - sar_science_processor/**/*
+        - .gitlab-ci.yml
+  script:
+    - cd sar_science_processor && cargo build --release --all-targets
 
 build_dashboard:
   stage: build
@@ -130,6 +143,22 @@ test_operator:
         - sar_operator_v2/**/*
   script:
     - cd sar_operator_v2 && cargo test
+
+test_science_processor:
+  stage: test
+  image: rust:latest
+  <<: *rust_cache
+  needs: [build_science_processor]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - sar_science_processor/**/*
+        - scripts/**/*
+        - .gitlab-ci.yml
+  script:
+    # 56 unit tests: windowed reader, fill values, filter masks, sha256
+    # vectors, memory-guard fail-closed — no granule needed (synthetic only)
+    - cd sar_science_processor && cargo test --release
 
 lint_dashboard:
   stage: test
