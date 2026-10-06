@@ -1,6 +1,7 @@
 # ══════════════════════════════════════════════
 # PRIVATE / PERSONAL — Never push to public repo
 # ══════════════════════════════════════════════
+Docs/Hireme/
 # ══════════════════════════════════════════════
 # BUILD ARTIFACTS
 # ══════════════════════════════════════════════
@@ -23,11 +24,21 @@ SarScienceFrontendExample/
 .idea/
 .agents/
 # ══════════════════════════════════════════════
+# DOWNLOADED DATA — ASF granules are licensed, huge, and regenerable
+# ══════════════════════════════════════════════
+# A single GCOV granule is ~6.95 GiB. Its goldens are derived from it and are
+# rebuilt by `scripts/nisar_probe.py goldens`, so neither belongs in git.
+Download/
+*.h5
+
+# ══════════════════════════════════════════════
 # SECRETS
 # ══════════════════════════════════════════════
 **/*.env
 .env
 *.secret.yaml
+*_secret.yaml
+*_secrets.yaml
 .png
 # Cloudflare Pages local state
 .wrangler/
