@@ -649,6 +649,15 @@ fn main() -> Result<()> {
             })?;
 
             if let Some(ref bp) = baseline_product {
+                let (active_rows, active_cols) = active_slc.dim();
+                let (baseline_rows, baseline_cols) = bp.slc.dim();
+                if (active_rows, active_cols) != (baseline_rows, baseline_cols) {
+                    anyhow::bail!(
+                        "Pre/post window shape mismatch: active {}x{} vs baseline {}x{}. Pixel-wise change detection requires identical crop windows.",
+                        active_rows, active_cols, baseline_rows, baseline_cols
+                    );
+                }
+
                 let baseline_dx = bp.pixel_spacing_x_m.ok_or_else(|| {
                     anyhow::anyhow!("Baseline GCOV product is missing xCoordinateSpacing metadata. Cannot perform pixel-wise flood comparison safely.")
                 })?;

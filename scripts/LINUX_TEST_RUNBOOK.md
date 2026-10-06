@@ -12,7 +12,7 @@ Reference results this run must reproduce (Windows laptop, release build):
 
 | Check | Windows result |
 |---|---|
-| `cargo test` | 56/56 pass |
+| `cargo test` | 58/58 pass |
 | `gcov_verify` | 21/21 goldens pass |
 | `gcov_fixture_verify` | 8/8 pass |
 | `gcov_diff` | 32/32 windows pass |
@@ -46,7 +46,7 @@ What each check needs:
 
 | Check | Needs the Assam granule? | Works on Kolab DAM files already on the box? |
 |---|---|---|
-| `cargo test` (56) | no | yes — no data needed |
+| `cargo test` (58) | no | yes — no data needed |
 | `gcov_fixture_verify` (8) | no — synthetic fixture only | yes (fixture is 2 small files) |
 | `gcov_diff` (32) | no — windows are grid-relative | **yes, run it on a Kolab file first** |
 | `gcov_fingerprint` / `gcov_probe_chunk` | no | yes |
@@ -158,10 +158,10 @@ Verify layout:
 ```bash
 cd ~/nisar_pro
 ls -lh Download/gcov/*.h5
-ls Download/gcov/goldens/   # expect goldens.tsv, fixture_missing_chunks.h5, fixture_missing_chunks.tsv
+ls Download/gcov/goldens/   # expect goldens.tsv, fixture_missing_chunks.h5, fixture_missing_chunks.h5.tsv
 ```
 
-## 2. Unit tests (expect 56/56)
+## 2. Unit tests (expect 58/58)
 
 ```bash
 cd ~/nisar_pro/sar_science_processor
@@ -195,7 +195,7 @@ cargo run --release --bin gcov_verify -- "$GRANULE" "$GOLDENS"
 # expect: passed 21, failed 0        (exit 0)
 
 # 8 synthetic fixture windows incl. missing/masked chunks
-cargo run --release --bin gcov_fixture_verify -- "$GOLDENS/fixture_missing_chunks.h5" "$GOLDENS/fixture_missing_chunks.tsv"
+cargo run --release --bin gcov_fixture_verify -- "$GOLDENS/fixture_missing_chunks.h5" "$GOLDENS/fixture_missing_chunks.h5.tsv"
 # expect: passed 8, failed 0         (exit 0)
 
 # 32 full-read-vs-crop differentials on the small frequencyB band
@@ -254,13 +254,13 @@ mkdir -p ~/linux_verify_results
   echo "=== system ==="; uname -a; lscpu | head -15; free -h
   echo "=== unit tests ==="; cargo test --release 2>&1 | tail -5
   echo "=== gcov_verify ==="; cargo run --release --bin gcov_verify -- "../Download/gcov/NISAR_L2_PR_GCOV_028_062_D_075_4005_DHDH_A_20260817T121708_20260817T121743_P05023_N_F_J_001.h5" "../Download/gcov/goldens"
-  echo "=== gcov_fixture_verify ==="; cargo run --release --bin gcov_fixture_verify -- "../Download/gcov/goldens/fixture_missing_chunks.h5" "../Download/gcov/goldens/fixture_missing_chunks.tsv"
+  echo "=== gcov_fixture_verify ==="; cargo run --release --bin gcov_fixture_verify -- "../Download/gcov/goldens/fixture_missing_chunks.h5" "../Download/gcov/goldens/fixture_missing_chunks.h5.tsv"
   echo "=== gcov_diff ==="; cargo run --release --bin gcov_diff -- "../Download/gcov/NISAR_L2_PR_GCOV_028_062_D_075_4005_DHDH_A_20260817T121708_20260817T121743_P05023_N_F_J_001.h5" "/science/LSAR/GCOV/grids/frequencyB/HHHH"
   echo "=== gcov_measure ==="; cargo run --release --bin gcov_measure -- "../Download/gcov/NISAR_L2_PR_GCOV_028_062_D_075_4005_DHDH_A_20260817T121708_20260817T121743_P05023_N_F_J_001.h5" "/science/LSAR/GCOV/grids/frequencyA/HHHH" 10850 12850 4119 6119
 } 2>&1 | tee ~/linux_verify_results/run_$(date +%Y%m%d_%H%M).txt
 ```
 
-Paste that file back. Success = every `failed: 0`, `56/56`, and both bars
+Paste that file back. Success = every `failed: 0`, `58/58`, and both bars
 `PASS`.
 
 ## Notes

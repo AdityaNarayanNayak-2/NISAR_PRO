@@ -370,37 +370,99 @@ pub fn parse_nisar_cropped(
 
         info!("Cropping: {}×{} → {}×{} (rows {}..{}, cols {}..{})", full_rows, full_cols, crop_rows, crop_cols, row_start, row_end, col_start, col_end);
 
-        // === MEMORY SAFETY: Guard against OOM before loading full dataset ===
-        let full_elements = full_rows as u64 * full_cols as u64;
-        let bytes_per_element: u64 = if product_type == NisarProductType::GCOV { 4 } else { 8 }; // f32 vs complex (2×f32)
-        let estimated_bytes = full_elements * bytes_per_element;
-        let alloc_desc = format!(
-            "read_f32 full dataset {}×{} ({:.1} MB) from '{}'",
-            full_rows, full_cols,
-            estimated_bytes as f64 / (1024.0 * 1024.0),
-            data_path
-        );
-        crash_journal::guard_allocation(&alloc_desc, estimated_bytes)?;
-        crash_journal::checkpoint_before_alloc(&alloc_desc, estimated_bytes);
-
-        // Read dataset directly to cropped Array2
         let slc = if product_type == NisarProductType::GCOV {
-            let _timer = crash_journal::timed_scope("GCOV read_f32 + crop");
-            let raw_f32 = dataset.read_f32()
-                .with_context(|| format!("Failed to read GCOV float32 data from '{}'", data_path))?;
-            
-            let mut cropped = Array2::<Complex32>::from_elem((crop_rows, crop_cols), Complex32::new(0.0, 0.0));
-            for r in 0..crop_rows {
-                let global_r = row_start + r;
-                let src_offset = global_r * full_cols + col_start;
-                for c in 0..crop_cols {
-                    cropped[[r, c]] = Complex32::new(raw_f32[src_offset + c], 0.0);
+            let _timer = crash_journal::timed_scope("GCOV windowed read");
+            let window = crate::windowed::Window {
+                row_start: row_start as u64,
+                row_end: row_end as u64,
+                col_start: col_start as u64,
+                col_end: col_end as u64,
+            };
+            window
+                .validate(full_rows as u64, full_cols as u64)
+                .with_context(|| {
+                    format!(
+                        "Crop window rows {}..{} cols {}..{} invalid for dataset '{}' ({}x{})",
+                        row_start, row_end, col_start, col_end, data_path, full_rows, full_cols
+                    )
+                })?;
+            let window_bytes = window.elements() * crate::windowed::ELEMENT_SIZE;
+            let alloc_desc = format!(
+                "GCOV windowed read {}x{} ({:.1} MB) rows {}..{} cols {}..{} from '{}'",
+                crop_rows,
+                crop_cols,
+                window_bytes as f64 / (1024.0 * 1024.0),
+                row_start,
+                row_end,
+                col_start,
+                col_end,
+                data_path
+            );
+            crash_journal::guard_allocation(&alloc_desc, window_bytes)?;
+            crash_journal::checkpoint_before_alloc(&alloc_desc, window_bytes);
+
+            let raw: Vec<f32> = if std::env::var_os("NISAR_GCOV_LEGACY_FULL_READ").is_some() {
+                let legacy_bytes = full_rows as u64 * full_cols as u64 * 4;
+                let legacy_desc = format!(
+                    "LEGACY read_f32 full dataset {}x{} ({:.1} MB) from '{}'",
+                    full_rows,
+                    full_cols,
+                    legacy_bytes as f64 / (1024.0 * 1024.0),
+                    data_path
+                );
+                crash_journal::guard_allocation(&legacy_desc, legacy_bytes)?;
+                crash_journal::checkpoint_before_alloc(&legacy_desc, legacy_bytes);
+                let full = dataset.read_f32().with_context(|| {
+                    format!("Failed to read GCOV float32 data from '{}'", data_path)
+                })?;
+                let mut buf = Vec::with_capacity(crop_rows * crop_cols);
+                for r in 0..crop_rows {
+                    let base = (row_start + r) * full_cols + col_start;
+                    buf.extend_from_slice(&full[base..base + crop_cols]);
                 }
+                drop(full);
+                crash_journal::checkpoint_after_free("GCOV legacy full buffer dropped");
+                buf
+            } else {
+                let mut reader = crate::windowed::ChunkedF32Reader::open(path)?;
+                reader.read_window(&data_path, window).with_context(|| {
+                    format!(
+                        "Windowed GCOV read failed for '{}' rows {}..{} cols {}..{}",
+                        data_path, row_start, row_end, col_start, col_end
+                    )
+                })?
+            };
+            anyhow::ensure!(
+                raw.len() == crop_rows * crop_cols,
+                "GCOV read returned {} elements, expected {} for crop window {}x{} (rows {}..{}, cols {}..{})",
+                raw.len(),
+                crop_rows * crop_cols,
+                crop_rows,
+                crop_cols,
+                row_start,
+                row_end,
+                col_start,
+                col_end
+            );
+            let mut cropped =
+                Array2::<Complex32>::from_elem((crop_rows, crop_cols), Complex32::new(0.0, 0.0));
+            for (i, &v) in raw.iter().enumerate() {
+                cropped[[i / crop_cols, i % crop_cols]] = Complex32::new(v, 0.0);
             }
-            drop(raw_f32); // Explicitly free the 4.6 GB buffer
-            crash_journal::checkpoint_after_free("GCOV raw_f32 dropped");
+            crash_journal::checkpoint_after_free("GCOV window buffer dropped");
             cropped
         } else {
+            let full_elements = full_rows as u64 * full_cols as u64;
+            let estimated_bytes = full_elements * 8;
+            let alloc_desc = format!(
+                "read_f32 full dataset {}×{} ({:.1} MB) from '{}'",
+                full_rows,
+                full_cols,
+                estimated_bytes as f64 / (1024.0 * 1024.0),
+                data_path
+            );
+            crash_journal::guard_allocation(&alloc_desc, estimated_bytes)?;
+            crash_journal::checkpoint_before_alloc(&alloc_desc, estimated_bytes);
             let _timer = crash_journal::timed_scope("Complex read_f32 + crop");
             let raw_f32 = dataset.read_f32()
                 .with_context(|| format!("Failed to read complex float32 data from '{}'", data_path))?;

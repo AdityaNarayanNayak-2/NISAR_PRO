@@ -145,12 +145,17 @@ pub fn validate_gcov_pair_metadata(
 
 /// Stage 2: Convert complex/real GCOV power to decibels (dB)
 ///
-/// Power P is stored in the real component. Uses 10 * log10(P + epsilon).
+/// Power P is stored in the real component: 10 * log10(P).
+/// Non-finite power and power <= 0 are nodata and become NaN, so they are
+/// excluded by the valid-pixel mask before any thresholding or growth.
 pub fn gcov_to_db(slc: &Array2<Complex32>) -> Array2<f32> {
-    const EPSILON: f32 = 1e-10;
     slc.mapv(|c| {
-        let power = c.re.max(EPSILON);
-        10.0 * power.log10()
+        let power = c.re;
+        if power.is_finite() && power > 0.0 {
+            10.0 * power.log10()
+        } else {
+            f32::NAN
+        }
     })
 }
 
@@ -519,10 +524,25 @@ pub fn run_flood_detection_pipeline(
 ) -> (Array2<u8>, Array2<f32>, FloodAnalysisResult) {
     let (rows, cols) = active_slc.dim();
     let total_pixels = rows * cols;
-    let valid_mask = Array2::<bool>::from_elem((rows, cols), true);
 
     info!("[FLOOD_PIPELINE] Stage 2: Converting active image to dB...");
     let active_db = gcov_to_db(active_slc);
+    let mut valid_mask = active_db.mapv(|v| v.is_finite());
+
+    let baseline_db_conv = baseline_slc.map(|base_slc| {
+        info!("[FLOOD_PIPELINE] Stage 2: Converting baseline image to dB...");
+        gcov_to_db(base_slc)
+    });
+    if let Some(base_db) = &baseline_db_conv {
+        valid_mask = &valid_mask & &base_db.mapv(|v| v.is_finite());
+    }
+    let valid_pixels = valid_mask.iter().filter(|&&v| v).count();
+    info!(
+        "[FLOOD_PIPELINE] Nodata mask: {} / {} pixels valid ({:.1}%)",
+        valid_pixels,
+        total_pixels,
+        100.0 * valid_pixels as f64 / total_pixels as f64
+    );
 
     let active_db_filtered = if opts.enable_median_filter {
         info!("[FLOOD_PIPELINE] Stage 3: Applying 3x3 median speckle filter...");
@@ -531,9 +551,7 @@ pub fn run_flood_detection_pipeline(
         active_db.clone()
     };
 
-    let (delta_db, baseline_db) = if let Some(base_slc) = baseline_slc {
-        info!("[FLOOD_PIPELINE] Stage 2: Converting baseline image to dB...");
-        let base_db = gcov_to_db(base_slc);
+    let (delta_db, baseline_db) = if let Some(base_db) = baseline_db_conv {
         let base_db_filtered = if opts.enable_median_filter {
             median_filter_3x3(&base_db, &valid_mask)
         } else {
@@ -574,6 +592,11 @@ pub fn run_flood_detection_pipeline(
 
     info!("[FLOOD_PIPELINE] Stage 6b: Morphological cleanup & size filtering...");
     let regions_count = morphological_cleanup(&mut flood_mask, opts.min_area_pixels);
+    for (mask, valid) in flood_mask.iter_mut().zip(valid_mask.iter()) {
+        if !*valid {
+            *mask = false;
+        }
+    }
 
     info!("[FLOOD_PIPELINE] Stage 7: Multi-tier confidence scoring...");
     let (class_map, confidence_reasons) = compute_confidence(
@@ -636,6 +659,40 @@ mod tests {
         assert!((db[[0, 1]] - 10.0).abs() < 1e-4);
         assert!((db[[1, 0]] - (-10.0)).abs() < 1e-4);
         assert!((db[[1, 1]] - (-20.0)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_gcov_to_db_nodata_becomes_nan() {
+        let mut slc = Array2::<Complex32>::zeros((2, 2));
+        slc[[0, 0]] = Complex32::new(0.0, 0.0);
+        slc[[0, 1]] = Complex32::new(-3.5, 0.0);
+        slc[[1, 0]] = Complex32::new(f32::NAN, 0.0);
+        slc[[1, 1]] = Complex32::new(1.0, 0.0);
+
+        let db = gcov_to_db(&slc);
+        assert!(db[[0, 0]].is_nan(), "zero power must be nodata, not -100 dB");
+        assert!(db[[0, 1]].is_nan(), "negative power must be nodata");
+        assert!(db[[1, 0]].is_nan(), "NaN power must stay nodata");
+        assert!((db[[1, 1]] - 0.0).abs() < 1e-4, "valid power must convert normally");
+    }
+
+    #[test]
+    fn test_pipeline_excludes_nodata_from_flood() {
+        let (rows, cols) = (16, 16);
+        let mut active =
+            Array2::<Complex32>::from_elem((rows, cols), Complex32::new(0.708, 0.0));
+        let baseline = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+        active[[8, 8]] = Complex32::new(0.0, 0.0);
+        active[[9, 9]] = Complex32::new(f32::NAN, 0.0);
+
+        let opts = FloodDetectionOptions::for_band(RadarBand::LBand);
+        let (class_map, _delta, summary) =
+            run_flood_detection_pipeline(&active, Some(&baseline), None, None, &opts);
+
+        assert_eq!(class_map[[8, 8]], 0, "zero-power pixel must not be classified");
+        assert_eq!(class_map[[9, 9]], 0, "NaN pixel must not be classified");
+        assert_ne!(class_map[[0, 0]], 0, "valid drop pixel must be classified");
+        assert!(summary.total_flooded_pixels >= 1);
     }
 
     #[test]
