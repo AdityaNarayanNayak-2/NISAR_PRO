@@ -754,6 +754,15 @@ fn main() -> Result<()> {
                     external_mask.as_ref(),
                     &pipeline_opts,
                 );
+            let valid_ratio = report.valid_pixels as f64 / report.total_pixels as f64;
+            if valid_ratio < 0.95 {
+                anyhow::bail!(
+                    "AOI coverage too low: {}/{} valid pixels ({:.1}%) < 95%. The crop window is mostly nodata or outside the granule footprint — adjust --crop-lat/--crop-lon before running change detection.",
+                    report.valid_pixels,
+                    report.total_pixels,
+                    100.0 * valid_ratio
+                );
+            }
 
             // Save output files
             println!("{{\"event\":\"progress\",\"stage\":\"GENERATING_OUTPUTS\",\"message\":\"Generating geospatial products...\"}}");

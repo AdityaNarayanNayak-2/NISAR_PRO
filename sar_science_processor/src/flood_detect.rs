@@ -627,7 +627,7 @@ pub fn run_flood_detection_pipeline(
         otsu_threshold_db: effective_threshold,
         raw_otsu_threshold_db: otsu_thresh,
         total_pixels,
-        valid_pixels: total_pixels,
+        valid_pixels,
         permanent_water_pixels: perm_count,
         flooded_pixels_high_conf: high_count,
         flooded_pixels_med_conf: med_count,
@@ -693,6 +693,8 @@ mod tests {
         assert_eq!(class_map[[9, 9]], 0, "NaN pixel must not be classified");
         assert_ne!(class_map[[0, 0]], 0, "valid drop pixel must be classified");
         assert!(summary.total_flooded_pixels >= 1);
+        assert_eq!(summary.valid_pixels, rows * cols - 2, "two nodata pixels excluded from valid count");
+        assert_eq!(summary.total_pixels, rows * cols);
     }
 
     #[test]
