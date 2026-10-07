@@ -199,7 +199,21 @@ pub fn compute_change_image(active_db: &Array2<f32>, baseline_db: &Array2<f32>) 
     active_db - baseline_db
 }
 
+/// Deepest physical L-band change considered by the Otsu histogram (dB).
+///
+/// Deltas below this (≈ −70..−100 dB) are sensor-noise-floor dropouts from
+/// saturated/permanent water, not flood backscatter. Including them skews Otsu
+/// toward absurdly deep splits (e.g. −40 dB) that seed zero real floods.
+pub const OSTSU_MIN_PHYSICAL_DB: f32 = -25.0;
+
 /// Stage 4b: Compute Otsu's threshold on the change image histogram
+///
+/// Deltas deeper than [`OSTSU_MIN_PHYSICAL_DB`] are instrument-noise-floor
+/// dropouts (saturated/permanent water at −70..−100 dB), not physical flood
+/// backscatter. They are excluded from the histogram so a deep water-noise
+/// cluster cannot drag the split below where a real L-band flood (≈ −3..−15 dB)
+/// sits. A real observed failure: noise-floor pixels at −93 dB split the
+/// full-range histogram at −40 dB, requiring a >40 dB drop to seed any flood.
 pub fn otsu_threshold(delta_db: &Array2<f32>, valid_mask: &Array2<bool>, n_bins: usize) -> f32 {
     let mut min_val = f32::MAX;
     let mut max_val = f32::MIN;
@@ -210,8 +224,9 @@ pub fn otsu_threshold(delta_db: &Array2<f32>, valid_mask: &Array2<bool>, n_bins:
         for c in 0..cols {
             if valid_mask[[r, c]] {
                 let v = delta_db[[r, c]];
-                // Physically scope to negative/zero change (specular water backscatter drop)
-                if v.is_finite() && v <= 0.0 {
+                // Physically scope to negative/zero change (specular water backscatter
+                // drop), bounded below by the noise floor (exclude dropouts).
+                if v.is_finite() && v <= 0.0 && v >= OSTSU_MIN_PHYSICAL_DB {
                     min_val = min_val.min(v);
                     max_val = max_val.max(v);
                     count += 1;
@@ -232,7 +247,7 @@ pub fn otsu_threshold(delta_db: &Array2<f32>, valid_mask: &Array2<bool>, n_bins:
         for c in 0..cols {
             if valid_mask[[r, c]] {
                 let v = delta_db[[r, c]];
-                if v.is_finite() && v <= 0.0 {
+                if v.is_finite() && v <= 0.0 && v >= OSTSU_MIN_PHYSICAL_DB {
                     let bin = (((v - min_val) / bin_width) as usize).min(n_bins - 1);
                     histogram[bin] += 1;
                 }
@@ -739,6 +754,75 @@ mod tests {
         let valid_mask = Array2::from_elem((rows, cols), true);
         let thresh = otsu_threshold(&delta, &valid_mask, 256);
         assert!(thresh < 0.0, "Otsu threshold should separate negative change from positive");
+    }
+
+    #[test]
+    fn test_otsu_threshold_ignores_noise_floor_dropouts() {
+        // Regression: real Assam pre/post pair had deep permanent-water dropouts
+        // at -93 dB that dragged Otsu to -40.46 dB, so zero real floods (-3..-15 dB)
+        // were ever seeded. The histogram must be bounded to the physical range.
+        let (rows, cols) = (40, 40);
+        let mut delta = Array2::from_elem((rows, cols), -0.5f32);
+        // Large cluster of noise-floor permanent-water dropouts
+        for r in 30..40 {
+            for c in 30..40 {
+                delta[[r, c]] = -93.0f32;
+            }
+        }
+        // Genuine flood: moderate drop of -8 dB
+        for r in 5..15 {
+            for c in 5..15 {
+                delta[[r, c]] = -8.0f32;
+            }
+        }
+        let valid_mask = Array2::from_elem((rows, cols), true);
+        let thresh = otsu_threshold(&delta, &valid_mask, 256);
+        assert!(
+            thresh >= -25.0,
+            "Otsu threshold {thresh:.2} dB dragged below the physical floor by noise-floor dropouts"
+        );
+        assert!(
+            thresh <= -3.0,
+            "Otsu threshold {thresh:.2} dB should split off the -8 dB flood cluster"
+        );
+    }
+
+    #[test]
+    fn test_pipeline_detects_flood_with_noise_floor_dropouts() {
+        // Full-pipeline regression for the real pair failure: a severe noise-floor
+        // drop region (-50 dB) must not prevent Otsu from finding the genuine -8 dB
+        // flood and producing non-zero inundation.
+        let (rows, cols) = (24, 24);
+        let baseline = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+        let mut active = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+
+        // Genuine flood: -8 dB drop (power 1.585 vs 10)
+        for r in 4..12 {
+            for c in 4..12 {
+                active[[r, c]] = Complex32::new(1.585, 0.0);
+            }
+        }
+        // Noise-floor dropout region: -50 dB drop (power 1e-4 vs 10)
+        for r in 16..24 {
+            for c in 16..24 {
+                active[[r, c]] = Complex32::new(1.0e-4, 0.0);
+            }
+        }
+
+        let opts = FloodDetectionOptions::for_band(RadarBand::LBand);
+        let (_class_map, _delta_db, summary) =
+            run_flood_detection_pipeline(&active, Some(&baseline), None, None, &opts);
+
+        assert!(
+            summary.raw_otsu_threshold_db >= OSTSU_MIN_PHYSICAL_DB,
+            "Otsu {:.2} dB dragged below physical floor by dropout cluster",
+            summary.raw_otsu_threshold_db
+        );
+        assert!(
+            summary.total_flooded_pixels > 0,
+            "expected non-zero flood area but got {:#?}",
+            summary
+        );
     }
 
     #[test]
