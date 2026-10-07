@@ -42,3 +42,5 @@ Download/
 .png
 # Cloudflare Pages local state
 .wrangler/
+# Local launcher runtime logs
+logs/

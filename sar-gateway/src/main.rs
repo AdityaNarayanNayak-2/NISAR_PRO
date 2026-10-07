@@ -8,7 +8,9 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use axum::response::IntoResponse;
 use std::net::SocketAddr;
+use std::sync::OnceLock;
 use dotenv::dotenv;
 use log::info;
 use tower_http::cors::{Any, CorsLayer};
@@ -51,11 +53,93 @@ async fn main() {
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .with_state(state);
 
+    let app = match resolve_dashboard_dir() {
+        Some(dir) => {
+            let index = dir.join("index.html");
+            let _ = INDEX_HTML.set(std::fs::read_to_string(&index).unwrap_or_default());
+            let _ = DIST_DIR.set(dir.clone());
+            info!("🖥️  Serving SAR dashboard from {} (SPA fallback -> index.html)", dir.display());
+            app.fallback(spa_fallback)
+        }
+        None => {
+            info!("⚠️  Dashboard dist not found - API only on :3000 (build frontend or use vite dev)");
+            app
+        }
+    };
+
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     info!("🚀 SAR Gateway listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+fn resolve_dashboard_dir() -> Option<std::path::PathBuf> {
+    let candidates = [
+        "../sar-dashboard-v3/dist",
+        "./sar-dashboard-v3/dist",
+    ];
+    for c in candidates {
+        let p = std::path::Path::new(c);
+        if p.join("index.html").exists() {
+            return Some(p.to_path_buf());
+        }
+    }
+    None
+}
+
+static INDEX_HTML: OnceLock<String> = OnceLock::new();
+static DIST_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+fn mime_for(path: &std::path::Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
+        "html" => "text/html; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "json" => "application/json",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "gif" => "image/gif",
+        "ico" => "image/x-icon",
+        "webm" => "video/webm",
+        "mp4" => "video/mp4",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "wasm" => "application/wasm",
+        "tif" | "tiff" => "image/tiff",
+        "pdf" => "application/pdf",
+        _ => "application/octet-stream",
+    }
+}
+
+async fn spa_fallback(uri: axum::http::Uri) -> axum::response::Response {
+    let index = INDEX_HTML.get().cloned().unwrap_or_default();
+    let Some(dist) = DIST_DIR.get() else {
+        return axum::response::Html(index).into_response();
+    };
+
+    let rel = uri.path().trim_start_matches('/');
+    if rel.is_empty() {
+        return axum::response::Html(index).into_response();
+    }
+
+    let mut cand = dist.clone();
+    for comp in std::path::Path::new(rel).components() {
+        match comp {
+            std::path::Component::Normal(c) => cand.push(c),
+            _ => return axum::response::Html(index).into_response(),
+        }
+    }
+
+    if cand.is_file() {
+        if let Ok(bytes) = std::fs::read(&cand) {
+            return ([(axum::http::header::CONTENT_TYPE, mime_for(&cand))], bytes).into_response();
+        }
+    }
+
+    axum::response::Html(index).into_response()
 }
 
 async fn preload_completed_jobs(state: AppState) {
