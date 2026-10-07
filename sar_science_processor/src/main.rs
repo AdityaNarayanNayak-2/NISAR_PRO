@@ -684,8 +684,16 @@ fn main() -> Result<()> {
                     ) {
                         (Some(fine_row), Some(fine_col), Some(fine_lat), Some(fine_lon), Some(ref_lat), Some(ref_lon)) => {
                             let zone = ((crop_region.center_lon + 180.0) / 6.0).floor() as i32 + 1;
-                            let (fine_e, fine_n) = nisar_parser::latlon_to_utm(fine_lat, fine_lon, zone);
-                            let (ref_e, ref_n) = nisar_parser::latlon_to_utm(ref_lat, ref_lon, zone);
+                            let (fine_e, fine_n) = if fine_lat.abs() <= 90.0 && fine_lon.abs() <= 180.0 {
+                                nisar_parser::latlon_to_utm(fine_lat, fine_lon, zone)
+                            } else {
+                                (fine_lon, fine_lat)
+                            };
+                            let (ref_e, ref_n) = if ref_lat.abs() <= 90.0 && ref_lon.abs() <= 180.0 {
+                                nisar_parser::latlon_to_utm(ref_lat, ref_lon, zone)
+                            } else {
+                                (ref_lon, ref_lat)
+                            };
                             let shift_c = nisar_parser::phase_alignment_shift(fine_e, ref_e, active_dx, resolution_factor);
                             let shift_r = nisar_parser::phase_alignment_shift(fine_n, ref_n, active_dy, resolution_factor);
                             match (shift_r, shift_c) {

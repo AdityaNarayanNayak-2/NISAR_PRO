@@ -648,7 +648,7 @@ pub fn phase_alignment_shift(
     fine_spacing_m: f64,
     looks: usize,
 ) -> Option<isize> {
-    if looks == 0 || fine_spacing_m <= 0.0 {
+    if looks == 0 || fine_spacing_m.abs() <= 1e-9 {
         return None;
     }
     let shift =
@@ -1518,5 +1518,14 @@ mod tests {
     fn test_phase_alignment_shift_rejects_non_nesting_grids() {
         assert_eq!(phase_alignment_shift(0.0, 17.0, 10.0, 2), None);
         assert_eq!(phase_alignment_shift(0.0, 10.0, 10.0, 1), Some(1));
+    }
+
+    /// Northing grid has negative spacing (north-to-south): 028/025 northing nests at shift 0.
+    #[test]
+    fn test_phase_alignment_shift_handles_negative_northing_spacing() {
+        let fine_northing = 3_020_615.0;
+        let ref_northing = 3_020_610.0;
+        let shift = phase_alignment_shift(fine_northing, ref_northing, -10.0, 2);
+        assert_eq!(shift, Some(0));
     }
 }
