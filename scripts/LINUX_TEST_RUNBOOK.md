@@ -12,7 +12,7 @@ Reference results this run must reproduce (Windows laptop, release build):
 
 | Check | Windows result |
 |---|---|
-| `cargo test` | 59/59 pass |
+| `cargo test` | 61/61 pass |
 | `gcov_verify` | 21/21 goldens pass |
 | `gcov_fixture_verify` | 8/8 pass |
 | `gcov_diff` | 32/32 windows pass |
@@ -46,7 +46,7 @@ What each check needs:
 
 | Check | Needs the Assam granule? | Works on Kolab DAM files already on the box? |
 |---|---|---|
-| `cargo test` (59) | no | yes — no data needed |
+| `cargo test` (61) | no | yes — no data needed |
 | `gcov_fixture_verify` (8) | no — synthetic fixture only | yes (fixture is 2 small files) |
 | `gcov_diff` (32) | no — windows are grid-relative | **yes, run it on a Kolab file first** |
 | `gcov_fingerprint` / `gcov_probe_chunk` | no | yes |
@@ -161,7 +161,7 @@ ls -lh Download/gcov/*.h5
 ls Download/gcov/goldens/   # expect goldens.tsv, fixture_missing_chunks.h5, fixture_missing_chunks.h5.tsv
 ```
 
-## 2. Unit tests (expect 59/59)
+## 2. Unit tests (expect 61/61)
 
 ```bash
 cd ~/nisar_pro/sar_science_processor
@@ -260,7 +260,7 @@ mkdir -p ~/linux_verify_results
 } 2>&1 | tee ~/linux_verify_results/run_$(date +%Y%m%d_%H%M).txt
 ```
 
-Paste that file back. Success = every `failed: 0`, `59/59`, and both bars
+Paste that file back. Success = every `failed: 0`, `61/61`, and both bars
 `PASS`.
 
 ## Notes
