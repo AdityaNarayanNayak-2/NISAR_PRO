@@ -110,6 +110,14 @@ pub struct NisarProduct {
     pub pixel_spacing_y_m: Option<f64>,
     /// Coordinate Reference System (CRS)
     pub crs: String,
+    /// First included pixel of the cropped window (row), if a grid-covered product
+    pub crop_start_row: Option<usize>,
+    /// First included pixel of the cropped window (column), if a grid-covered product
+    pub crop_start_col: Option<usize>,
+    /// WGS84 latitude of the top-left pixel center of the crop, if available
+    pub crop_origin_lat: Option<f64>,
+    /// WGS84 longitude of the top-left pixel center of the crop, if available
+    pub crop_origin_lon: Option<f64>,
 }
 
 /// NISAR product type, auto-detected from filename
@@ -244,10 +252,33 @@ pub fn parse_nisar_auto(path: &Path, polarization: &str) -> Result<NisarProduct>
 ///
 /// For a 16020×16560 GCOV with a 10 km crop radius, this reduces the
 /// array from ~2 GB to ~1 MB (typically ~500×500 pixels).
+#[derive(Debug, Clone, Copy)]
+pub struct IndexWindow {
+    pub row_start: usize,
+    pub row_end: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+}
+
+/// Wrapper over [`parse_nisar_cropped_window`] with automatic windowing.
 pub fn parse_nisar_cropped(
     path: &Path,
     polarization: &str,
     crop: &CropRegion,
+) -> Result<NisarProduct> {
+    parse_nisar_cropped_window(path, polarization, crop, None)
+}
+
+/// Parse and crop a NISAR product to a geographic region.
+///
+/// When `window_override` is supplied, the explicit pixel window is used
+/// instead of the region search. This is required for cross-resolution
+/// pre/post pairs where one grid must be phase-aligned to the other.
+pub fn parse_nisar_cropped_window(
+    path: &Path,
+    polarization: &str,
+    crop: &CropRegion,
+    window_override: Option<&IndexWindow>,
 ) -> Result<NisarProduct> {
     let pol = polarization.to_uppercase();
     let file = File::open(path)
@@ -302,7 +333,9 @@ pub fn parse_nisar_cropped(
         let looks_geographic = lats.iter().all(|&v| v.abs() <= 90.0)
             && lons.iter().all(|&v| v.abs() <= 360.0);
 
-        let (row_start, row_end, col_start, col_end) = if looks_geographic {
+        let (row_start, row_end, col_start, col_end) = if let Some(w) = window_override {
+            (w.row_start, w.row_end, w.col_start, w.col_end)
+        } else if looks_geographic {
             // Convert radius_km to degree bounds
             let lat_radius = crop.radius_km / 111.0;
             let cos_lat = crop.center_lat.to_radians().cos().abs().max(0.01);
@@ -519,6 +552,10 @@ pub fn parse_nisar_cropped(
             pixel_spacing_x_m: dx,
             pixel_spacing_y_m: dy,
             crs: extract_crs(&file, product_type_str),
+            crop_start_row: Some(row_start),
+            crop_start_col: Some(col_start),
+            crop_origin_lat: Some(lats[row_start]),
+            crop_origin_lon: Some(lons[col_start]),
         })
     } else {
         info!("No coordinate grids found for product type '{}'. Using full image.", product_type_str);
@@ -534,6 +571,10 @@ pub fn parse_nisar_cropped(
             pixel_spacing_x_m: None,
             pixel_spacing_y_m: None,
             crs: "UNKNOWN".to_string(),
+            crop_start_row: None,
+            crop_start_col: None,
+            crop_origin_lat: None,
+            crop_origin_lon: None,
         })
     }
 }
@@ -591,6 +632,34 @@ pub fn find_index_range(coords: &[f64], min_val: f64, max_val: f64) -> (usize, u
     (start, end)
 }
 
+/// Compute the pixel-index shift (on the finer grid) that makes an
+/// n-physical-pixel block of the finer grid nest exactly onto one cell of
+/// the reference (coarser) grid.
+///
+/// `fine_center` and `ref_center` are the ground coordinates (same axis,
+/// same UTM zone) of the top-left crop pixel of each grid; `fine_spacing`
+/// is the finer grid spacing in that axis; `looks` is the integer spacing
+/// ratio (reference_spacing / finer_spacing).
+///
+/// Returns `None` when the lattices cannot nest (non-integer shift).
+pub fn phase_alignment_shift(
+    fine_center: f64,
+    ref_center: f64,
+    fine_spacing_m: f64,
+    looks: usize,
+) -> Option<isize> {
+    if looks == 0 || fine_spacing_m <= 0.0 {
+        return None;
+    }
+    let shift =
+        (ref_center - fine_center - (looks as f64 - 1.0) / 2.0 * fine_spacing_m) / fine_spacing_m;
+    let rounded = shift.round();
+    if (shift - rounded).abs() > 1e-3 {
+        return None;
+    }
+    Some(rounded as isize)
+}
+
 /// Parse a NISAR RSLC HDF5 file (Level-1, radar coordinates)
 pub fn parse_nisar_rslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
     let pol = polarization.to_uppercase();
@@ -621,6 +690,10 @@ pub fn parse_nisar_rslc(path: &Path, polarization: &str) -> Result<NisarProduct>
         pixel_spacing_x_m: None,
         pixel_spacing_y_m: None,
         crs: "UNKNOWN".to_string(),
+        crop_start_row: None,
+        crop_start_col: None,
+        crop_origin_lat: None,
+        crop_origin_lon: None,
     })
 }
 
@@ -654,6 +727,10 @@ fn parse_nisar_gslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
         pixel_spacing_x_m: dx,
         pixel_spacing_y_m: dy,
         crs: extract_crs(&file, "GSLC"),
+        crop_start_row: None,
+        crop_start_col: None,
+        crop_origin_lat: None,
+        crop_origin_lon: None,
     })
 }
 
@@ -701,6 +778,10 @@ fn parse_nisar_gcov(path: &Path, polarization: &str) -> Result<NisarProduct> {
         pixel_spacing_x_m: dx,
         pixel_spacing_y_m: dy,
         crs: extract_crs(&file, "GCOV"),
+        crop_start_row: None,
+        crop_start_col: None,
+        crop_origin_lat: None,
+        crop_origin_lon: None,
     })
 }
 
@@ -742,6 +823,10 @@ fn parse_nisar_gunw(path: &Path, polarization: &str) -> Result<NisarProduct> {
         pixel_spacing_x_m: dx,
         pixel_spacing_y_m: dy,
         crs: extract_crs(&file, "GUNW"),
+        crop_start_row: None,
+        crop_start_col: None,
+        crop_origin_lat: None,
+        crop_origin_lon: None,
     })
 }
 
@@ -1237,7 +1322,7 @@ fn extract_crs(file: &File, product_type: &str) -> String {
 }
 
 /// Convert WGS84 Lat/Lon to UTM Easting/Northing coordinates.
-fn latlon_to_utm(lat: f64, lon: f64, zone: i32) -> (f64, f64) {
+pub fn latlon_to_utm(lat: f64, lon: f64, zone: i32) -> (f64, f64) {
     let a = 6378137.0;
     let ecc_squared = 0.00669437999013;
     let k0 = 0.9996;
@@ -1416,5 +1501,22 @@ mod tests {
 
         let fs = bw * 1.2; // 96 MHz sample rate
         assert!(fs > bw, "Sample rate must exceed bandwidth (Nyquist)");
+    }
+
+    /// Phase alignment: 10 m fine grid offset +15 m east nests onto the
+    /// 20 m reference via a +1 sample shift (real 028/025 case).
+    #[test]
+    fn test_phase_alignment_shift_nests_10m_onto_20m() {
+        let fine_center = 677_675.0;
+        let ref_center = 677_690.0;
+        let shift = phase_alignment_shift(fine_center, ref_center, 10.0, 2);
+        assert_eq!(shift, Some(1));
+    }
+
+    /// A half-cell residual that cannot nest yields None (no silent misregistration)
+    #[test]
+    fn test_phase_alignment_shift_rejects_non_nesting_grids() {
+        assert_eq!(phase_alignment_shift(0.0, 17.0, 10.0, 2), None);
+        assert_eq!(phase_alignment_shift(0.0, 10.0, 10.0, 1), Some(1));
     }
 }

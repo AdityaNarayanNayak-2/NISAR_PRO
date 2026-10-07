@@ -604,10 +604,10 @@ fn main() -> Result<()> {
             info!("[1/5] Loading Active GCOV: {:?}", input);
             crash_journal::phase("FLOOD_STEP_1", &format!("Loading Active GCOV: {:?}", input.file_name().unwrap_or_default()));
             nisar_parser::validate_crop_intersection(input, &crop_region)?;
-            let active_product =
+            let mut active_product =
                 nisar_parser::parse_nisar_cropped(input, &cli.polarization, &crop_region)?;
             crash_journal::checkpoint_after_free("Active GCOV parsed & cropped");
-            let bbox = active_product.bbox.clone();
+            let mut bbox = active_product.bbox.clone();
             let mut active_slc = active_product.slc;
 
             // Emit georef for gateway/frontend
@@ -673,18 +673,63 @@ fn main() -> Result<()> {
                         );
                     }
                     resolution_factor = active_rows / baseline_rows;
-                    info!(
-                        "Resolution align: active {}x{} at {:.1}m -> multilook {resolution_factor}x -> {}x{} at {:.1}m to match baseline {}x{} at {:.1}m",
-                        active_rows,
-                        active_cols,
-                        active_dx.abs(),
-                        active_rows / resolution_factor,
-                        active_cols / resolution_factor,
-                        active_dx.abs() * resolution_factor as f64,
-                        baseline_rows,
-                        baseline_cols,
-                        baseline_dx.abs()
-                    );
+
+                    match (
+                        active_product.crop_start_row,
+                        active_product.crop_start_col,
+                        active_product.crop_origin_lat,
+                        active_product.crop_origin_lon,
+                        bp.crop_origin_lat,
+                        bp.crop_origin_lon,
+                    ) {
+                        (Some(fine_row), Some(fine_col), Some(fine_lat), Some(fine_lon), Some(ref_lat), Some(ref_lon)) => {
+                            let zone = ((crop_region.center_lon + 180.0) / 6.0).floor() as i32 + 1;
+                            let (fine_e, fine_n) = nisar_parser::latlon_to_utm(fine_lat, fine_lon, zone);
+                            let (ref_e, ref_n) = nisar_parser::latlon_to_utm(ref_lat, ref_lon, zone);
+                            let shift_c = nisar_parser::phase_alignment_shift(fine_e, ref_e, active_dx, resolution_factor);
+                            let shift_r = nisar_parser::phase_alignment_shift(fine_n, ref_n, active_dy, resolution_factor);
+                            match (shift_r, shift_c) {
+                                (Some(sr), Some(sc)) => {
+                                    let aligned_row = fine_row as isize + sr;
+                                    let aligned_col = fine_col as isize + sc;
+                                    if aligned_row < 0 || aligned_col < 0 {
+                                        anyhow::bail!(
+                                            "Phase-aligned active window would start before the dataset (shift {sr} rows, {sc} cols). Increase the crop margin or choose a smaller AOI."
+                                        );
+                                    }
+                                    let target_rows = baseline_rows * resolution_factor;
+                                    let target_cols = baseline_cols * resolution_factor;
+                                    let window = nisar_parser::IndexWindow {
+                                        row_start: aligned_row as usize,
+                                        row_end: aligned_row as usize + target_rows,
+                                        col_start: aligned_col as usize,
+                                        col_end: aligned_col as usize + target_cols,
+                                    };
+                                    info!(
+                                        "Resolution align: re-cropping active {resolution_factor}x at window rows {}..{} cols {}..{} (phase-aligned to baseline grid)",
+                                        window.row_start, window.row_end, window.col_start, window.col_end
+                                    );
+                                    active_product = nisar_parser::parse_nisar_cropped_window(
+                                        input,
+                                        &cli.polarization,
+                                        &crop_region,
+                                        Some(&window),
+                                    )?;
+                                    bbox = active_product.bbox.clone();
+                                    active_slc = active_product.slc;
+                                }
+                                _ => anyhow::bail!(
+                                    "Cannot phase-align active ({:.1}m) to baseline ({:.1}m): the finer grid lattices do not nest (non-integer offset). No geodetic alignment possible.",
+                                    active_dx.abs(),
+                                    baseline_dx.abs()
+                                ),
+                            }
+                        }
+                        _ => anyhow::bail!(
+                            "Cannot phase-align active and baseline grids: crop-origin metadata missing."
+                        ),
+                    }
+
                     active_slc = sar_science_processor::multilook::multilook(
                         &active_slc,
                         resolution_factor,
