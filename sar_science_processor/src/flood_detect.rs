@@ -698,6 +698,27 @@ mod tests {
     }
 
     #[test]
+    fn test_pipeline_accepts_multilooked_pair() {
+        let mut active = Array2::<Complex32>::from_elem((32, 32), Complex32::new(10.0, 0.0));
+        for r in 8..24 {
+            for c in 8..24 {
+                active[[r, c]] = Complex32::new(0.708, 0.0);
+            }
+        }
+        let baseline = Array2::<Complex32>::from_elem((16, 16), Complex32::new(10.0, 0.0));
+        let aligned = crate::multilook::multilook(&active, 2, 2);
+
+        assert_eq!(aligned.dim(), baseline.dim());
+        let opts = FloodDetectionOptions::for_band(RadarBand::LBand);
+        let (class_map, _delta, summary) =
+            run_flood_detection_pipeline(&aligned, Some(&baseline), None, None, &opts);
+
+        assert_ne!(class_map[[8, 8]], 0, "interior of flood block must be classified");
+        assert!(summary.total_flooded_pixels >= 1);
+        assert_eq!(summary.valid_pixels, 16 * 16);
+    }
+
+    #[test]
     fn test_compute_change_image() {
         let active = Array2::from_elem((2, 2), -15.0f32);
         let baseline = Array2::from_elem((2, 2), -5.0f32);

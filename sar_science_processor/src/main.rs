@@ -608,7 +608,7 @@ fn main() -> Result<()> {
                 nisar_parser::parse_nisar_cropped(input, &cli.polarization, &crop_region)?;
             crash_journal::checkpoint_after_free("Active GCOV parsed & cropped");
             let bbox = active_product.bbox.clone();
-            let active_slc = active_product.slc;
+            let mut active_slc = active_product.slc;
 
             // Emit georef for gateway/frontend
             if let Some(ref bb) = bbox {
@@ -648,15 +648,10 @@ fn main() -> Result<()> {
                 anyhow::anyhow!("Active GCOV product is missing yCoordinateSpacing metadata. Cannot calculate flood acreage reliably.")
             })?;
 
+            let mut resolution_factor: usize = 1;
             if let Some(ref bp) = baseline_product {
                 let (active_rows, active_cols) = active_slc.dim();
                 let (baseline_rows, baseline_cols) = bp.slc.dim();
-                if (active_rows, active_cols) != (baseline_rows, baseline_cols) {
-                    anyhow::bail!(
-                        "Pre/post window shape mismatch: active {}x{} vs baseline {}x{}. Pixel-wise change detection requires identical crop windows.",
-                        active_rows, active_cols, baseline_rows, baseline_cols
-                    );
-                }
 
                 let baseline_dx = bp.pixel_spacing_x_m.ok_or_else(|| {
                     anyhow::anyhow!("Baseline GCOV product is missing xCoordinateSpacing metadata. Cannot perform pixel-wise flood comparison safely.")
@@ -665,13 +660,47 @@ fn main() -> Result<()> {
                     anyhow::anyhow!("Baseline GCOV product is missing yCoordinateSpacing metadata. Cannot perform pixel-wise flood comparison safely.")
                 })?;
 
-                if (active_dx.abs() - baseline_dx.abs()).abs() > 1e-3
-                    || (active_dy.abs() - baseline_dy.abs()).abs() > 1e-3
+                if (active_rows, active_cols) != (baseline_rows, baseline_cols) {
+                    let divisible = active_rows >= baseline_rows
+                        && active_cols >= baseline_cols
+                        && active_rows % baseline_rows == 0
+                        && active_cols % baseline_cols == 0
+                        && active_rows / baseline_rows == active_cols / baseline_cols;
+                    if !divisible {
+                        anyhow::bail!(
+                            "Pre/post window shape mismatch: active {}x{} vs baseline {}x{}. Pixel-wise change detection requires identical crop windows, or the finer grid must be an integer multiple of the coarser one.",
+                            active_rows, active_cols, baseline_rows, baseline_cols
+                        );
+                    }
+                    resolution_factor = active_rows / baseline_rows;
+                    info!(
+                        "Resolution align: active {}x{} at {:.1}m -> multilook {resolution_factor}x -> {}x{} at {:.1}m to match baseline {}x{} at {:.1}m",
+                        active_rows,
+                        active_cols,
+                        active_dx.abs(),
+                        active_rows / resolution_factor,
+                        active_cols / resolution_factor,
+                        active_dx.abs() * resolution_factor as f64,
+                        baseline_rows,
+                        baseline_cols,
+                        baseline_dx.abs()
+                    );
+                    active_slc = sar_science_processor::multilook::multilook(
+                        &active_slc,
+                        resolution_factor,
+                        resolution_factor,
+                    );
+                }
+
+                let effective_dx = active_dx * resolution_factor as f64;
+                let effective_dy = active_dy * resolution_factor as f64;
+                if (effective_dx.abs() - baseline_dx.abs()).abs() > 1e-3
+                    || (effective_dy.abs() - baseline_dy.abs()).abs() > 1e-3
                 {
                     anyhow::bail!(
-                        "ERROR: Incompatible grid spacing. Active grid = {:.1}m × {:.1}m, Baseline grid = {:.1}m × {:.1}m. Cannot perform pixel-wise flood comparison safely.",
-                        active_dx.abs(),
-                        active_dy.abs(),
+                        "ERROR: Incompatible grid spacing. Active grid (after {resolution_factor}x multilook) = {:.1}m × {:.1}m, Baseline grid = {:.1}m × {:.1}m. Cannot perform pixel-wise flood comparison safely.",
+                        effective_dx.abs(),
+                        effective_dy.abs(),
                         baseline_dx.abs(),
                         baseline_dy.abs()
                     );
@@ -821,7 +850,9 @@ fn main() -> Result<()> {
                 .to_string();
 
             // Calculate physical areas in acres
-            let pixel_area_m2 = active_dx.abs() * active_dy.abs();
+            let effective_dx = active_dx * resolution_factor as f64;
+            let effective_dy = active_dy * resolution_factor as f64;
+            let pixel_area_m2 = effective_dx.abs() * effective_dy.abs();
             let pixel_area_acres = pixel_area_m2 / 4046.856; // 1 acre = 4046.856 sqm
 
             let total_area_acres = report.total_pixels as f64 * pixel_area_acres;
@@ -838,8 +869,8 @@ fn main() -> Result<()> {
                     "baseline_id": baseline_filename,
                     "frequency": "L",
                     "polarization": cli.polarization,
-                    "pixel_spacing_x_m": active_dx,
-                    "pixel_spacing_y_m": active_dy,
+                    "pixel_spacing_x_m": effective_dx,
+                    "pixel_spacing_y_m": effective_dy,
                     "crs": active_product.crs
                 },
                 "method": {
