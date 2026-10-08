@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, ImageOverlay, GeoJSON, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -7,7 +7,8 @@ import { Terminal, Play, ChevronDown, CheckCircle, AlertTriangle, Loader, Search
 
 import { MONO, SANS, C, PROFILES, TM, INFRA_LAYOUT } from './constants';
 import { parseNisarFilename, normalizeJobStatus, jobErrorMessage } from './helpers';
-import { MapFlyTo, MapFlyToBounds, MapEventTracker, MapResizer, MapAoiDrawer } from './MapComponents';
+import { parseFloodReport } from './flood/floodReportHelpers';
+import { MapFlyTo, MapFlyToBounds, MapEventTracker, MapResizer, MapAoiDrawer, MapZoomGate } from './MapComponents';
 import L from 'leaflet';
 import InfrastructurePanel from './InfrastructurePanel';
 import WorkspaceSidebar from './flood/WorkspaceSidebar';
@@ -33,6 +34,10 @@ import MapLayerControls from './layout/MapLayerControls';
 import RunHistorySidebar from './layout/RunHistorySidebar';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
+// Only mount the per-pixel flood vector layer once the user zooms this far in.
+// Below this the raster *_flood.png mask already shows the full classification.
+const FLOOD_FEATURE_ZOOM = 11;
+const MAX_RASTER_GEOJSON_FEATURES = 2000;
 
 function AppDashboard() {
     // ── Zustand Stores (State Unification) ──
@@ -59,6 +64,58 @@ function AppDashboard() {
     const showMedConf = useMapStore(state => state.showMedConf);
     const showLowConf = useMapStore(state => state.showLowConf);
     const [replayPhase, setReplayPhase] = useState('detected');
+
+    // ── Load/zoom affordances for heavy flood vector data ──
+    const [geoJsonLoading, setGeoJsonLoading] = useState(false);
+    const [jobsSyncing, setJobsSyncing] = useState(false);
+    const [mapZoom, setMapZoom] = useState(9);
+    const geoJsonLoadKeyRef = useRef(null);          // in-flight fetch dedupe key (path)
+    const geoJsonFailedRef = useRef(new Set());      // paths that failed -> don't retry on every render
+
+    // Memoized flood-layer style: only re-applied when a toggle/selection actually changes,
+    // so opacity-slider ticks no longer rebuild or restyle ~321k features.
+    const floodStyle = useMemo(() => (feature) => {
+        const raw = feature?.properties?.class_code;
+        const classCode = (raw === undefined || raw === null || raw === '') ? null : Number(raw);
+        const isSelected = selectedRegion?.id === feature?.id;
+        if (classCode === 1 && !showPermanentWater) return { fillOpacity: 0, opacity: 0, stroke: false };
+        if (classCode === 2 && !showHighConf) return { fillOpacity: 0, opacity: 0, stroke: false };
+        if (classCode === 3 && !showMedConf) return { fillOpacity: 0, opacity: 0, stroke: false };
+        if ((classCode === 4 || classCode == null) && !showLowConf) return { fillOpacity: 0, opacity: 0, stroke: false };
+        const color = classCode === 1 ? '#2166c1' : classCode === 2 ? '#00a6c7' : classCode === 3 ? '#42c6d5' : '#91d9dc';
+        return { fillOpacity: isSelected ? 0.75 : 0.42, fillColor: color, color, weight: isSelected ? 2 : 0.5 };
+    }, [showPermanentWater, showHighConf, showMedConf, showLowConf, selectedRegion]);
+
+    const floodFeatureCount = viewingResult?.floodGeoJson?.features?.length ?? 0;
+    const showFloodVectors = floodFeatureCount > 0 && (floodFeatureCount <= MAX_RASTER_GEOJSON_FEATURES || mapZoom >= FLOOD_FEATURE_ZOOM);
+
+    // Single owner of the heavy GeoJSON download: dedupes concurrent fetches of the same path,
+    // surfaces a loading flag, and records failures so effects never hot-loop on them.
+    const ensureFloodGeoJson = useCallback((path) => {
+        if (!path || geoJsonFailedRef.current.has(path)) return Promise.resolve(null);
+        if (geoJsonLoadKeyRef.current === path) return Promise.resolve(null);
+        geoJsonLoadKeyRef.current = path;
+        setGeoJsonLoading(true);
+        return fetch(api(path))
+            .then(r => r.ok ? r.json() : null)
+            .then(geoJson => {
+                if (geoJson) {
+                    geoJsonFailedRef.current.delete(path);
+                    return geoJson;
+                }
+                geoJsonFailedRef.current.add(path);
+                return null;
+            })
+            .catch(err => {
+                geoJsonFailedRef.current.add(path);
+                console.error('GeoJSON load failed:', err);
+                return null;
+            })
+            .finally(() => {
+                geoJsonLoadKeyRef.current = null;
+                setGeoJsonLoading(false);
+            });
+    }, []);
 
     const jobs = useJobStore(state => state.jobs);
     const setJobs = useJobStore(state => state.setJobs);
@@ -191,93 +248,90 @@ function AppDashboard() {
         }
     }, [viewingResult?.id, reportModalOpen, profile, activeView, paramJobId]);
 
-    // Ensure GeoJSON is fetched for persisted viewingResult if missing
+    // Ensure GeoJSON is fetched for a persisted viewingResult if missing (deduped against the job preload)
     useEffect(() => {
         if (viewingResult && !viewingResult.floodGeoJson && viewingResult.floodGeoJsonPath) {
-            fetch(api(viewingResult.floodGeoJsonPath))
-                .then(r => r.ok ? r.json() : null)
-                .then(geoJson => {
-                    if (geoJson) {
-                        setViewingResult(prev => prev ? { ...prev, floodGeoJson: geoJson } : prev);
-                    }
-                })
-                .catch(console.error);
+            ensureFloodGeoJson(viewingResult.floodGeoJsonPath).then(geoJson => {
+                if (geoJson) {
+                    setViewingResult(prev => prev ? { ...prev, floodGeoJson: geoJson } : prev);
+                }
+            });
         }
-    }, [viewingResult, setViewingResult]);
+    }, [viewingResult, setViewingResult, ensureFloodGeoJson]);
 
-    // Reset active view and selected region when changing profile, and preload completed flood runs from gateway
+// Reset active view and selected region when changing profile, and preload completed flood runs from gateway
     useEffect(() => {
-        if (profile === 'flood') {
-            setSelectedRegion(null);
-fetch(api('/jobs'))
-                .then(r => r.ok ? r.json() : [])
-                .then(async (allJobs) => {
-                    const jobsToProcess = (Array.isArray(allJobs) && allJobs.length > 0) ? allJobs : [];
+        if (profile !== 'flood') return;
+        setSelectedRegion(null);
+        let cancelled = false;
+        setJobsSyncing(true);
+        fetch(api('/jobs'))
+            .then(r => r.ok ? r.json() : [])
+            .then(async (allJobs) => {
+                const jobsToProcess = (Array.isArray(allJobs) && allJobs.length > 0) ? allJobs : [];
 
-                    const loadedJobs = {};
-                    for (const j of jobsToProcess) {
-                        if (!j.flood_report_path) continue;
-                        try {
-                            const floodReport = await fetch(api(j.flood_report_path)).then(r => r.ok ? r.json() : null);
-                            if (!floodReport) continue;
-                            const jobBounds = j.bbox ? [[j.bbox.south, j.bbox.west], [j.bbox.north, j.bbox.east]] : null;
-                            const label = floodReport.crop?.preset ? `RUN: ${floodReport.crop.preset} (${j.id.slice(0, 8)})` : `RUN (${j.id.slice(0, 8)})`;
-
-                            loadedJobs[j.id] = {
-                                id: j.id,
-                                name: label,
-                                status: 'completed',
-                                output_path: j.output_path,
-                                floodReport,
-                                floodReportPath: j.flood_report_path,
-                                floodGeoJsonPath: j.flood_geojson_path,
-                                floodBaselinePath: j.flood_baseline_path,
-                                floodActivePath: j.flood_active_path,
-                                floodReplayAvailable: Boolean(j.flood_baseline_path && j.flood_active_path && floodReport.replay?.available),
-                                pipeline: 'flood',
-                                bbox: j.bbox,
-                                bounds: jobBounds,
-                            };
-                        } catch (err) {
-                            console.warn(`Failed to preload job ${j.id}:`, err);
-                        }
+                // Fetch all flood reports in parallel (previously serial N+1 round-trips)
+                const enriched = await Promise.all(jobsToProcess.map(async (j) => {
+                    if (!j.flood_report_path) return null;
+                    try {
+                        const floodReport = await fetch(api(j.flood_report_path)).then(r => r.ok ? r.json() : null);
+                        if (!floodReport) return null;
+                        const jobBounds = j.bbox ? [[j.bbox.south, j.bbox.west], [j.bbox.north, j.bbox.east]] : null;
+                        const label = floodReport.crop?.preset ? `RUN: ${floodReport.crop.preset} (${j.id.slice(0, 8)})` : `RUN (${j.id.slice(0, 8)})`;
+                        return {
+                            id: j.id,
+                            name: label,
+                            status: 'completed',
+                            output_path: j.output_path,
+                            floodReport,
+                            floodReportPath: j.flood_report_path,
+                            floodGeoJsonPath: j.flood_geojson_path,
+                            floodBaselinePath: j.flood_baseline_path,
+                            floodActivePath: j.flood_active_path,
+                            floodReplayAvailable: Boolean(j.flood_baseline_path && j.flood_active_path && floodReport.replay?.available),
+                            pipeline: 'flood',
+                            bbox: j.bbox,
+                            bounds: jobBounds,
+                        };
+                    } catch (err) {
+                        console.warn(`Failed to preload job ${j.id}:`, err);
+                        return null;
                     }
+                }));
 
-                    if (Object.keys(loadedJobs).length > 0) {
-                        setJobs(prev => ({ ...prev, ...loadedJobs }));
+                if (cancelled) return;
+                const loadedJobs = {};
+                for (const e of enriched) if (e) loadedJobs[e.id] = e;
 
-                        // Determine which job to display: URL param > current persisted result > most recent
-                        const targetId = paramJobId || useMapStore.getState().viewingResult?.id;
-                        const targetJob = (targetId && loadedJobs[targetId]) || Object.values(loadedJobs)[0];
-                        if (targetJob && (!useMapStore.getState().viewingResult || targetJob.id === paramJobId)) {
-                            fetch(api(targetJob.floodGeoJsonPath))
-                                .then(r => r.ok ? r.json() : null)
-                                .then(geoJson => {
-                                    setViewingResult({
-                                        ...targetJob,
-                                        url: api(targetJob.output_path),
-                                        floodGeoJson: geoJson,
-                                        floodBaselinePath: targetJob.floodBaselinePath,
-                                        floodActivePath: targetJob.floodActivePath,
-                                        floodReplayAvailable: targetJob.floodReplayAvailable,
-                                    });
-                                    if (targetJob.bounds) {
-                                        const [[south, west], [north, east]] = targetJob.bounds;
-                                        setFlyToCenter([(south + north) / 2, (west + east) / 2]);
-                                    }
-                                })
-                                .catch(() => {
-                                    setViewingResult({
-                                        ...targetJob,
-                                        url: api(targetJob.output_path),
-                                    });
-                                });
-                        }
+                if (Object.keys(loadedJobs).length > 0) {
+                    setJobs(prev => ({ ...prev, ...loadedJobs }));
+
+                    // Determine which job to display: URL param > current persisted result > most recent
+                    const targetId = paramJobId || useMapStore.getState().viewingResult?.id;
+                    const targetJob = (targetId && loadedJobs[targetId]) || Object.values(loadedJobs)[0];
+                    if (targetJob && (!useMapStore.getState().viewingResult || targetJob.id === paramJobId)) {
+                        ensureFloodGeoJson(targetJob.floodGeoJsonPath).then(geoJson => {
+                            if (cancelled) return;
+                            setViewingResult({
+                                ...targetJob,
+                                url: api(targetJob.output_path),
+                                floodGeoJson: geoJson,
+                                floodBaselinePath: targetJob.floodBaselinePath,
+                                floodActivePath: targetJob.floodActivePath,
+                                floodReplayAvailable: targetJob.floodReplayAvailable,
+                            });
+                            if (targetJob.bounds) {
+                                const [[south, west], [north, east]] = targetJob.bounds;
+                                setFlyToCenter([(south + north) / 2, (west + east) / 2]);
+                            }
+                        });
                     }
-                })
-                .catch(console.error);
-        }
-    }, [profile, paramJobId, setFlyToCenter, setJobs, setSelectedRegion, setViewingResult]);
+                }
+            })
+            .catch(console.error)
+            .finally(() => { if (!cancelled) setJobsSyncing(false); });
+        return () => { cancelled = true; };
+    }, [profile, paramJobId, ensureFloodGeoJson, setFlyToCenter, setJobs, setSelectedRegion, setViewingResult]);
 
     // Center map to bounds of newly active results
     useEffect(() => {
@@ -948,6 +1002,7 @@ setJobs(prev => ({
                 }}
                 zoomControl={false}
                 attributionControl={false}
+                preferCanvas
             >
                 <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}" />
                 {viewingResult && viewingResult.url && viewingResult.bounds && !(viewingResult.floodReplayAvailable && replayPhase !== 'detected') && (
@@ -967,6 +1022,7 @@ setJobs(prev => ({
                 />
                 <MapResizer />
                 <MapEventTracker setCoords={setMouseCoords} setMapBounds={setMapBounds} />
+                <MapZoomGate onZoomChange={setMapZoom} />
                 <MapAoiDrawer
                     isDrawing={isDrawingAoi}
                     setIsDrawing={setIsDrawingAoi}
@@ -1088,40 +1144,68 @@ setJobs(prev => ({
                     />
                 )}
 
-                {profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && (!viewingResult.floodReplayAvailable || replayPhase === 'detected') && (
+{profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && showFloodVectors && (!viewingResult.floodReplayAvailable || replayPhase === 'detected') && (
                     <GeoJSON
-                        key={`${viewingResult.floodGeoJsonPath || viewingResult.url}-${layerOpacity}-${showPermanentWater}-${showHighConf}-${showMedConf}-${showLowConf}`}
+                        key={viewingResult.floodGeoJsonPath || viewingResult.url}
                         data={viewingResult.floodGeoJson}
-                        style={feature => {
-                            const raw = feature?.properties?.class_code;
-                            const classCode = (raw === undefined || raw === null || raw === '') ? null : Number(raw);
-                            const isSelected = selectedRegion?.id === feature?.id;
-
-                            // Visibility filtering by class
-                            if (classCode === 1 && !showPermanentWater) {
-                                return { fillOpacity: 0, opacity: 0, stroke: false };
-                            }
-                            if (classCode === 2 && !showHighConf) {
-                                return { fillOpacity: 0, opacity: 0, stroke: false };
-                            }
-                            if (classCode === 3 && !showMedConf) {
-                                return { fillOpacity: 0, opacity: 0, stroke: false };
-                            }
-                            if ((classCode === 4 || classCode == null) && !showLowConf) {
-                                return { fillOpacity: 0, opacity: 0, stroke: false };
-                            }
-
-                            const color = classCode === 1 ? '#2166c1' : classCode === 2 ? '#00a6c7' : classCode === 3 ? '#42c6d5' : '#91d9dc';
-                            return { fillOpacity: isSelected ? 0.75 : 0.42, fillColor: color, color, weight: isSelected ? 2 : 0.5 };
-                        }}
+                        style={floodStyle}
                         onEachFeature={(feature, layer) => {
                             layer.on('click', () => setSelectedRegion(feature));
-                            const confidence = feature.properties?.confidence || 'unknown';
-                            layer.bindPopup(`<strong>Flood classification</strong><br/>Confidence: ${confidence}`);
                         }}
                     />
                 )}
             </MapContainer>
+
+            {/* ── FLOOD HUD: SYNC/LOADING AFFORDANCES ── */}
+            {profile === 'flood' && (jobsSyncing || geoJsonLoading) && (
+                <div style={{
+                    position: 'absolute', top: '58px', left: '224px', zIndex: 950,
+                    background: 'rgba(10, 10, 10, 0.92)', border: '1px solid #2A2A2A', padding: '6px 10px',
+                    display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'none',
+                }}>
+                    {jobsSyncing && <><Loader size={12} className="spin" /> <span style={{ fontFamily: MONO, fontSize: '9px', color: '#dddddd', letterSpacing: '0.08em' }}>SYNCING PAST RUNS&hellip;</span></>}
+                    {geoJsonLoading && <><Loader size={12} className="spin" /> <span style={{ fontFamily: MONO, fontSize: '9px', color: '#dddddd', letterSpacing: '0.08em' }}>LOADING FLOOD POLYGONS&hellip;</span></>}
+                </div>
+            )}
+
+            {/* ── FLOOD HUD: TEMPORAL CONTEXT (pre/post acquisition dates) ── */}
+            {profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodReport && (() => {
+                const taper = parseFloodReport(viewingResult.floodReport);
+                const method = viewingResult.floodReport.method || {};
+                if (!taper || taper.baselineDate === 'N/A') return null;
+                return (
+                    <div style={{
+                        position: 'absolute', bottom: '40px', left: '50%', transform: 'translateX(-50%)', zIndex: 950,
+                        background: 'rgba(10, 10, 10, 0.92)', border: '1px solid #2A2A2A', padding: '6px 12px',
+                        display: 'flex', alignItems: 'center', gap: '10px', pointerEvents: 'none',
+                    }}>
+                        <span style={{ fontFamily: MONO, fontSize: '8px', color: '#888888', letterSpacing: '0.12em' }}>BEFORE</span>
+                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#a5d8ff' }}>{taper.baselineDate}</span>
+                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#444444' }}>&rarr;</span>
+                        <span style={{ fontFamily: MONO, fontSize: '8px', color: '#888888', letterSpacing: '0.12em' }}>AFTER</span>
+                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#ffd166' }}>{taper.activeDate}</span>
+                        <span style={{ width: '1px', height: '14px', background: '#333333' }} />
+                        <span style={{ fontFamily: MONO, fontSize: '8px', color: '#888888', letterSpacing: '0.12em' }}>NEW WATER</span>
+                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#42c6d5' }}>{taper.totalFloodAcres.toFixed(1)} ac</span>
+                        <span style={{ fontFamily: MONO, fontSize: '8px', color: '#888888', letterSpacing: '0.12em' }}>OTSU</span>
+                        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#dddddd' }}>{Number(method.threshold_db || -3.0).toFixed(2)} dB</span>
+                    </div>
+                );
+            })()}
+
+            {/* ── FLOOD HUD: zoom hint when interactive polygons are deferred ── */}
+            {profile === 'flood' && viewingResult?.pipeline === 'flood' && floodFeatureCount > MAX_RASTER_GEOJSON_FEATURES && !showFloodVectors && (
+                <div style={{
+                    position: 'absolute', top: '58px', left: '50%', transform: 'translateX(-50%)', zIndex: 950,
+                    background: 'rgba(10, 10, 10, 0.92)', border: '1px solid #2A2A2A', padding: '6px 12px',
+                    display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'none',
+                }}>
+                    <Search size={12} style={{ color: '#42c6d5' }} />
+                    <span style={{ fontFamily: MONO, fontSize: '9px', color: '#bbbbbb', letterSpacing: '0.08em' }}>
+                        ZOOM IN TO {FLOOD_FEATURE_ZOOM}+ FOR INTERACTIVE FLOOD POLYGONS
+                    </span>
+                </div>
+            )}
 
             {/* ── MAP LEGEND ── */}
             {profile === 'infrastructure' && viewingResult && (

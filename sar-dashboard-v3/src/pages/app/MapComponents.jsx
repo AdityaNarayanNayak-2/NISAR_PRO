@@ -12,6 +12,17 @@ export function MapFlyTo({ center }) {
     return null;
 }
 
+export function MapZoomGate({ onZoomChange }) {
+    const map = useMap();
+    useEffect(() => {
+        const update = () => onZoomChange(map.getZoom());
+        update();
+        map.on('zoomend', update);
+        return () => { map.off('zoomend', update); };
+    }, [map, onZoomChange]);
+    return null;
+}
+
 export function MapFlyToBounds({ bounds }) {
     const map = useMap();
     useEffect(() => {

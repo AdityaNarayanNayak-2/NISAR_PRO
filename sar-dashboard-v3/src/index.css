@@ -40,6 +40,14 @@ body {
   animation: scan-pulse 1.5s ease-out infinite;
 }
 
+/* ── HUD spinner (loading chips) ── */
+@keyframes hud-spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: hud-spin 0.9s linear infinite;
+}
+
 /* ── Map crosshair overlay ── */
 .map-crosshair {
   position: absolute;
