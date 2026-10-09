@@ -114,11 +114,20 @@ fn mime_for(path: &std::path::Path) -> &'static str {
     }
 }
 
+fn read_index(dist: &std::path::Path) -> String {
+    // Read fresh so a frontend rebuild is picked up without restarting the gateway.
+    if let Ok(html) = std::fs::read_to_string(dist.join("index.html")) {
+        return html;
+    }
+    INDEX_HTML.get().cloned().unwrap_or_default()
+}
+
 async fn spa_fallback(uri: axum::http::Uri) -> axum::response::Response {
-    let index = INDEX_HTML.get().cloned().unwrap_or_default();
     let Some(dist) = DIST_DIR.get() else {
+        let index = INDEX_HTML.get().cloned().unwrap_or_default();
         return axum::response::Html(index).into_response();
     };
+    let index = read_index(dist);
 
     let rel = uri.path().trim_start_matches('/');
     if rel.is_empty() {
@@ -137,6 +146,12 @@ async fn spa_fallback(uri: axum::http::Uri) -> axum::response::Response {
         if let Ok(bytes) = std::fs::read(&cand) {
             return ([(axum::http::header::CONTENT_TYPE, mime_for(&cand))], bytes).into_response();
         }
+    }
+
+    // A missing hashed asset must fail loudly rather than silently serving HTML,
+    // which shows up in the browser as a blank page with no clue.
+    if rel.starts_with("assets/") {
+        return (axum::http::StatusCode::NOT_FOUND, "asset not found").into_response();
     }
 
     axum::response::Html(index).into_response()
