@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, ImageOverlay, GeoJSON, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { api } from '../../config/api';
@@ -21,6 +20,7 @@ import ProcessingView from './flood/ProcessingView';
 import DataExportsView from './flood/DataExportsView';
 import SettingsView from './flood/SettingsView';
 import FloodEventReplay from './flood/FloodEventReplay';
+import MissionHub from './MissionHub';
 
 import { useGatewayStore } from './stores/useGatewayStore';
 import { useMapStore } from './stores/useMapStore';
@@ -147,7 +147,7 @@ function AppDashboard() {
 
     const savedProfile = typeof localStorage !== 'undefined' ? localStorage.getItem('nisarpro_active_profile') : null;
     const initialProfile = paramProfile || savedProfile || (paramJobId ? 'flood' : 'infrastructure');
-    const initialMissionSelected = Boolean(paramJobId || paramReport || savedProfile || (typeof localStorage !== 'undefined' && localStorage.getItem('nisarpro_active_flood_result')));
+    const initialMissionSelected = Boolean(paramJobId || paramReport || paramProfile);
 
     // ── Profile State ──
     const [missionSelected, setMissionSelected] = useState(initialMissionSelected);
@@ -834,145 +834,7 @@ setJobs(prev => ({
 
             {/* ═══ MISSION SELECT OVERLAY ═══ */}
             {!missionSelected && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 500, background: C.bg0 }}>
-                    <div style={{ position: 'absolute', top: '16px', left: '16px', fontFamily: SANS, fontWeight: 600, fontSize: '13px', color: C.text }}>
-                        NISAR PRO
-                    </div>
-                    <div style={{ position: 'absolute', top: '16px', right: '16px', fontFamily: MONO, fontSize: '11px', color: C.textDim }}>
-                        v0.4.0 · 2026
-                    </div>
-
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ fontFamily: MONO, fontSize: '11px', color: C.textDim, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '24px' }}>
-                            SELECT MISSION PROFILE
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                            {/* Card 1: INFRASTRUCTURE MONITORING */}
-                            <motion.div
-                                onClick={() => { setProfile('infrastructure'); setMissionSelected(true); }}
-                                style={{
-                                    width: '280px',
-                                    height: '160px',
-                                    background: 'rgba(255, 255, 255, 0.015)',
-                                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                                    borderRadius: '2px',
-                                    padding: '24px',
-                                    cursor: 'pointer',
-                                    boxSizing: 'border-box',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between'
-                                }}
-                                whileHover={{ y: -4, borderColor: C.accent.infra, background: 'rgba(255, 255, 255, 0.025)' }}
-                                whileTap={{ scale: 0.98 }}
-                                transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                            >
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                                    INFRASTRUCTURE MONITORING
-                                </div>
-                                <div>
-                                    <div style={{ fontFamily: SANS, fontSize: '13px', color: C.text, fontWeight: 500 }}>
-                                        InSAR deformation and structural monitoring
-                                    </div>
-                                    <div style={{ width: '12px', height: '2px', background: C.accent.infra, marginTop: '8px' }} />
-                                </div>
-                            </motion.div>
-
-                            {/* Card 2: FLOOD MONITORING */}
-                            <motion.div
-                                onClick={() => { setProfile('flood'); setMissionSelected(true); }}
-                                style={{
-                                    width: '280px',
-                                    height: '160px',
-                                    background: 'rgba(255, 255, 255, 0.015)',
-                                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                                    borderRadius: '2px',
-                                    padding: '24px',
-                                    cursor: 'pointer',
-                                    boxSizing: 'border-box',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between'
-                                }}
-                                whileHover={{ y: -4, borderColor: C.accent.flood, background: 'rgba(255, 255, 255, 0.025)' }}
-                                whileTap={{ scale: 0.98 }}
-                                transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                            >
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                                    FLOOD MONITORING
-                                </div>
-                                <div>
-                                    <div style={{ fontFamily: SANS, fontSize: '13px', color: C.text, fontWeight: 500 }}>
-                                        Multi-temporal GCOV change detection
-                                    </div>
-                                    <div style={{ width: '12px', height: '2px', background: C.accent.flood, marginTop: '8px' }} />
-                                </div>
-                            </motion.div>
-
-                            {/* Card 3: SAR SCIENCE */}
-                            <motion.div
-                                onClick={() => { setProfile('sar_science'); setMissionSelected(true); }}
-                                style={{
-                                    width: '280px',
-                                    height: '160px',
-                                    background: 'rgba(255, 255, 255, 0.015)',
-                                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                                    borderRadius: '2px',
-                                    padding: '24px',
-                                    cursor: 'pointer',
-                                    boxSizing: 'border-box',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between'
-                                }}
-                                whileHover={{ y: -4, borderColor: C.accent.sar, background: 'rgba(255, 255, 255, 0.025)' }}
-                                whileTap={{ scale: 0.98 }}
-                                transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                            >
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                                    SAR SCIENCE
-                                </div>
-                                <div>
-                                    <div style={{ fontFamily: SANS, fontSize: '13px', color: C.text, fontWeight: 500 }}>
-                                        RSLC / GCOV / RDA viewer (Telemetry)
-                                    </div>
-                                    <div style={{ width: '12px', height: '2px', background: C.accent.sar, marginTop: '8px' }} />
-                                </div>
-                            </motion.div>
-
-                            {/* Card 4: INSAR PROCESSING */}
-                            <motion.div
-                                onClick={() => { setProfile('insar'); setMissionSelected(true); }}
-                                style={{
-                                    width: '280px',
-                                    height: '160px',
-                                    background: 'rgba(255, 255, 255, 0.015)',
-                                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                                    borderRadius: '2px',
-                                    padding: '24px',
-                                    cursor: 'pointer',
-                                    boxSizing: 'border-box',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between'
-                                }}
-                                whileHover={{ y: -4, borderColor: C.accent.insar, background: 'rgba(255, 255, 255, 0.025)' }}
-                                whileTap={{ scale: 0.98 }}
-                                transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                            >
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                                    INSAR PROCESSING
-                                </div>
-                                <div>
-                                    <div style={{ fontFamily: SANS, fontSize: '13px', color: C.text, fontWeight: 500 }}>
-                                        Advanced multi-pass interferometry
-                                    </div>
-                                    <div style={{ width: '12px', height: '2px', background: C.accent.insar, marginTop: '8px' }} />
-                                </div>
-                            </motion.div>
-                        </div>
-                    </div>
-                </div>
+                <MissionHub onSelectMission={(nextProfile) => { setProfile(nextProfile); setMissionSelected(true); }} />
             )}
 
             {/* ═══ TOPBAR ═══ */}

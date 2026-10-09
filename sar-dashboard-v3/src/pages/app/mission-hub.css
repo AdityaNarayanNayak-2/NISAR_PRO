@@ -1,0 +1,213 @@
+/* Mission Hub — the entry point for NISAR PRO.
+   One radar-scope hero, then the four processors as a left-aligned list
+   rather than a grid of identical cards. */
+
+.mh {
+  --mh-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  overflow-y: auto;
+  color: #F1F3F5;
+  background:
+    radial-gradient(120% 80% at 82% -12%, rgba(28, 46, 52, 0.42), transparent 58%),
+    radial-gradient(90% 60% at 8% 110%, rgba(48, 40, 30, 0.18), transparent 60%),
+    #0B0D10;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Top bar ── */
+.mh__topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 24px 40px 0;
+}
+.mh__brand {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.mh__brand-sub {
+  margin-left: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #7C8794;
+}
+.mh__version {
+  font-family: var(--mh-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #6C7684;
+}
+
+/* ── Stage ── */
+.mh__stage {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: clamp(56px, 11vh, 128px) 40px 72px;
+}
+
+/* ── Hero ── */
+.mh__hero {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.1fr) 0.9fr;
+  gap: clamp(32px, 5vw, 72px);
+  align-items: center;
+}
+.mh__title {
+  margin: 0;
+  max-width: 15ch;
+  font-size: clamp(2.1rem, 4.6vw, 3.6rem);
+  line-height: 1.03;
+  font-weight: 600;
+  letter-spacing: -0.033em;
+  text-wrap: balance;
+}
+.mh__lede {
+  margin: 22px 0 0;
+  max-width: 44ch;
+  font-size: 15px;
+  line-height: 1.65;
+  color: #98A1AE;
+}
+
+/* ── Radar scope (the single memorable element) ── */
+.mh__scope {
+  position: relative;
+  justify-self: end;
+  width: min(34vw, 380px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(15, 150, 156, 0.10), transparent 62%);
+  overflow: hidden;
+}
+.mh__sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(90, 214, 227, 0) 0deg,
+    rgba(90, 214, 227, 0.02) 300deg,
+    rgba(90, 214, 227, 0.16) 340deg,
+    rgba(120, 228, 238, 0.5) 358deg,
+    rgba(90, 214, 227, 0) 360deg);
+  animation: mh-sweep 5.2s linear infinite;
+}
+@keyframes mh-sweep { to { transform: rotate(360deg); } }
+
+.mh__ring {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+}
+.mh__axis {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.05);
+}
+.mh__axis--h { top: 50%; left: 6%; right: 6%; height: 1px; }
+.mh__axis--v { left: 50%; top: 6%; bottom: 6%; width: 1px; }
+.mh__blip {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #EAF7FA;
+  box-shadow: 0 0 10px 2px rgba(90, 214, 227, 0.6);
+}
+
+/* ── Engine list ── */
+.mh__list-label {
+  margin: clamp(56px, 9vh, 88px) 0 0;
+  font-family: var(--mh-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6C7684;
+}
+.mh__list {
+  margin-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.mh__engine {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  padding: 22px 18px 22px 4px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.16s ease, padding-left 0.16s ease;
+}
+.mh__engine:hover {
+  background: rgba(255, 255, 255, 0.02);
+  padding-left: 12px;
+}
+.mh__engine:focus-visible {
+  outline: 2px solid #5AD6E3;
+  outline-offset: -2px;
+}
+.mh__bar {
+  align-self: stretch;
+  min-height: 34px;
+  border-radius: 2px;
+  background: var(--mh-accent, #5AD6E3);
+  opacity: 0.32;
+  transition: opacity 0.16s ease;
+}
+.mh__engine:hover .mh__bar,
+.mh__engine:focus-visible .mh__bar { opacity: 1; }
+
+.mh__name {
+  display: block;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #F1F3F5;
+}
+.mh__desc {
+  display: block;
+  margin-top: 5px;
+  max-width: 64ch;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #8A93A0;
+}
+.mh__tag {
+  justify-self: end;
+  font-family: var(--mh-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #7C8794;
+  white-space: nowrap;
+}
+
+/* ── Footer ── */
+.mh__foot {
+  margin-top: 32px;
+  font-size: 12.5px;
+  color: #6C7684;
+}
+
+@media (max-width: 880px) {
+  .mh__hero { grid-template-columns: 1fr; }
+  .mh__scope { justify-self: start; width: min(62vw, 300px); order: -1; }
+  .mh__topbar { padding: 20px 22px 0; }
+  .mh__stage { padding-left: 22px; padding-right: 22px; }
+  .mh__engine { grid-template-columns: 3px minmax(0, 1fr); }
+  .mh__tag { grid-column: 2; justify-self: start; margin-top: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mh__sweep { animation: none; }
+  .mh__engine { transition: none; }
+}
