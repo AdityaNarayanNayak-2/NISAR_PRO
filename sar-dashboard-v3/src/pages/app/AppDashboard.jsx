@@ -83,8 +83,8 @@ function AppDashboard() {
         if (classCode === 3 && !showMedConf) return { fillOpacity: 0, opacity: 0, stroke: false };
         if ((classCode === 4 || classCode == null) && !showLowConf) return { fillOpacity: 0, opacity: 0, stroke: false };
         const color = classCode === 1 ? '#2166c1' : classCode === 2 ? '#00a6c7' : classCode === 3 ? '#42c6d5' : '#91d9dc';
-        return { fillOpacity: isSelected ? 0.75 : 0.42, fillColor: color, color, weight: isSelected ? 2 : 0.5 };
-    }, [showPermanentWater, showHighConf, showMedConf, showLowConf, selectedRegion]);
+        return { fillOpacity: (isSelected ? 0.85 : 0.65) * layerOpacity, fillColor: color, color, weight: isSelected ? 2 : 0.5 };
+    }, [showPermanentWater, showHighConf, showMedConf, showLowConf, selectedRegion, layerOpacity]);
 
     const floodFeatureCount = viewingResult?.floodGeoJson?.features?.length ?? 0;
     const showFloodVectors = floodFeatureCount > 0 && (floodFeatureCount <= MAX_RASTER_GEOJSON_FEATURES || mapZoom >= FLOOD_FEATURE_ZOOM);
@@ -1009,7 +1009,7 @@ setJobs(prev => ({
                     <ImageOverlay
                         url={viewingResult.url}
                         bounds={viewingResult.bounds}
-                        opacity={layerOpacity}
+                        opacity={showPermanentWater ? layerOpacity : 0}
                     />
                 )}
                 <FloodEventReplay
@@ -1150,8 +1150,33 @@ setJobs(prev => ({
                         data={viewingResult.floodGeoJson}
                         style={floodStyle}
                         onEachFeature={(feature, layer) => {
-                            layer.on('click', () => setSelectedRegion(feature));
-                        }}
+                            const props = feature.properties || {};
+                            layer.on({
+                                click: () => {
+                                    setSelectedRegion(feature);
+                                    if (props.centroid_lat && props.centroid_lon) {
+                                        setFlyToCenter([props.centroid_lat, props.centroid_lon]);
+                                    }
+                                },
+                                mouseover: (e) => {
+                                    e.target.setStyle({ weight: 2.5, fillOpacity: Math.min(1, 0.85 * layerOpacity), color: '#00e5ff' });
+                                },
+                                mouseout: (e) => {
+                                    e.target.setStyle(floodStyle(feature));
+                                }
+                            });
+                            layer.bindPopup(
+                                `<div style="font-family: ${MONO}; font-size: 10px; color: #f0f0f0; min-width: 170px; line-height: 1.6;">
+                                    <div style="color: #00e5ff; font-weight: 700; border-bottom: 1px solid #2a2a2a; padding-bottom: 4px; margin-bottom: 4px;">
+                                        ${props.region_id || 'FLOOD ZONE'} · ${props.confidence || 'DETECTED'}
+                                    </div>
+                                    <div>Area: <strong>${props.area_acres != null ? Number(props.area_acres).toFixed(2) + ' ac' : '~0.10 ac'}</strong></div>
+                                    <div>Pixels (20m): <strong>${props.pixel_count || 1} px</strong></div>
+                                    ${props.high_conf_pixels != null ? `<div>High/Med Split: <strong>${props.high_conf_pixels}H / ${props.med_conf_pixels}M</strong></div>` : ''}
+                                    ${props.centroid_lat ? `<div style="color: #888; font-size: 9px; margin-top: 3px;">${Number(props.centroid_lat).toFixed(4)}°N,${Number(props.centroid_lon).toFixed(4)}°E</div>` : ''}
+                                </div>`
+                        );
+                    }}
                     />
                 )}
             </MapContainer>
@@ -1367,6 +1392,12 @@ setJobs(prev => ({
                         viewingResult.floodReport ? (
                             <FloodInsightPanel
                                 floodReport={viewingResult.floodReport}
+                                floodGeoJson={viewingResult.floodGeoJson}
+                                selectedRegion={selectedRegion}
+                                onSelectRegion={(feat) => {
+                                    setSelectedRegion(feat);
+                                    if (feat?.properties?.centroid_lat) setFlyToCenter([feat.properties.centroid_lat, feat.properties.centroid_lon]);
+                                }}
                                 elapsed={viewingResult.elapsed}
                                 onClose={() => setViewingResult(null)}
                                 onExportGeoJson={() => {

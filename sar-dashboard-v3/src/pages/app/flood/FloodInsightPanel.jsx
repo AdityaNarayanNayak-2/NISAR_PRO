@@ -5,7 +5,7 @@ import { parseFloodReport } from './floodReportHelpers';
 import { formatElapsed } from '../helpers';
 import { Activity, Radio, Cpu, Download, FileText, ArrowLeft, ArrowUpRight, ChevronDown } from 'lucide-react';
 
-export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExportGeoJson, onViewReport }) {
+export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedRegion, onSelectRegion, elapsed, onClose, onExportGeoJson, onViewReport }) {
     const [sections, setSections] = useState({
         impact: true,
         acquisition: true,
@@ -242,9 +242,26 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                                         <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', color: C.accent.flood, marginLeft: '6px' }}>acres</span>
                                     </div>
                                     <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginTop: '8px' }}>
-                                        Mapped Area · {p.totalAreaAcres.toLocaleString(undefined, { maximumFractionDigits: 2 })} ac · 10 km × 10 km
+                                        Mapped Area · {p.totalAreaAcres.toLocaleString(undefined, { maximumFractionDigits: 2 })} ac{p.cropPreset ? ` · ${p.cropPreset.replace(/x/i, ' × ')}` : ''}
                                     </div>
                                 </div>
+
+                                {/* Wet-baseline diagnostic */}
+                                {p.permWaterAcres > 5000 && p.totalFloodAcres < 250 && (
+                                    <div style={{
+                                        background: 'rgba(230, 168, 23, 0.08)',
+                                        border: `1px solid ${C.caution}`,
+                                        borderRadius: '2px',
+                                        padding: '8px 10px',
+                                        marginBottom: '10px',
+                                        fontFamily: MONO,
+                                        fontSize: '9px',
+                                        color: '#f5d78e',
+                                        lineHeight: 1.5
+                                    }}>
+                                        <strong style={{ color: C.caution }}>MONSOON BASELINE ADVISORY:</strong> Baseline ({p.baselineDate}) contains {p.permWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 0 })} ac of standing water. Reported {p.totalFloodAcres.toFixed(2)} ac represents <em>net inter-monsoon expansion</em>, not total inundation footprint.
+                                    </div>
+                                )}
 
                                 {/* 2x2 Bento Grid */}
                                 <div style={{
@@ -290,6 +307,42 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                                     <span><i style={{ background: C.caution }} /> Medium confidence</span>
                                     <span><i style={{ background: '#5483b3' }} /> Permanent water</span>
                                 </div>
+
+                                {/* 1-Click Flood Hotspot Table */}
+                                {floodGeoJson?.features?.length > 0 && (
+                                    <div style={{ marginTop: '12px', border: cardBorder, background: cardBg, borderRadius: '2px' }}>
+                                        <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontFamily: MONO, fontSize: '9px', color: C.textDim, display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>TOP INUNDATION CLUSTERS (CLICK TO FLY)</span>
+                                            <span style={{ color: C.accent.flood }}>{floodGeoJson.features.length} ZONES</span>
+                                        </div>
+                                        <div style={{ maxHeight: '140px', overflowY: 'auto' }}>
+                                            {[...floodGeoJson.features]
+                                                .sort((a, b) => (b.properties?.area_acres || 0) - (a.properties?.area_acres || 0))
+                                                .slice(0, 8)
+                                                .map((feat, i) => {
+                                                    const pr = feat.properties || {};
+                                                    const isSel = selectedRegion?.id === feat.id || (pr.region_id && selectedRegion?.properties?.region_id === pr.region_id);
+                                                    return (
+                                                        <div
+                                                            key={feat.id || i}
+                                                            onClick={() => onSelectRegion && onSelectRegion(feat)}
+                                                            style={{
+                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                padding: '6px 10px', fontFamily: MONO, fontSize: '10px', cursor: 'pointer',
+                                                                background: isSel ? 'rgba(15, 150, 156, 0.18)' : 'transparent',
+                                                                borderBottom: '1px solid rgba(255,255,255,0.03)',
+                                                                borderLeft: isSel ? `2px solid ${C.accent.flood}` : '2px solid transparent'
+                                                            }}
+                                                        >
+                                                            <span style={{ color: C.text }}>{pr.region_id || `ZONE-${i + 1}`}</span>
+                                                            <span style={{ color: pr.confidence === 'HIGH' ? C.accent.flood : C.caution, fontSize: '9px' }}>{pr.confidence || 'MED'}</span>
+                                                            <span style={{ color: C.textMid }}>{pr.area_acres != null ? `${Number(pr.area_acres).toFixed(2)} ac` : `${pr.pixel_count || 1} px`}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </motion.div>
                     )}
@@ -383,6 +436,30 @@ export default function FloodInsightPanel({ floodReport, elapsed, onClose, onExp
                                 {renderMethodologyRow('Median Filter', '3 × 3 kernel')}
                                 {renderMethodologyRow('Region Growing', floodReport.method?.region_growing ? 'Enabled' : 'Disabled')}
                             </div>
+
+                            {/* Visual dual-threshold bar */}
+                            {(() => {
+                                const effDb = typeof floodReport.method?.threshold_db === 'number' ? floodReport.method.threshold_db : -3.0;
+                                const growthDb = typeof floodReport.method?.growth_threshold_db === 'number' ? floodReport.method.growth_threshold_db : -2.5;
+                                const toPct = (db) => Math.max(0, Math.min(100, ((db + 25) / 25) * 100));
+                                return (
+                                    <div style={{ marginTop: '10px', padding: '8px', background: cardBg, border: cardBorder, borderRadius: '2px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '8px', color: C.textDim }}>
+                                            <span>−25 dB</span>
+                                            <span>Δ BACKSCATTER</span>
+                                            <span>0 dB</span>
+                                        </div>
+                                        <div style={{ position: 'relative', height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden', marginTop: '4px' }}>
+                                            <div style={{ position: 'absolute', left: 0, width: `${toPct(effDb)}%`, height: '100%', background: C.accent.flood, opacity: 0.75 }} title={`High-conf seed (< ${effDb.toFixed(2)} dB)`} />
+                                            <div style={{ position: 'absolute', left: `${toPct(effDb)}%`, width: `${Math.max(0, toPct(growthDb) - toPct(effDb))}%`, height: '100%', background: C.caution, opacity: 0.65 }} title={`Region growth (${effDb.toFixed(2)} to ${growthDb.toFixed(2)} dB)`} />
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: '9px', marginTop: '6px' }}>
+                                            <span style={{ color: C.accent.flood }}>Seed: {effDb.toFixed(2)} dB</span>
+                                            <span style={{ color: C.caution }}>Growth: {growthDb.toFixed(2)} dB</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </motion.div>
                     )}
                 </AnimatePresence>

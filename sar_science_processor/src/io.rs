@@ -1330,13 +1330,12 @@ pub fn save_colormap_png_f32(
     Ok(())
 }
 
-/// Saves a flood classification map as an RGBA PNG.
+/// Saves the permanent-water layer as an RGBA PNG.
 ///
-/// - Class 0 (Dry land): transparent [0, 0, 0, 0]
-/// - Class 1 (Permanent water): deep ICEYE-inspired blue
-/// - Class 2 (Flood High Conf): saturated cyan
-/// - Class 3 (Flood Med Conf): medium cyan
-/// - Class 4 (Flood Low Conf): pale cyan
+/// Only Class 1 (Permanent water, deep ICEYE-inspired blue) is rendered; dry
+/// land and new flood (Classes 2..=4) are transparent. New flood is exported as
+/// merged GeoJSON vectors, so the dashboard can toggle permanent water (this
+/// raster) and each flood confidence class (the vectors) independently.
 pub fn save_flood_map_png(
     flood_map: ArrayView2<u8>,
     output_path: &str,
@@ -1351,31 +1350,16 @@ pub fn save_flood_map_png(
             let idx = (r * cols + c) * 4;
             match class {
                 1 => {
+                    // Permanent water (stable-water layer). New flood (2..=4) is
+                    // exported as GeoJSON vectors and toggled independently, so it
+                    // is intentionally left transparent here.
                     img_buf[idx] = 33;
                     img_buf[idx + 1] = 102;
                     img_buf[idx + 2] = 193;
                     img_buf[idx + 3] = 180;
                 }
-                2 => {
-                    img_buf[idx] = 0;
-                    img_buf[idx + 1] = 166;
-                    img_buf[idx + 2] = 199;
-                    img_buf[idx + 3] = 220;
-                }
-                3 => {
-                    img_buf[idx] = 66;
-                    img_buf[idx + 1] = 198;
-                    img_buf[idx + 2] = 213;
-                    img_buf[idx + 3] = 190;
-                }
-                4 => {
-                    img_buf[idx] = 145;
-                    img_buf[idx + 1] = 217;
-                    img_buf[idx + 2] = 220;
-                    img_buf[idx + 3] = 145;
-                }
                 _ => {
-                    // Land: Transparent
+                    // Dry land and new flood: transparent.
                     img_buf[idx + 3] = 0;
                 }
             }
@@ -1393,9 +1377,15 @@ pub fn save_flood_map_png(
     Ok(())
 }
 
-/// Generates a GeoJSON FeatureCollection of flood polygons.
+/// Generates a GeoJSON FeatureCollection of connected flood regions.
 ///
-/// Maps each flooded pixel to a bounding box polygon in WGS84 coordinates.
+/// Permanent water (class 1) is intentionally omitted: the classified raster
+/// (*_flood.png) already renders it, whereas vectorising every stable-water
+/// pixel used to emit hundreds of thousands of single-pixel boxes (the 321k
+/// feature / 244 MB case). New-flood pixels (classes 2..=4) are grouped by
+/// 8-connected component and each region is emitted as one MultiPolygon made of
+/// horizontal run-length strips, so a scene exports a handful of regions with
+/// acreage and confidence telemetry instead of one box per pixel.
 pub fn save_flood_geojson(
     flood_map: ArrayView2<u8>,
     bbox: [f64; 4], // [west, south, east, north]
@@ -1404,56 +1394,137 @@ pub fn save_flood_geojson(
     let rows = flood_map.nrows();
     let cols = flood_map.ncols();
 
-    let west = bbox[0];
-    let south = bbox[1];
-    let east = bbox[2];
-    let north = bbox[3];
+    let [west, south, east, north] = bbox;
 
-    let lat_height = north - south;
-    let lon_width = east - west;
+    let pixel_lat_step = (north - south) / (rows as f64);
+    let pixel_lon_step = (east - west) / (cols as f64);
 
-    let pixel_lat_step = lat_height / (rows as f64);
-    let pixel_lon_step = lon_width / (cols as f64);
+    // Latitude-corrected WGS84 pixel footprint so per-region acreage is accurate.
+    let mid_lat_rad = ((north + south) * 0.5).to_radians();
+    let dy_m = pixel_lat_step.abs() * 111_132.954;
+    let dx_m = pixel_lon_step.abs() * 111_319.491 * mid_lat_rad.cos();
+    let pixel_area_acres = (dx_m * dy_m) / 4046.856;
 
+    const NEIGHBORS: [(isize, isize); 8] = [
+        (-1, -1), (-1, 0), (-1, 1),
+        (0, -1), (0, 1),
+        (1, -1), (1, 0), (1, 1),
+    ];
+
+    let mut visited = vec![false; rows * cols];
     let mut features = Vec::new();
+    let mut region_id = 0usize;
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let class = flood_map[[r, c]];
-            if (1..=4).contains(&class) {
-                let conf_str = match class {
-                    1 => "PERMANENT_WATER",
-                    2 => "HIGH",
-                    3 => "MEDIUM",
-                    4 => "LOW",
-                    _ => "UNKNOWN",
-                };
-
-                let p_north = north - (r as f64 * pixel_lat_step);
-                let p_south = north - ((r + 1) as f64 * pixel_lat_step);
-                let p_west = west + (c as f64 * pixel_lon_step);
-                let p_east = west + ((c + 1) as f64 * pixel_lon_step);
-
-                let feature = serde_json::json!({
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [[
-                            [p_west, p_south],
-                            [p_east, p_south],
-                            [p_east, p_north],
-                            [p_west, p_north],
-                            [p_west, p_south]
-                        ]]
-                    },
-                    "properties": {
-                        "confidence": conf_str,
-                        "class_code": class,
-                        "class_name": conf_str
-                    }
-                });
-                features.push(feature);
+    for sr in 0..rows {
+        for sc in 0..cols {
+            // Only new flood (2=HIGH, 3=MEDIUM, 4=LOW). Class 1 is permanent water.
+            if !(2..=4).contains(&flood_map[[sr, sc]]) || visited[sr * cols + sc] {
+                continue;
             }
+
+            region_id += 1;
+            let mut queue = std::collections::VecDeque::new();
+            queue.push_back((sr, sc));
+            visited[sr * cols + sc] = true;
+
+            let mut pixels: Vec<(usize, usize)> = Vec::new();
+            let (mut high_px, mut med_px, mut low_px) = (0usize, 0usize, 0usize);
+            let (mut min_r, mut max_r, mut min_c, mut max_c) = (sr, sr, sc, sc);
+
+            while let Some((r, c)) = queue.pop_front() {
+                pixels.push((r, c));
+                min_r = min_r.min(r);
+                max_r = max_r.max(r);
+                min_c = min_c.min(c);
+                max_c = max_c.max(c);
+                match flood_map[[r, c]] {
+                    2 => high_px += 1,
+                    3 => med_px += 1,
+                    _ => low_px += 1,
+                }
+                for &(dr, dc) in &NEIGHBORS {
+                    let nr = r as isize + dr;
+                    let nc = c as isize + dc;
+                    if nr < 0 || nr >= rows as isize || nc < 0 || nc >= cols as isize {
+                        continue;
+                    }
+                    let (nr, nc) = (nr as usize, nc as usize);
+                    if !visited[nr * cols + nc] && (2..=4).contains(&flood_map[[nr, nc]]) {
+                        visited[nr * cols + nc] = true;
+                        queue.push_back((nr, nc));
+                    }
+                }
+            }
+
+            // Merge consecutive same-row pixels into horizontal strips: exact
+            // pixel boundaries, but a fraction of the vertices.
+            pixels.sort_unstable();
+            let mut polygons = Vec::new();
+            let mut i = 0;
+            while i < pixels.len() {
+                let (row, start_c) = pixels[i];
+                let mut end_c = start_c;
+                while i + 1 < pixels.len()
+                    && pixels[i + 1].0 == row
+                    && pixels[i + 1].1 == end_c + 1
+                {
+                    i += 1;
+                    end_c = pixels[i].1;
+                }
+                let p_north = north - (row as f64 * pixel_lat_step);
+                let p_south = north - ((row + 1) as f64 * pixel_lat_step);
+                let p_west = west + (start_c as f64 * pixel_lon_step);
+                let p_east = west + ((end_c + 1) as f64 * pixel_lon_step);
+                polygons.push(vec![vec![
+                    [p_west, p_south],
+                    [p_east, p_south],
+                    [p_east, p_north],
+                    [p_west, p_north],
+                    [p_west, p_south],
+                ]]);
+                i += 1;
+            }
+
+            let dominant = if high_px >= med_px && high_px >= low_px {
+                2u8
+            } else if med_px >= low_px {
+                3u8
+            } else {
+                4u8
+            };
+            let conf_str = match dominant {
+                2 => "HIGH",
+                3 => "MEDIUM",
+                _ => "LOW",
+            };
+
+            let total_px = pixels.len();
+            let centroid_lat = north - (((min_r + max_r + 1) as f64 * 0.5) * pixel_lat_step);
+            let centroid_lon = west + (((min_c + max_c + 1) as f64 * 0.5) * pixel_lon_step);
+            let area_acres = (total_px as f64 * pixel_area_acres * 100.0).round() / 100.0;
+            let region_label = format!("FL-REG-{:03}", region_id);
+
+            features.push(serde_json::json!({
+                "type": "Feature",
+                "id": region_label,
+                "geometry": {
+                    "type": "MultiPolygon",
+                    "coordinates": polygons
+                },
+                "properties": {
+                    "region_id": region_label,
+                    "confidence": conf_str,
+                    "class_code": dominant,
+                    "class_name": conf_str,
+                    "pixel_count": total_px,
+                    "high_conf_pixels": high_px,
+                    "med_conf_pixels": med_px,
+                    "low_conf_pixels": low_px,
+                    "area_acres": area_acres,
+                    "centroid_lat": (centroid_lat * 100_000.0).round() / 100_000.0,
+                    "centroid_lon": (centroid_lon * 100_000.0).round() / 100_000.0
+                }
+            }));
         }
     }
 
@@ -1463,9 +1534,9 @@ pub fn save_flood_geojson(
     });
 
     let file = std::fs::File::create(output_path)?;
-    serde_json::to_writer_pretty(file, &geojson)?;
+    serde_json::to_writer(file, &geojson)?;
 
-    info!("  ✓ Flood GeoJSON saved: {} ({} features)", output_path, features.len());
+    info!("  ✓ Flood GeoJSON saved: {} ({} connected flood regions)", output_path, features.len());
     Ok(())
 }
 
@@ -1550,20 +1621,50 @@ mod tests {
     }
 
     #[test]
-    fn test_save_flood_geojson() {
-        let mut flood_map = Array2::<u8>::zeros((4, 4));
-        flood_map[[1, 1]] = 2; // Flood High
-        flood_map[[2, 2]] = 3; // Flood Med
+    fn test_save_flood_geojson_merges_regions_and_drops_permanent_water() {
+        let mut flood_map = Array2::<u8>::zeros((5, 6));
+        // Permanent water must NOT be exported (the raster PNG renders it).
+        flood_map[[0, 0]] = 1;
+        // Region 1: a horizontal HIGH strip.
+        flood_map[[1, 0]] = 2;
+        flood_map[[1, 1]] = 2;
+        flood_map[[1, 2]] = 2;
+        // Region 2: an isolated MEDIUM pixel.
+        flood_map[[3, 4]] = 3;
 
-        let path = tmp_path("nisar_test_flood.json");
-        let bbox = [82.0, 18.0, 83.0, 19.0];
-        let res = save_flood_geojson(flood_map.view(), bbox, &path);
+        let path = tmp_path("nisar_test_flood_regions.geo.json");
+        let res = save_flood_geojson(flood_map.view(), [90.0, 20.0, 90.06, 20.05], &path);
         assert!(res.is_ok());
 
-        let content = fs::read_to_string(path).unwrap();
-        assert!(content.contains("FeatureCollection"));
-        assert!(content.contains("Polygon"));
-        assert!(content.contains("HIGH"));
-        assert!(content.contains("MEDIUM"));
+        let raw = fs::read_to_string(path).unwrap();
+        assert!(
+            !raw.contains("PERMANENT_WATER"),
+            "permanent water must be excluded from the vector export"
+        );
+
+        let geojson: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let features = geojson["features"].as_array().unwrap();
+        assert_eq!(features.len(), 2, "one feature per connected flood region");
+
+        let high = features
+            .iter()
+            .find(|f| f["properties"]["confidence"].as_str() == Some("HIGH"))
+            .expect("HIGH region missing");
+        assert_eq!(high["geometry"]["type"].as_str(), Some("MultiPolygon"));
+        assert_eq!(high["properties"]["pixel_count"].as_u64(), Some(3));
+        assert_eq!(high["properties"]["high_conf_pixels"].as_u64(), Some(3));
+        assert!(high["properties"]["area_acres"].as_f64().unwrap() > 0.0);
+        // Three collinear pixels collapse into one 5-point polygon ring.
+        assert_eq!(high["geometry"]["coordinates"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            high["geometry"]["coordinates"][0][0].as_array().unwrap().len(),
+            5
+        );
+
+        let med = features
+            .iter()
+            .find(|f| f["properties"]["confidence"].as_str() == Some("MEDIUM"))
+            .expect("MEDIUM region missing");
+        assert_eq!(med["properties"]["pixel_count"].as_u64(), Some(1));
     }
 }

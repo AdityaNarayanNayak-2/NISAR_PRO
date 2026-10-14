@@ -261,6 +261,24 @@ export default function FloodConfigPanel({
                 >
                     Kundra Block
                 </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setCropLat('27.2055');
+                        setCropLon('94.8948');
+                        setCropPreset('20x20km');
+                        if (setFlyToCenter) setFlyToCenter([27.2055, 94.8948]);
+                    }}
+                    style={{
+                        flex: 1, padding: '5px 4px', fontFamily: MONO, fontSize: '9px',
+                        background: (cropLat === '27.2055' && cropLon === '94.8948') ? 'rgba(0, 229, 255, 0.15)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${(cropLat === '27.2055' && cropLon === '94.8948') ? accent : 'rgba(255,255,255,0.08)'}`,
+                        color: (cropLat === '27.2055' && cropLon === '94.8948') ? accent : C.textMid,
+                        cursor: 'pointer', textAlign: 'center', borderRadius: '2px'
+                    }}
+                >
+                    Brahmaputra
+                </button>
             </div>
 
             {/* Lat / Lon text inputs */}

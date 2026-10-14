@@ -170,7 +170,7 @@ export default function AnalysisReportModal({ floodReport, onClose }) {
                     <div style={cardStyle}>
                         <div style={sectionTitleStyle}>1.0 Executive Summary & Location Context</div>
                         <p style={{ fontFamily: SANS, fontSize: '12px', color: C.textMid, lineHeight: 1.6, margin: 0 }}>
-                            NISAR L-band SAR change detection analysis was executed over the <strong style={{ color: C.text }}>{p.location}</strong> analysis region. The evaluation compares the monsoon active acquisition on <strong style={{ color: C.accent.flood }}>{p.activeDate}</strong> against the dry baseline acquisition on <strong style={{ color: C.text }}>{p.baselineDate}</strong>.
+                            NISAR L-band SAR change detection analysis was executed over the <strong style={{ color: C.text }}>{p.location}</strong> analysis region. The evaluation compares the monsoon active acquisition on <strong style={{ color: C.accent.flood }}>{p.activeDate}</strong> against the reference baseline acquisition on <strong style={{ color: C.text }}>{p.baselineDate}</strong>.
                         </p>
                     </div>
 
@@ -255,9 +255,9 @@ export default function AnalysisReportModal({ floodReport, onClose }) {
                     <div>
                         <div style={sectionTitleStyle}>4.0 Quality Flags & Calibration Metadata</div>
                         <div style={{ background: C.bg2, border: `1px solid ${C.bg3}`, borderRadius: '2px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: C.stable }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: floodReport.method?.coherence_used ? C.stable : C.caution }}>
                                 <CheckCircle2 size={12} />
-                                <span>Coherence Thresholding: CALIBRATED</span>
+                                <span>{floodReport.method?.coherence_used ? 'GUNW Coherence Fusion: ACTIVE' : 'Intensity-Only Mode (GUNW Excluded)'}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: C.stable }}>
                                 <CheckCircle2 size={12} />

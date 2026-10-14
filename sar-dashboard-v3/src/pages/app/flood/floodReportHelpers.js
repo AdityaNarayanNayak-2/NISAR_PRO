@@ -31,6 +31,9 @@ export function getGeoLocation(lat, lon) {
     if (Math.abs(lLat - 18.9306) < 0.08 && Math.abs(lLon - 82.3885) < 0.08) {
         return 'Kundra Block, Koraput, Odisha, India';
     }
+    if (Math.abs(lLat - 27.2055) < 0.25 && Math.abs(lLon - 94.8948) < 0.25) {
+        return 'Brahmaputra Valley (Dibrugarh–Dhemaji Sector), Assam, India';
+    }
     return `${lLat.toFixed(4)}° N, ${lLon.toFixed(4)}° E`;
 }
 
@@ -45,18 +48,27 @@ export function getEPSGZone(lon) {
     return `UTM Zone ${zone}N / EPSG:${32600 + zone}`;
 }
 
+// Convert a crop preset token (e.g. "20x20km") into a human label ("20 km × 20 km")
+export function formatCropPreset(preset) {
+    if (!preset) return null;
+    const match = String(preset).match(/^(\d+)x(\d+)km$/i);
+    if (match) return `${match[1]} km × ${match[2]} km`;
+    return String(preset);
+}
+
 export function parseFloodReport(report) {
     if (!report) return null;
-    
+
     const areas = report.areas || {};
     const product = report.product || {};
     const method = report.method || {};
     const crop = report.crop || {};
-    
+
     const activeDate = parseNisarDate(product.active_id);
     const baselineDate = parseNisarDate(product.baseline_id);
     const location = getGeoLocation(crop.center_lat, crop.center_lon);
     const epsg = getEPSGZone(crop.center_lon);
+    const cropPresetLabel = formatCropPreset(crop.preset);
     
     const dx = product.pixel_spacing_x_m || 10.0;
     const dy = product.pixel_spacing_y_m || -10.0;
@@ -106,6 +118,7 @@ export function parseFloodReport(report) {
         location,
         epsg,
         gridLabel,
+        cropPreset: crop.preset || null,
         dx,
         dy,
         totalAreaAcres,
