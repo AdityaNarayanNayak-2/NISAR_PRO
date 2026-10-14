@@ -474,6 +474,12 @@ pub fn morphological_cleanup(
 
 /// Stage 7: Confidence scoring per pixel
 ///
+/// `strong_change_db` is the data-driven seed cutoff actually used by region
+/// growing. Pixels at least this strong become High confidence (they seeded a
+/// region); weaker pixels that were only grown into become Medium. Coupling to
+/// this value keeps the High/Medium split consistent with the computed
+/// threshold instead of a fixed constant.
+///
 /// Output grid values:
 /// - 0: Land / No Flood
 /// - 1: Permanent Water
@@ -485,6 +491,7 @@ pub fn compute_confidence(
     flood_mask: &Array2<bool>,
     perm_water_mask: &Array2<bool>,
     coherence: Option<&Array2<f32>>,
+    strong_change_db: f32,
 ) -> (Array2<u8>, Vec<String>) {
     let (rows, cols) = delta_db.dim();
     let mut class_map = Array2::<u8>::zeros((rows, cols));
@@ -507,7 +514,7 @@ pub fn compute_confidence(
                 class_map[[r, c]] = 1; // Permanent Water
             } else if flood_mask[[r, c]] {
                 let d = delta_db[[r, c]];
-                let is_strong_change = d < -5.0;
+                let is_strong_change = d < strong_change_db;
 
                 let coh_supports = if let Some(coh) = coherence {
                     coh[[r, c]] < 0.3
@@ -579,14 +586,6 @@ pub fn run_flood_detection_pipeline(
         (active_db_filtered.clone(), active_db_filtered.clone())
     };
 
-    info!("[FLOOD_PIPELINE] Stage 4b: Computing Otsu's threshold on change image...");
-    let otsu_thresh = otsu_threshold(&delta_db, &valid_mask, opts.otsu_bins);
-    let effective_threshold = otsu_thresh.min(opts.min_change_db);
-    info!(
-        "[FLOOD_PIPELINE] Otsu threshold: {:.2} dB | Effective threshold (with cap {:.2} dB): {:.2} dB",
-        otsu_thresh, opts.min_change_db, effective_threshold
-    );
-
     info!("[FLOOD_PIPELINE] Stage 5: Identifying permanent water...");
     let perm_water_mask = build_permanent_water_mask(
         &active_db_filtered,
@@ -595,7 +594,26 @@ pub fn run_flood_detection_pipeline(
         external_mask,
     );
 
+    // Permanent water is a stable, seasonally-persistent radar target whose
+    // delta clusters around 0 dB with roughness-driven variance. Leaving those
+    // thousands of pixels in the Otsu histogram drags the split down the lower
+    // tail of the background distribution, so genuine flood - a small, shallow
+    // secondary mode - is never separated. Exclude them from the histogram.
+    // (Region growing already refuses to grow into permanent water.)
+    let otsu_valid = &valid_mask & &perm_water_mask.mapv(|is_water| !is_water);
+    let otsu_excluded = valid_mask.iter().filter(|&&v| v).count()
+        - otsu_valid.iter().filter(|&&v| v).count();
+
+    info!("[FLOOD_PIPELINE] Stage 4b: Computing Otsu's threshold on change image...");
+    let otsu_thresh = otsu_threshold(&delta_db, &otsu_valid, opts.otsu_bins);
+    let effective_threshold = otsu_thresh.min(opts.min_change_db);
+    info!(
+        "[FLOOD_PIPELINE] Otsu threshold: {:.2} dB | Effective threshold (with cap {:.2} dB): {:.2} dB | {} permanent-water px excluded from histogram",
+        otsu_thresh, opts.min_change_db, effective_threshold, otsu_excluded
+    );
+
     info!("[FLOOD_PIPELINE] Stage 6a: Two-threshold region growing...");
+
     let seed_thresh = opts.seed_threshold_db.min(effective_threshold);
     let mut flood_mask = region_grow(
         &delta_db,
@@ -619,6 +637,7 @@ pub fn run_flood_detection_pipeline(
         &flood_mask,
         &perm_water_mask,
         coherence,
+        seed_thresh,
     );
 
     let mut perm_count = 0;
@@ -822,6 +841,46 @@ mod tests {
             summary.total_flooded_pixels > 0,
             "expected non-zero flood area but got {:#?}",
             summary
+        );
+    }
+
+    #[test]
+    fn test_pipeline_excludes_permanent_water_from_otsu() {
+        // Regression: a large permanent-water body (specularly dark on both
+        // dates) adds a deep-delta cluster to the Otsu histogram. If it stays in
+        // the histogram the split lands below the genuine shallow flood and
+        // nothing is seeded. Excluding permanent water must recover the flood.
+        let (rows, cols) = (40, 40);
+        let land = Complex32::new(10.0, 0.0);
+        let mut active = Array2::<Complex32>::from_elem((rows, cols), land);
+        let mut baseline = Array2::<Complex32>::from_elem((rows, cols), land);
+
+        // Permanent water: both dates < -13 dB -> active -33 dB, baseline -14 dB
+        // (delta ~ -19 dB), a deep cluster that would dominate the histogram.
+        for r in 24..40 {
+            for c in 24..40 {
+                active[[r, c]] = Complex32::new(5.0e-4, 0.0);
+                baseline[[r, c]] = Complex32::new(0.04, 0.0);
+            }
+        }
+
+        // Genuine flood: -8 dB drop (active +2 dB vs baseline +10 dB).
+        for r in 4..12 {
+            for c in 4..12 {
+                active[[r, c]] = Complex32::new(1.585, 0.0);
+            }
+        }
+
+        let opts = FloodDetectionOptions::for_band(RadarBand::LBand);
+        let (class_map, _delta, summary) =
+            run_flood_detection_pipeline(&active, Some(&baseline), None, None, &opts);
+
+        assert_eq!(class_map[[30, 30]], 1, "permanent water must stay class 1");
+        assert_ne!(class_map[[8, 8]], 0, "genuine flood must be detected");
+        assert_eq!(class_map[[8, 8]], 2, "seeded flood pixel must be High confidence");
+        assert!(
+            summary.total_flooded_pixels > 0,
+            "permanent-water cluster suppressed flood detection: {summary:#?}"
         );
     }
 
