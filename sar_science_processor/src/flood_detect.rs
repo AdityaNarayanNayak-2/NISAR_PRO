@@ -148,10 +148,20 @@ pub fn validate_gcov_pair_metadata(
 /// Power P is stored in the real component: 10 * log10(P).
 /// Non-finite power and power <= 0 are nodata and become NaN, so they are
 /// excluded by the valid-pixel mask before any thresholding or growth.
+/// Minimum physical backscatter power for NISAR L-band GCOV (linear scale).
+/// Corresponds to -40.0 dB (10 * log10(1e-4) = -40 dB).
+///
+/// Pixels below this floor (such as out-of-swath fill or feather zones, which
+/// hold tiny non-zero floats like 1e-13..1e-6 / -130..-60 dB) are below the
+/// sensor Noise Equivalent Sigma Zero (NESZ, typically ~-30 dB to -35 dB).
+/// Treating them as nodata (f32::NAN) prevents out-of-swath edges from falsely
+/// classifying as permanent water (< -13 dB).
+pub const GCOV_MIN_VALID_POWER: f32 = 1e-4; // -40.0 dB
+
 pub fn gcov_to_db(slc: &Array2<Complex32>) -> Array2<f32> {
     slc.mapv(|c| {
         let power = c.re;
-        if power.is_finite() && power > 0.0 {
+        if power.is_finite() && power >= GCOV_MIN_VALID_POWER {
             10.0 * power.log10()
         } else {
             f32::NAN
@@ -317,7 +327,9 @@ pub fn build_permanent_water_mask(
     } else {
         for r in 0..rows {
             for c in 0..cols {
-                if active_db[[r, c]] < water_thresh_db && baseline_db[[r, c]] < water_thresh_db {
+                let a = active_db[[r, c]];
+                let b = baseline_db[[r, c]];
+                if a.is_finite() && b.is_finite() && a < water_thresh_db && b < water_thresh_db {
                     perm_mask[[r, c]] = true;
                 }
             }
@@ -700,13 +712,13 @@ mod tests {
         let mut slc = Array2::<Complex32>::zeros((2, 2));
         slc[[0, 0]] = Complex32::new(0.0, 0.0);
         slc[[0, 1]] = Complex32::new(-3.5, 0.0);
-        slc[[1, 0]] = Complex32::new(f32::NAN, 0.0);
+        slc[[1, 0]] = Complex32::new(1e-7, 0.0); // Out-of-swath feather noise floor (-70 dB)
         slc[[1, 1]] = Complex32::new(1.0, 0.0);
 
         let db = gcov_to_db(&slc);
         assert!(db[[0, 0]].is_nan(), "zero power must be nodata, not -100 dB");
         assert!(db[[0, 1]].is_nan(), "negative power must be nodata");
-        assert!(db[[1, 0]].is_nan(), "NaN power must stay nodata");
+        assert!(db[[1, 0]].is_nan(), "noise floor dropout < -40 dB must become NaN");
         assert!((db[[1, 1]] - 0.0).abs() < 1e-4, "valid power must convert normally");
     }
 

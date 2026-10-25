@@ -44,3 +44,6 @@ Download/
 .wrangler/
 # Local launcher runtime logs
 logs/
+
+# Benchmarks
+benchmarks/

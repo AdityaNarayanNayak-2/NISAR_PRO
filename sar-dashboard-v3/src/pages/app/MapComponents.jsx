@@ -5,8 +5,31 @@ import L from 'leaflet';
 export function MapFlyTo({ center }) {
     const map = useMap();
     useEffect(() => {
-        if (center) {
-            map.flyTo(center, 8, { duration: 1.5 });
+        if (!center) return;
+        try {
+            if (Array.isArray(center)) {
+                if (center.length >= 3 && typeof center[2] === 'number') {
+                    map.flyTo([center[0], center[1]], center[2], { duration: 1.5 });
+                } else if (center.length >= 2) {
+                    const currentZoom = map.getZoom();
+                    const targetZoom = currentZoom >= 13 ? currentZoom : 14;
+                    map.flyTo([center[0], center[1]], targetZoom, { duration: 1.5 });
+                }
+            } else if (typeof center === 'object') {
+                if (center.bounds) {
+                    map.flyToBounds(center.bounds, { padding: [50, 50], duration: 1.5, maxZoom: 15 });
+                } else if (center.center) {
+                    const z = center.zoom || 14;
+                    map.flyTo(center.center, z, { duration: 1.5 });
+                } else if (center.lat != null && (center.lon != null || center.lng != null)) {
+                    const lat = center.lat;
+                    const lon = center.lon != null ? center.lon : center.lng;
+                    const z = center.zoom || 14;
+                    map.flyTo([lat, lon], z, { duration: 1.5 });
+                }
+            }
+        } catch (err) {
+            console.warn('MapFlyTo failed:', err);
         }
     }, [center, map]);
     return null;

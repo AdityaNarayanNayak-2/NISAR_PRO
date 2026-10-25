@@ -71,20 +71,53 @@ function AppDashboard() {
     const [mapZoom, setMapZoom] = useState(9);
     const geoJsonLoadKeyRef = useRef(null);          // in-flight fetch dedupe key (path)
     const geoJsonFailedRef = useRef(new Set());      // paths that failed -> don't retry on every render
+    const geoJsonRef = useRef(null);
 
     // Memoized flood-layer style: only re-applied when a toggle/selection actually changes,
     // so opacity-slider ticks no longer rebuild or restyle ~321k features.
     const floodStyle = useMemo(() => (feature) => {
         const raw = feature?.properties?.class_code;
         const classCode = (raw === undefined || raw === null || raw === '') ? null : Number(raw);
-        const isSelected = selectedRegion?.id === feature?.id;
+        const isSelected = selectedRegion && (
+            (selectedRegion.id && feature?.id && selectedRegion.id === feature.id) ||
+            (selectedRegion.properties?.region_id && feature?.properties?.region_id && selectedRegion.properties.region_id === feature.properties.region_id) ||
+            (selectedRegion.id && feature?.properties?.region_id && selectedRegion.id === feature.properties.region_id) ||
+            (selectedRegion.region_id && feature?.properties?.region_id && selectedRegion.region_id === feature.properties.region_id)
+        );
         if (classCode === 1 && !showPermanentWater) return { fillOpacity: 0, opacity: 0, stroke: false };
         if (classCode === 2 && !showHighConf) return { fillOpacity: 0, opacity: 0, stroke: false };
         if (classCode === 3 && !showMedConf) return { fillOpacity: 0, opacity: 0, stroke: false };
         if ((classCode === 4 || classCode == null) && !showLowConf) return { fillOpacity: 0, opacity: 0, stroke: false };
         const color = classCode === 1 ? '#2166c1' : classCode === 2 ? '#00a6c7' : classCode === 3 ? '#42c6d5' : '#91d9dc';
-        return { fillOpacity: (isSelected ? 0.85 : 0.65) * layerOpacity, fillColor: color, color, weight: isSelected ? 2 : 0.5 };
+        return {
+            fillOpacity: (isSelected ? 0.95 : 0.65) * layerOpacity,
+            fillColor: isSelected ? '#00ffff' : color,
+            color: isSelected ? '#ffffff' : color,
+            weight: isSelected ? 3 : 0.8
+        };
     }, [showPermanentWater, showHighConf, showMedConf, showLowConf, selectedRegion, layerOpacity]);
+
+    // Keep react-leaflet's underlying layers updated when style or selection changes
+    useEffect(() => {
+        if (!geoJsonRef.current) return;
+        try {
+            geoJsonRef.current.setStyle(floodStyle);
+            if (selectedRegion) {
+                const targetId = selectedRegion.id || selectedRegion.properties?.region_id || selectedRegion.region_id;
+                geoJsonRef.current.eachLayer((layer) => {
+                    const feat = layer.feature;
+                    if (!feat) return;
+                    const fid = feat.id || feat.properties?.region_id;
+                    if (fid && targetId && fid === targetId) {
+                        layer.openPopup();
+                        if (layer.bringToFront) layer.bringToFront();
+                    }
+                });
+            }
+        } catch (err) {
+            console.warn('GeoJSON restyle failed:', err);
+        }
+    }, [floodStyle, selectedRegion]);
 
     const floodFeatureCount = viewingResult?.floodGeoJson?.features?.length ?? 0;
     const showFloodVectors = floodFeatureCount > 0 && (floodFeatureCount <= MAX_RASTER_GEOJSON_FEATURES || mapZoom >= FLOOD_FEATURE_ZOOM);
@@ -1146,6 +1179,7 @@ setJobs(prev => ({
 
 {profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && showFloodVectors && (!viewingResult.floodReplayAvailable || replayPhase === 'detected') && (
                     <GeoJSON
+                        ref={geoJsonRef}
                         key={viewingResult.floodGeoJsonPath || viewingResult.url}
                         data={viewingResult.floodGeoJson}
                         style={floodStyle}
@@ -1155,7 +1189,7 @@ setJobs(prev => ({
                                 click: () => {
                                     setSelectedRegion(feature);
                                     if (props.centroid_lat && props.centroid_lon) {
-                                        setFlyToCenter([props.centroid_lat, props.centroid_lon]);
+                                        setFlyToCenter({ center: [props.centroid_lat, props.centroid_lon], zoom: 14 });
                                     }
                                 },
                                 mouseover: (e) => {
@@ -1276,9 +1310,24 @@ setJobs(prev => ({
                 </div>
             )}
 
-            {/* ═══ MAP CROSSHAIR (Phase D) ═══ */}
-            <div className="map-crosshair" />
-            <div className="map-crosshair-box" />
+            {/* ═══ MAP CROSSHAIR (Aligned to MapContainer viewport) ═══ */}
+            {!(profile === 'flood' && activeView !== 'map') && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '42px',
+                        left: profile === 'infrastructure' ? `${INFRA_LAYOUT.left}px` : profile === 'flood' ? `${TM.side}px` : '0px',
+                        right: profile === 'infrastructure' ? '0px' : (profile === 'flood' && activeView === 'map') ? `${TM.panel}px` : '0px',
+                        bottom: profile === 'infrastructure' ? `${INFRA_LAYOUT.bottom}px` : (viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport) ? '32px' : '0px',
+                        pointerEvents: 'none',
+                        zIndex: 500,
+                        overflow: 'hidden',
+                    }}
+                >
+                    <div className="map-crosshair" />
+                    <div className="map-crosshair-box" />
+                </div>
+            )}
 
             {/* ═══ INFRASTRUCTURE: 3-ZONE LAYOUT (rendered outside right panel) ═══ */}
             {profile === 'infrastructure' && (
@@ -1396,7 +1445,9 @@ setJobs(prev => ({
                                 selectedRegion={selectedRegion}
                                 onSelectRegion={(feat) => {
                                     setSelectedRegion(feat);
-                                    if (feat?.properties?.centroid_lat) setFlyToCenter([feat.properties.centroid_lat, feat.properties.centroid_lon]);
+                                    if (feat?.properties?.centroid_lat != null && feat?.properties?.centroid_lon != null) {
+                                        setFlyToCenter({ center: [feat.properties.centroid_lat, feat.properties.centroid_lon], zoom: 14 });
+                                    }
                                 }}
                                 elapsed={viewingResult.elapsed}
                                 onClose={() => setViewingResult(null)}
@@ -1603,9 +1654,11 @@ setJobs(prev => ({
                                     }
                                     return null;
                                 };
-                                const center = extractCentroid(region.geometry);
+                                const center = (region?.properties?.centroid_lat != null && region?.properties?.centroid_lon != null)
+                                    ? [region.properties.centroid_lat, region.properties.centroid_lon]
+                                    : extractCentroid(region.geometry);
                                 if (center) {
-                                    setFlyToCenter(center);
+                                    setFlyToCenter({ center, zoom: 14 });
                                 }
                                 setActiveView('map');
                             }}

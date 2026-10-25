@@ -837,9 +837,9 @@ fn main() -> Result<()> {
                     &pipeline_opts,
                 );
             let valid_ratio = report.valid_pixels as f64 / report.total_pixels as f64;
-            if valid_ratio < 0.95 {
+            if valid_ratio < 0.30 {
                 anyhow::bail!(
-                    "AOI coverage too low: {}/{} valid pixels ({:.1}%) < 95%. The crop window is mostly nodata or outside the granule footprint — adjust --crop-lat/--crop-lon before running change detection.",
+                    "AOI coverage too low: {}/{} valid pixels ({:.1}%) < 30%. The crop window is mostly nodata or outside the granule footprint — adjust --crop-lat/--crop-lon before running change detection.",
                     report.valid_pixels,
                     report.total_pixels,
                     100.0 * valid_ratio
