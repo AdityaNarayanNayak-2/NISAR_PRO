@@ -80,7 +80,7 @@ struct Cli {
     water_mask: Option<PathBuf>,
 
     // ── Radar Band Preset ─────────────────────────────────────────
-    /// Radar band: l | c | x (sets default thresholds for L-band, C-band, or X-band)
+    /// Radar band: l | s | c | x (sets default thresholds for L-band, S-band, C-band, or X-band)
     #[arg(long, default_value = "l")]
     radar_band: String,
 
@@ -108,7 +108,8 @@ struct Cli {
 
 /// Parse crop preset string into rectangular half-dimensions (km)
 fn parse_crop_preset(preset: &str) -> (f64, f64) {
-    match preset {
+    match preset.to_lowercase().as_str() {
+        "full" => (150.0, 150.0), // Full swath footprint placeholder
         "1x1km" => (0.5, 0.5),     // 1 km × 1 km → ±0.5 km
         "5x5km" => (2.5, 2.5),     // 5 km × 5 km → ±2.5 km
         "1x2km" => (0.5, 1.0),     // 1 km × 2 km → ±0.5 lat, ±1.0 lon
@@ -331,7 +332,7 @@ fn main() -> Result<()> {
                 nisar_parser::parse_nisar_cropped(input, &cli.polarization, &crop_region)?;
             let bbox = master_product.bbox.clone();
             let focused = master_product.slc;
-            let _params = master_product.params;
+            let master_params = master_product.params;
             info!(
                 "  Master loaded: {}×{} ({:.1} MB)",
                 focused.nrows(),
@@ -465,7 +466,7 @@ fn main() -> Result<()> {
                 );
                 let dem =
                     Array2::from_elem((unwrapped_phase.nrows(), unwrapped_phase.ncols()), 0.0_f32);
-                let wavelength = 0.2384; // NISAR L-band
+                let wavelength = master_params.wavelength();
                 let slant_range = 900_000.0;
                 let incidence_angle = 0.6109; // ~35°
                 let topo = sar_science_processor::topo_phase::simulate_topo_phase(
@@ -494,7 +495,7 @@ fn main() -> Result<()> {
             let bbox_arr = bbox.as_ref().map(|b| [b.south, b.west, b.north, b.east]);
             let options = sar_science_processor::infra_health::InfraHealthOptions {
                 bbox: bbox_arr,
-                wavelength_m: 0.2384,
+                wavelength_m: master_params.wavelength() as f32,
                 coherence_threshold: cli.coherence_threshold,
                 max_points: 2000,
             };
@@ -519,10 +520,11 @@ fn main() -> Result<()> {
             let base = cli.output.replace(".tif", "").replace(".png", "");
             let bbox_opt = bbox.as_ref().map(|b| [b.west, b.south, b.east, b.north]);
 
-            // Convert phase to displacement (mm)
+            // Convert phase to displacement (mm) using exact sensor wavelength
+            let wl_m = master_params.wavelength() as f32;
             let displacement_mm = defo_phase.mapv(|phi| {
                 if phi.is_finite() {
-                    phi * 0.2384 * 1000.0 / (4.0 * std::f32::consts::PI)
+                    phi * wl_m * 1000.0 / (4.0 * std::f32::consts::PI)
                 } else {
                     f32::NAN
                 }
@@ -575,23 +577,34 @@ fn main() -> Result<()> {
             info!("║       Flood & Inundation Mapping Pipeline    ║");
             info!("╚══════════════════════════════════════════════╝");
 
-            let (crop_lat, crop_lon) = match (cli.crop_lat, cli.crop_lon) {
-                (Some(lat), Some(lon)) => (lat, lon),
-                _ => anyhow::bail!(
-                    "Flood mode requires --crop-lat and --crop-lon to prevent RAM blowup.\n\
-                     Example: --crop-lat 18.7883 --crop-lon 82.6003 --crop-preset 10x10km"
-                ),
+            let is_full_scene = cli.crop_preset.eq_ignore_ascii_case("full")
+                || (cli.crop_lat.is_none() && cli.crop_lon.is_none());
+
+            let (crop_lat, crop_lon) = if is_full_scene {
+                (cli.crop_lat.unwrap_or(25.5), cli.crop_lon.unwrap_or(86.5))
+            } else {
+                match (cli.crop_lat, cli.crop_lon) {
+                    (Some(lat), Some(lon)) => (lat, lon),
+                    _ => anyhow::bail!(
+                        "Flood mode requires --crop-lat and --crop-lon to prevent RAM blowup (or specify --crop-preset full for memory-bounded full-scene ingestion).\n\
+                         Example: --crop-lat 18.7883 --crop-lon 82.6003 --crop-preset 10x10km"
+                    ),
+                }
             };
 
             let (lat_half_km, lon_half_km) = parse_crop_preset(&cli.crop_preset);
-            info!(
-                "  Crop window: ({:.4}°, {:.4}°) ± {:.1}×{:.1} km [{}]",
-                crop_lat,
-                crop_lon,
-                lat_half_km * 2.0,
-                lon_half_km * 2.0,
-                cli.crop_preset
-            );
+            if is_full_scene {
+                info!("  Processing Mode: FULL SCENE (8x8 block-multilooked, 80m spacing)");
+            } else {
+                info!(
+                    "  Crop window: ({:.4}°, {:.4}°) ± {:.1}×{:.1} km [{}]",
+                    crop_lat,
+                    crop_lon,
+                    lat_half_km * 2.0,
+                    lon_half_km * 2.0,
+                    cli.crop_preset
+                );
+            }
 
             let crop_region = nisar_parser::CropRegion {
                 center_lat: crop_lat,
@@ -601,12 +614,17 @@ fn main() -> Result<()> {
 
             println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[1/5] Loading active product metadata...\"}}");
             // 1. Load Active GCOV
-            info!("[1/5] Loading Active GCOV: {:?}", input);
-            crash_journal::phase("FLOOD_STEP_1", &format!("Loading Active GCOV: {:?}", input.file_name().unwrap_or_default()));
-            nisar_parser::validate_crop_intersection(input, &crop_region)?;
-            let mut active_product =
-                nisar_parser::parse_nisar_cropped(input, &cli.polarization, &crop_region)?;
-            crash_journal::checkpoint_after_free("Active GCOV parsed & cropped");
+            let mut active_product = if is_full_scene {
+                info!("[1/5] Ingesting Full-Scene Active GCOV: {:?}", input);
+                crash_journal::phase("FLOOD_STEP_1", &format!("Loading Full-Scene Active GCOV: {:?}", input.file_name().unwrap_or_default()));
+                nisar_parser::parse_nisar_full_scene_multilooked(input, &cli.polarization, 8)?
+            } else {
+                info!("[1/5] Loading Active GCOV: {:?}", input);
+                crash_journal::phase("FLOOD_STEP_1", &format!("Loading Active GCOV: {:?}", input.file_name().unwrap_or_default()));
+                nisar_parser::validate_crop_intersection(input, &crop_region)?;
+                nisar_parser::parse_nisar_cropped(input, &cli.polarization, &crop_region)?
+            };
+            crash_journal::checkpoint_after_free("Active GCOV parsed");
             let mut bbox = active_product.bbox.clone();
             let mut active_slc = active_product.slc;
 
@@ -628,13 +646,20 @@ fn main() -> Result<()> {
             // 2. Load Optional Baseline GCOV
             println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[2/5] Loading baseline reference product...\"}}");
             let baseline_product = if let Some(ref slave_path) = cli.slave {
-                info!("[2/5] Loading Baseline GCOV: {:?}", slave_path);
-                crash_journal::phase("FLOOD_STEP_2", &format!("Loading Baseline GCOV: {:?}", slave_path.file_name().unwrap_or_default()));
-                nisar_parser::validate_crop_intersection(slave_path, &crop_region)?;
-                let prod =
-                    nisar_parser::parse_nisar_cropped(slave_path, &cli.polarization, &crop_region)?;
-                crash_journal::checkpoint_after_free("Baseline GCOV parsed & cropped");
-                Some(prod)
+                if is_full_scene {
+                    info!("[2/5] Ingesting Full-Scene Baseline GCOV: {:?}", slave_path);
+                    crash_journal::phase("FLOOD_STEP_2", &format!("Loading Full-Scene Baseline GCOV: {:?}", slave_path.file_name().unwrap_or_default()));
+                    let prod = nisar_parser::parse_nisar_full_scene_multilooked(slave_path, &cli.polarization, 8)?;
+                    crash_journal::checkpoint_after_free("Baseline GCOV parsed");
+                    Some(prod)
+                } else {
+                    info!("[2/5] Loading Baseline GCOV: {:?}", slave_path);
+                    crash_journal::phase("FLOOD_STEP_2", &format!("Loading Baseline GCOV: {:?}", slave_path.file_name().unwrap_or_default()));
+                    nisar_parser::validate_crop_intersection(slave_path, &crop_region)?;
+                    let prod = nisar_parser::parse_nisar_cropped(slave_path, &cli.polarization, &crop_region)?;
+                    crash_journal::checkpoint_after_free("Baseline GCOV parsed & cropped");
+                    Some(prod)
+                }
             } else {
                 None
             };
@@ -810,8 +835,17 @@ fn main() -> Result<()> {
             println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[5/5] Running 7-stage change detection...\"}}");
             crash_journal::phase("FLOOD_STEP_5", "Running 7-stage flood detection pipeline");
             info!("[5/5] Running 7-stage flood detection pipeline...");
-            let band = cli.radar_band.parse::<sar_science_processor::flood_detect::RadarBand>()
-                .unwrap_or(sar_science_processor::flood_detect::RadarBand::LBand);
+            let default_band = if active_product.params.is_s_band() {
+                sar_science_processor::flood_detect::RadarBand::SBand
+            } else {
+                sar_science_processor::flood_detect::RadarBand::LBand
+            };
+            let band = if cli.radar_band.eq_ignore_ascii_case("l") && active_product.params.is_s_band() {
+                sar_science_processor::flood_detect::RadarBand::SBand
+            } else {
+                cli.radar_band.parse::<sar_science_processor::flood_detect::RadarBand>()
+                    .unwrap_or(default_band)
+            };
             let mut pipeline_opts = sar_science_processor::flood_detect::FloodDetectionOptions::for_band(band);
 
             // Apply overrides only if explicitly specified by user via CLI
@@ -837,7 +871,22 @@ fn main() -> Result<()> {
                     &pipeline_opts,
                 );
             let valid_ratio = report.valid_pixels as f64 / report.total_pixels as f64;
-            if valid_ratio < 0.30 {
+            let mut warnings = report.warnings.clone();
+
+            if is_full_scene {
+                if report.valid_pixels == 0 {
+                    anyhow::bail!("Full-scene ingestion contains 0 valid pixels across the granule.");
+                }
+                let coverage_pct = 100.0 * valid_ratio;
+                info!(
+                    "  ✓ Full-scene valid swath coverage: {:.1}% ({}/{} pixels)",
+                    coverage_pct, report.valid_pixels, report.total_pixels
+                );
+                warnings.push(format!(
+                    "Full-scene swath coverage: {:.1}% valid pixels (rotated track within UTM bounding grid)",
+                    coverage_pct
+                ));
+            } else if valid_ratio < 0.30 {
                 anyhow::bail!(
                     "AOI coverage too low: {}/{} valid pixels ({:.1}%) < 30%. The crop window is mostly nodata or outside the granule footprint — adjust --crop-lat/--crop-lon before running change detection.",
                     report.valid_pixels,
@@ -914,13 +963,20 @@ fn main() -> Result<()> {
             let flood_med_acres = report.flooded_pixels_med_conf as f64 * pixel_area_acres;
             let flood_low_acres = report.flooded_pixels_low_conf as f64 * pixel_area_acres;
             let total_flood_acres = report.total_flooded_pixels as f64 * pixel_area_acres;
+            let receded_water_acres = report.receded_water_pixels as f64 * pixel_area_acres;
+            let stable_non_water_acres = report.stable_non_water_pixels as f64 * pixel_area_acres;
+            let acres_to_km2 = 0.004046856;
 
             // Generate full JSON report
             let full_report = serde_json::json!({
                 "product": {
                     "active_id": active_filename,
                     "baseline_id": baseline_filename,
-                    "frequency": "L",
+                    "frequency": if active_product.params.is_s_band() { "S" } else { "L" },
+                    "instrument": active_product.params.instrument,
+                    "radar_band": active_product.params.radar_band,
+                    "center_frequency_hz": active_product.params.center_frequency,
+                    "wavelength_m": active_product.params.wavelength(),
                     "polarization": cli.polarization,
                     "pixel_spacing_x_m": effective_dx,
                     "pixel_spacing_y_m": effective_dy,
@@ -963,15 +1019,25 @@ fn main() -> Result<()> {
                 },
                 "areas": {
                     "total_area_acres": total_area_acres,
+                    "total_area_km2": total_area_acres * acres_to_km2,
                     "permanent_water_acres": permanent_water_acres,
+                    "permanent_water_km2": permanent_water_acres * acres_to_km2,
                     "new_inundation_high_acres": flood_high_acres,
+                    "new_inundation_high_km2": flood_high_acres * acres_to_km2,
                     "new_inundation_medium_acres": flood_med_acres,
+                    "new_inundation_medium_km2": flood_med_acres * acres_to_km2,
                     "new_inundation_low_acres": flood_low_acres,
-                    "total_flood_acres": total_flood_acres
+                    "new_inundation_low_km2": flood_low_acres * acres_to_km2,
+                    "total_flood_acres": total_flood_acres,
+                    "total_flood_km2": total_flood_acres * acres_to_km2,
+                    "receded_water_acres": receded_water_acres,
+                    "receded_water_km2": receded_water_acres * acres_to_km2,
+                    "stable_non_water_acres": stable_non_water_acres,
+                    "stable_non_water_km2": stable_non_water_acres * acres_to_km2
                 },
                 "flood_regions": report.flood_regions_count,
                 "confidence_reasons": report.confidence_reasons,
-                "warnings": report.warnings
+                "warnings": warnings
             });
 
             std::fs::write(&report_path, serde_json::to_string_pretty(&full_report)?)?;

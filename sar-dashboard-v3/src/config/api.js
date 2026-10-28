@@ -21,6 +21,10 @@ export function isGatewayConfigured() {
 // Helper to build full API URL
 // Collapses duplicate slashes so callers can safely pass paths that already start with '/'
 export function api(path) {
+    if (!path) return '';
+    if (typeof path === 'string' && (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:'))) {
+        return path;
+    }
     const base = getGatewayUrl();
     const cleanPath = path.replace(/\/{2,}/g, '/');
     return `${base}${cleanPath.startsWith('/') ? cleanPath : '/' + cleanPath}`;

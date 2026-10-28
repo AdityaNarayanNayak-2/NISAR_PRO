@@ -35,9 +35,11 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
 
     // Calculate proportion bar percentages
     const totalNew = p.highConfAcres + p.medConfAcres + p.lowConfAcres;
-    const totalWater = totalNew + p.permWaterAcres;
+    const receded = p.recededWaterAcres || 0;
+    const totalWater = totalNew + p.permWaterAcres + receded;
     const highPct = totalWater > 0 ? (p.highConfAcres / totalWater) * 100 : 0;
     const medPct = totalWater > 0 ? (p.medConfAcres / totalWater) * 100 : 0;
+    const recededPct = totalWater > 0 ? (receded / totalWater) * 100 : 0;
     const permPct = totalWater > 0 ? (p.permWaterAcres / totalWater) * 100 : 0;
 
     const handleExportReportJson = () => {
@@ -233,16 +235,21 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
                                     <span style={{ position: 'absolute', bottom: '-1px', right: '-1px', width: '10px', height: '10px', borderBottom: `2px solid ${C.accent.flood}`, borderRight: `2px solid ${C.accent.flood}` }} />
 
                                     <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '6px' }}>
-                                        NEW INUNDATION (NET)
+                                        WATER GAIN · NEW INUNDATION
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '8px 0 4px 0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '8px 0 4px 0', flexWrap: 'wrap' }}>
                                         <span style={{ fontFamily: SANS, fontSize: '36px', fontWeight: 300, color: C.text, letterSpacing: '-0.04em', lineHeight: 1, textShadow: '0 0 20px rgba(42, 139, 145, 0.3)' }}>
-                                            {p.totalFloodAcres.toFixed(2)}
+                                            {p.totalFloodKm2 >= 1 ? p.totalFloodKm2.toFixed(2) : p.totalFloodAcres.toFixed(2)}
                                         </span>
-                                        <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', color: C.accent.flood, marginLeft: '6px' }}>acres</span>
+                                        <span style={{ fontFamily: MONO, fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', color: C.accent.flood, marginLeft: '4px' }}>
+                                            {p.totalFloodKm2 >= 1 ? 'km²' : 'acres'}
+                                        </span>
+                                        <span style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, marginLeft: '6px' }}>
+                                            ({p.totalFloodKm2 >= 1 ? `${p.totalFloodAcres.toLocaleString(undefined, { maximumFractionDigits: 1 })} ac` : `${p.totalFloodKm2.toFixed(2)} km²`})
+                                        </span>
                                     </div>
                                     <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginTop: '8px' }}>
-                                        Mapped Area · {p.totalAreaAcres.toLocaleString(undefined, { maximumFractionDigits: 2 })} ac{p.cropPreset ? ` · ${p.cropPreset.replace(/x/i, ' × ')}` : ''}
+                                        Mapped Area · {p.totalAreaKm2 >= 1 ? `${p.totalAreaKm2.toLocaleString(undefined, { maximumFractionDigits: 1 })} km²` : `${p.totalAreaAcres.toLocaleString(undefined, { maximumFractionDigits: 1 })} ac`}{p.cropPreset ? ` · ${p.cropPreset.replace(/x/i, ' × ')}` : ''}
                                     </div>
                                 </div>
 
@@ -263,21 +270,22 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
                                     </div>
                                 )}
 
-                                {/* 2x2 Bento Grid */}
+                                {/* 4-Class Temporal Partition (InGARSS 2026 Core Requirements) */}
+                                <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '6px', marginTop: '12px' }}>
+                                    4-CLASS TEMPORAL PARTITION (DATE 1 → DATE 2)
+                                </div>
                                 <div style={{
                                     display: 'grid',
                                     gridTemplateColumns: 'repeat(2, 1fr)',
                                     gap: '6px',
                                     fontFamily: MONO,
-                                    marginBottom: '12px',
-                                    marginTop: '10px'
+                                    marginBottom: '10px',
                                 }}>
-                                    {/* Bento Card Component Reusable Block */}
                                     {[
-                                        { label: 'High Conf', value: p.highConfAcres.toFixed(2), unit: 'ac', color: C.accent.flood },
-                                        { label: 'Medium Conf', value: p.medConfAcres.toFixed(2), unit: 'ac', color: C.caution },
-                                        { label: 'Perm Water', value: p.permWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 1 }), unit: 'ac', color: '#5483b3' },
-                                        { label: 'Det. Regions', value: p.detectedRegionsCount, unit: 'poly', color: C.textDim }
+                                        { label: 'Water Gain', value: p.totalFloodKm2 >= 1 ? p.totalFloodKm2.toFixed(1) : p.totalFloodAcres.toFixed(1), unit: p.totalFloodKm2 >= 1 ? 'km²' : 'ac', sub: p.totalFloodKm2 >= 1 ? `${p.totalFloodAcres.toLocaleString(undefined, { maximumFractionDigits: 0 })} ac` : `${p.totalFloodKm2.toFixed(2)} km²`, color: C.accent.flood, tag: 'Class 2-4' },
+                                        { label: 'Water Loss', value: p.recededWaterKm2 >= 1 ? p.recededWaterKm2.toFixed(1) : p.recededWaterAcres.toFixed(1), unit: p.recededWaterKm2 >= 1 ? 'km²' : 'ac', sub: p.recededWaterKm2 >= 1 ? `${p.recededWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 0 })} ac` : `${p.recededWaterKm2.toFixed(2)} km²`, color: '#f59e0b', tag: 'Class 5' },
+                                        { label: 'Stable Water', value: p.permWaterKm2 >= 1 ? p.permWaterKm2.toFixed(1) : p.permWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 1 }), unit: p.permWaterKm2 >= 1 ? 'km²' : 'ac', sub: p.permWaterKm2 >= 1 ? `${p.permWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 0 })} ac` : `${p.permWaterKm2.toFixed(2)} km²`, color: '#3b82f6', tag: 'Class 1' },
+                                        { label: 'Stable Land', value: p.stableNonWaterKm2 >= 1 ? p.stableNonWaterKm2.toFixed(1) : p.stableNonWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 1 }), unit: p.stableNonWaterKm2 >= 1 ? 'km²' : 'ac', sub: p.stableNonWaterKm2 >= 1 ? `${p.stableNonWaterAcres.toLocaleString(undefined, { maximumFractionDigits: 0 })} ac` : `${p.stableNonWaterKm2.toFixed(2)} km²`, color: '#94a3b8', tag: 'Class 0' }
                                     ].map((item, idx) => (
                                         <motion.div
                                             key={idx}
@@ -285,27 +293,42 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
                                             whileHover={{ background: 'rgba(255, 255, 255, 0.03)', scale: 1.02 }}
                                             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                                         >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '8px', letterSpacing: '0.15em', textTransform: 'uppercase', color: C.textDim, marginBottom: '5px' }}>
-                                                <span style={{ width: '6px', height: '6px', background: item.color, borderRadius: '50%', boxShadow: `0 0 6px ${item.color}` }} />
-                                                <span>{item.label}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '8px', letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textDim }}>
+                                                    <span style={{ width: '6px', height: '6px', background: item.color, borderRadius: '50%', boxShadow: `0 0 6px ${item.color}` }} />
+                                                    <span>{item.label}</span>
+                                                </div>
+                                                <span style={{ fontSize: '8px', color: C.textDim, opacity: 0.7 }}>{item.tag}</span>
                                             </div>
                                             <div style={{ fontFamily: SANS, fontSize: '18px', fontWeight: 300, color: C.text, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
                                                 {item.value}<span style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginLeft: '3px' }}>{item.unit}</span>
+                                            </div>
+                                            <div style={{ fontFamily: MONO, fontSize: '8px', color: C.textDim, marginTop: '3px' }}>
+                                                {item.sub}
                                             </div>
                                         </motion.div>
                                     ))}
                                 </div>
 
+                                {/* Confidence Tier Summary */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: cardBg, border: cardBorder, fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '10px' }}>
+                                    <span>High Conf: <strong style={{ color: C.accent.flood }}>{p.highConfKm2 >= 1 ? `${p.highConfKm2.toFixed(1)} km²` : `${p.highConfAcres.toFixed(1)} ac`}</strong></span>
+                                    <span>Med Conf: <strong style={{ color: C.caution }}>{p.medConfKm2 >= 1 ? `${p.medConfKm2.toFixed(1)} km²` : `${p.medConfAcres.toFixed(1)} ac`}</strong></span>
+                                    <span>Polygons: <strong style={{ color: C.text }}>{p.detectedRegionsCount}</strong></span>
+                                </div>
+
                                 {/* Proportion Bar */}
                                 <div style={{ display: 'flex', height: '4px', overflow: 'hidden', background: 'rgba(255,255,255,0.04)', borderRadius: '2px', marginBottom: '14px', marginTop: '10px' }}>
-                                    <div style={{ width: `${highPct}%`, background: C.accent.flood, transition: 'width 1s ease' }} title={`High Confidence: ${p.highConfAcres.toFixed(1)} ac`} />
-                                    <div style={{ width: `${medPct}%`, background: C.caution, transition: 'width 1s ease' }} title={`Medium Confidence: ${p.medConfAcres.toFixed(1)} ac`} />
-                                    <div style={{ width: `${permPct}%`, background: '#5483b3', transition: 'width 1s ease' }} title={`Permanent Water: ${p.permWaterAcres.toFixed(1)} ac`} />
+                                    <div style={{ width: `${highPct}%`, background: C.accent.flood, transition: 'width 1s ease' }} title={`Water Gain (High): ${p.highConfAcres.toFixed(1)} ac`} />
+                                    <div style={{ width: `${medPct}%`, background: C.caution, transition: 'width 1s ease' }} title={`Water Gain (Med): ${p.medConfAcres.toFixed(1)} ac`} />
+                                    <div style={{ width: `${recededPct}%`, background: '#f59e0b', transition: 'width 1s ease' }} title={`Water Loss (Receded): ${p.recededWaterAcres.toFixed(1)} ac`} />
+                                    <div style={{ width: `${permPct}%`, background: '#3b82f6', transition: 'width 1s ease' }} title={`Stable Water: ${p.permWaterAcres.toFixed(1)} ac`} />
                                 </div>
-                                <div className="flood-legend" aria-label="Flood impact confidence legend">
-                                    <span><i style={{ background: C.accent.flood }} /> High confidence</span>
-                                    <span><i style={{ background: C.caution }} /> Medium confidence</span>
-                                    <span><i style={{ background: '#5483b3' }} /> Permanent water</span>
+                                <div className="flood-legend" aria-label="Flood impact confidence legend" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '9px', fontFamily: MONO, color: C.textDim }}>
+                                    <span><i style={{ display: 'inline-block', width: '7px', height: '7px', background: C.accent.flood, marginRight: '4px', borderRadius: '1px' }} /> Gain (High)</span>
+                                    <span><i style={{ display: 'inline-block', width: '7px', height: '7px', background: C.caution, marginRight: '4px', borderRadius: '1px' }} /> Gain (Med)</span>
+                                    <span><i style={{ display: 'inline-block', width: '7px', height: '7px', background: '#f59e0b', marginRight: '4px', borderRadius: '1px' }} /> Receded Water</span>
+                                    <span><i style={{ display: 'inline-block', width: '7px', height: '7px', background: '#3b82f6', marginRight: '4px', borderRadius: '1px' }} /> Stable Water</span>
                                 </div>
 
                                 {/* 1-Click Flood Hotspot Table */}
@@ -382,9 +405,9 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
                                 borderRadius: '2px'
                             }}>
                                 <span style={{ color: C.textDim }}>Sensor</span>
-                                <span style={{ color: C.accent.flood, fontWeight: 500 }}>NISAR</span>
+                                <span style={{ color: C.accent.flood, fontWeight: 500 }}>{p.sensor || 'NISAR'}</span>
                                 <span style={{ color: C.textDim }}>Band</span>
-                                <span style={{ color: C.textMid }}>L-band</span>
+                                <span style={{ color: C.textMid }}>{p.band || 'L-band'}</span>
                                 <span style={{ color: C.textDim }}>Polarization</span>
                                 <span style={{ color: C.textMid }}>{p.polarization}</span>
                                 <span style={{ color: C.textDim }}>Active date</span>

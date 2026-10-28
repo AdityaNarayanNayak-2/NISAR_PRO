@@ -170,27 +170,31 @@ export default function AnalysisReportModal({ floodReport, onClose }) {
                     <div style={cardStyle}>
                         <div style={sectionTitleStyle}>1.0 Executive Summary & Location Context</div>
                         <p style={{ fontFamily: SANS, fontSize: '12px', color: C.textMid, lineHeight: 1.6, margin: 0 }}>
-                            NISAR L-band SAR change detection analysis was executed over the <strong style={{ color: C.text }}>{p.location}</strong> analysis region. The evaluation compares the monsoon active acquisition on <strong style={{ color: C.accent.flood }}>{p.activeDate}</strong> against the reference baseline acquisition on <strong style={{ color: C.text }}>{p.baselineDate}</strong>.
+                            NISAR SAR change detection analysis (InGARSS 2026 Phase-1 temporal mapping) was executed over the <strong style={{ color: C.text }}>{p.location}</strong> analysis region. The evaluation compares the active acquisition on <strong style={{ color: C.accent.flood }}>{p.activeDate}</strong> against the baseline acquisition on <strong style={{ color: C.text }}>{p.baselineDate}</strong> across 4 temporal classes: Water Gain (New Inundation), Water Loss (Receded Water), Stable Water, and Stable Non-Water.
                         </p>
                     </div>
 
-                    {/* Key Metrics Grid */}
+                    {/* Key Metrics Grid - 4 InGARSS Temporal Classes */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
                         <div style={{ background: C.bg2, border: `1px solid ${C.bg3}`, padding: '12px', borderRadius: '2px' }}>
-                            <div style={cellLabelStyle}>Total Mapped Area</div>
-                            <div style={cellValueStyle}>{p.totalAreaAcres.toLocaleString(undefined, {maximumFractionDigits:1})} ac</div>
+                            <div style={cellLabelStyle}>Water Gain (Flood)</div>
+                            <div style={{ ...cellValueStyle, color: C.accent.flood }}>{p.totalFloodKm2 >= 1 ? `${p.totalFloodKm2.toFixed(1)} km²` : `${p.totalFloodAcres.toFixed(1)} ac`}</div>
+                            <div style={{ fontSize: '9px', color: C.textDim, marginTop: '3px' }}>{p.totalFloodKm2 >= 1 ? `${p.totalFloodAcres.toLocaleString(undefined, {maximumFractionDigits:0})} ac` : `${p.totalFloodKm2.toFixed(2)} km²`}</div>
                         </div>
                         <div style={{ background: C.bg2, border: `1px solid ${C.bg3}`, padding: '12px', borderRadius: '2px' }}>
-                            <div style={cellLabelStyle}>New Inundation</div>
-                            <div style={{ ...cellValueStyle, color: C.accent.flood }}>{p.totalFloodAcres.toFixed(2)} ac</div>
+                            <div style={cellLabelStyle}>Water Loss (Receded)</div>
+                            <div style={{ ...cellValueStyle, color: '#f59e0b' }}>{p.recededWaterKm2 >= 1 ? `${p.recededWaterKm2.toFixed(1)} km²` : `${p.recededWaterAcres.toFixed(1)} ac`}</div>
+                            <div style={{ fontSize: '9px', color: C.textDim, marginTop: '3px' }}>{p.recededWaterKm2 >= 1 ? `${p.recededWaterAcres.toLocaleString(undefined, {maximumFractionDigits:0})} ac` : `${p.recededWaterKm2.toFixed(2)} km²`}</div>
                         </div>
                         <div style={{ background: C.bg2, border: `1px solid ${C.bg3}`, padding: '12px', borderRadius: '2px' }}>
-                            <div style={cellLabelStyle}>High Confidence</div>
-                            <div style={{ ...cellValueStyle, color: C.critical }}>{p.highConfAcres.toFixed(2)} ac</div>
+                            <div style={cellLabelStyle}>Stable Water</div>
+                            <div style={{ ...cellValueStyle, color: '#3b82f6' }}>{p.permWaterKm2 >= 1 ? `${p.permWaterKm2.toFixed(1)} km²` : `${p.permWaterAcres.toFixed(1)} ac`}</div>
+                            <div style={{ fontSize: '9px', color: C.textDim, marginTop: '3px' }}>{p.permWaterKm2 >= 1 ? `${p.permWaterAcres.toLocaleString(undefined, {maximumFractionDigits:0})} ac` : `${p.permWaterKm2.toFixed(2)} km²`}</div>
                         </div>
                         <div style={{ background: C.bg2, border: `1px solid ${C.bg3}`, padding: '12px', borderRadius: '2px' }}>
-                            <div style={cellLabelStyle}>Permanent Water</div>
-                            <div style={{ ...cellValueStyle, color: C.data }}>{p.permWaterAcres.toLocaleString(undefined, {maximumFractionDigits:1})} ac</div>
+                            <div style={cellLabelStyle}>Stable Non-Water</div>
+                            <div style={{ ...cellValueStyle, color: '#94a3b8' }}>{p.stableNonWaterKm2 >= 1 ? `${p.stableNonWaterKm2.toFixed(1)} km²` : `${p.stableNonWaterAcres.toFixed(1)} ac`}</div>
+                            <div style={{ fontSize: '9px', color: C.textDim, marginTop: '3px' }}>{p.stableNonWaterKm2 >= 1 ? `${p.stableNonWaterAcres.toLocaleString(undefined, {maximumFractionDigits:0})} ac` : `${p.stableNonWaterKm2.toFixed(2)} km²`}</div>
                         </div>
                     </div>
 

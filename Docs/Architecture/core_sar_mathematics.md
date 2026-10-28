@@ -81,6 +81,35 @@ Radar reflections from the ocean are extremely noisy. You cannot use a hard-code
    ```
 4. **Non-Maximum Suppression (NMS)**: Because a large ship will trigger detections on multiple adjacent pixels, `cluster_targets()` runs a greedy NMS algorithm to merge clustered pixels into a single target, keeping only the brightest peak.
 
----
+## 5. Multi-Temporal SAR Flood Mathematics (`flood_detect.rs`)
 
-**Next up: Part 4 (Data Export & Health Analysis)** will detail how these processed arrays are converted into GeoTIFFs and how the system analyzes infrastructure risk limits.
+For the InGARSS 2026 Flood Inundation & Damage Mapping pipeline, the science processor executes multi-temporal radar mathematics to isolate flooded ground from permanent water and dry land.
+
+### A. Calibrated Log-Ratio Change Image
+Specular radar reflection off smooth open water scatters radar pulses away from the antenna, causing a dramatic drop in backscatter intensity:
+$$\Delta\text{dB} = \text{active}_{\text{dB}} - \text{baseline}_{\text{dB}} = 10 \log_{10}(P_{\text{active}} + \epsilon) - 10 \log_{10}(P_{\text{baseline}} + \epsilon)$$
+Where:
+* $P_{\text{active}}$ and $P_{\text{baseline}}$ are calibrated linear backscatter powers from NISAR GCOV datasets ($\sigma^0$ or $\gamma^0$).
+* A significant negative change ($\Delta\text{dB} \le -3.0\text{ dB}$) indicates new inundation.
+* A significant positive change ($\Delta\text{dB} \ge +3.0\text{ dB}$) from a water baseline indicates receded water / water loss.
+
+### B. Otsu's Global Variance Maximization
+To determine an adaptive, scene-specific change threshold without manual calibration, `flood_detect.rs` implements Otsu's method over the change distribution:
+$$\sigma_B^2(t) = \omega_0(t) \omega_1(t) \left[ \mu_0(t) - \mu_1(t) \right]^2$$
+Where:
+* $\omega_0(t), \omega_1(t)$ are the probabilities of the two classes separated by threshold $t$.
+* $\mu_0(t), \mu_1(t)$ are the mean change values of the two classes.
+* The algorithm searches 256 histogram bins to find $t^* = \arg\max \sigma_B^2(t)$, bound by a safety floor of $\min(\text{raw\_otsu}, -3.0\text{ dB})$ to prevent false positives during dry seasons.
+
+### C. Two-Threshold Seeded Region Growing
+To eliminate isolated speckle false alarms while retaining complete contiguous flood extents:
+1. **Seed Threshold ($T_{\text{seed}} = -5.0\text{ dB}$)**: Identifies unequivocal deep water cores.
+2. **Growth Threshold ($T_{\text{growth}} = -2.5\text{ dB}$)**: An 8-connected flood-fill recursively expands from seed pixels into adjacent boundary pixels until backscatter rises above $T_{\text{growth}}$.
+3. **Morphological Filtering**: Applies a $3\times 3$ morphological opening (erosion followed by dilation) to break thin bridges, followed by a connected component size filter removing regions $< 8$ pixels.
+
+### D. 8×8 Spatial Multilooking Integer Lattice
+For the full-scene $1.157\text{B}$ pixel Bihar swath ($33,696 \times 34,344$ at $10\text{ m}$ spacing):
+* Range and azimuth dimensions are reduced by a factor of 8 ($M = 8, N = 8$):
+  $$P_{80\text{m}}(R, C) = \frac{1}{64} \sum_{r=0}^{7} \sum_{c=0}^{7} P_{10\text{m}}(8R + r, 8C + c)$$
+* Downsamples the $1.157\text{B}$ pixel scene to $4,212 \times 4,293$ ($18.08\text{M}$ pixels = 72 MB per array).
+* Suppresses radar speckle noise variance by $\sqrt{64} = 8\times$, improving Otsu class separability while preserving geographic river boundary fidelity.

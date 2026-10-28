@@ -34,6 +34,9 @@ export function getGeoLocation(lat, lon) {
     if (Math.abs(lLat - 27.2055) < 0.25 && Math.abs(lLon - 94.8948) < 0.25) {
         return 'Brahmaputra Valley (Dibrugarh–Dhemaji Sector), Assam, India';
     }
+    if (Math.abs(lLat - 25.5000) < 0.60 && Math.abs(lLon - 86.5000) < 0.60) {
+        return 'Ganga Alluvial Plain (Begusarai–Khagaria), Bihar, India';
+    }
     return `${lLat.toFixed(4)}° N, ${lLon.toFixed(4)}° E`;
 }
 
@@ -51,6 +54,7 @@ export function getEPSGZone(lon) {
 // Convert a crop preset token (e.g. "20x20km") into a human label ("20 km × 20 km")
 export function formatCropPreset(preset) {
     if (!preset) return null;
+    if (String(preset).toLowerCase() === 'full') return 'Full Scene (80m Multilook)';
     const match = String(preset).match(/^(\d+)x(\d+)km$/i);
     if (match) return `${match[1]} km × ${match[2]} km`;
     return String(preset);
@@ -80,6 +84,17 @@ export function parseFloodReport(report) {
     const medConfAcres = areas.new_inundation_medium_acres || 0;
     const lowConfAcres = areas.new_inundation_low_acres || 0;
     const permWaterAcres = areas.permanent_water_acres || 0;
+    const recededWaterAcres = areas.receded_water_acres || 0;
+    const stableNonWaterAcres = areas.stable_non_water_acres || 0;
+
+    const totalAreaKm2 = areas.total_area_km2 || (totalAreaAcres * 0.004046856);
+    const totalFloodKm2 = areas.total_flood_km2 || (totalFloodAcres * 0.004046856);
+    const highConfKm2 = areas.new_inundation_high_km2 || (highConfAcres * 0.004046856);
+    const medConfKm2 = areas.new_inundation_medium_km2 || (medConfAcres * 0.004046856);
+    const lowConfKm2 = areas.new_inundation_low_km2 || (lowConfAcres * 0.004046856);
+    const permWaterKm2 = areas.permanent_water_km2 || (permWaterAcres * 0.004046856);
+    const recededWaterKm2 = areas.receded_water_km2 || (recededWaterAcres * 0.004046856);
+    const stableNonWaterKm2 = areas.stable_non_water_km2 || (stableNonWaterAcres * 0.004046856);
     
     const detectedRegionsCount = report.flood_regions || 0;
     
@@ -97,7 +112,7 @@ export function parseFloodReport(report) {
         },
         {
             name: 'Otsu Thresholding',
-            detail: `Bimodal split at ${method.threshold_db || '-3.0'} dB`,
+            detail: `Bimodal split at ${method.threshold_db != null ? method.threshold_db.toFixed(2) : '-3.0'} dB`,
             status: 'success'
         },
         {
@@ -119,6 +134,7 @@ export function parseFloodReport(report) {
         epsg,
         gridLabel,
         cropPreset: crop.preset || null,
+        cropPresetLabel,
         dx,
         dy,
         totalAreaAcres,
@@ -127,11 +143,25 @@ export function parseFloodReport(report) {
         medConfAcres,
         lowConfAcres,
         permWaterAcres,
+        recededWaterAcres,
+        stableNonWaterAcres,
+        totalAreaKm2,
+        totalFloodKm2,
+        highConfKm2,
+        medConfKm2,
+        lowConfKm2,
+        permWaterKm2,
+        recededWaterKm2,
+        stableNonWaterKm2,
         detectedRegionsCount,
         steps,
         warnings: report.warnings || [],
-        confidenceReasons: report.confidence_reasons || [],
-        sensor: 'NISAR L-band',
+        sensor: product.instrument === 'SSAR' || product.frequency === 'S' || product.radar_band === 'S-band' 
+            ? 'NISAR SSAR (ISRO S-band)' 
+            : 'NISAR LSAR (NASA L-band)',
+        band: product.radar_band || (product.frequency === 'S' ? 'S-band' : 'L-band'),
+        wavelengthM: product.wavelength_m || (product.frequency === 'S' ? 0.0937 : 0.2384),
+        centerFrequencyHz: product.center_frequency_hz || (product.frequency === 'S' ? 3.2e9 : 1.2575e9),
         polarization: product.polarization || 'HH'
     };
 }

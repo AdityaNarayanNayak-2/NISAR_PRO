@@ -12,8 +12,10 @@ use serde::{Deserialize, Serialize};
 /// Radar band types with predetermined defaults
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RadarBand {
-    /// L-Band (e.g. NISAR, ALOS-2) - default
+    /// L-Band (e.g. NISAR LSAR, ALOS-2) - default
     LBand,
+    /// S-Band (e.g. NISAR SSAR - ISRO payload)
+    SBand,
     /// C-Band (e.g. Sentinel-1, RADARSAT-2)
     CBand,
     /// X-Band (e.g. ICEYE, TerraSAR-X)
@@ -25,10 +27,11 @@ impl std::str::FromStr for RadarBand {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "l" | "l-band" | "lband" => Ok(Self::LBand),
+            "l" | "l-band" | "lband" | "lsar" => Ok(Self::LBand),
+            "s" | "s-band" | "sband" | "ssar" => Ok(Self::SBand),
             "c" | "c-band" | "cband" => Ok(Self::CBand),
             "x" | "x-band" | "xband" => Ok(Self::XBand),
-            _ => Err(format!("Unknown radar band '{}'. Supported: l, c, x", s)),
+            _ => Err(format!("Unknown radar band '{}'. Supported: l, s, c, x", s)),
         }
     }
 }
@@ -67,6 +70,16 @@ impl FloodDetectionOptions {
                 enable_median_filter: true,
                 otsu_bins: 256,
                 radar_band: RadarBand::LBand,
+            },
+            RadarBand::SBand => Self {
+                min_change_db: -2.7,
+                seed_threshold_db: -4.8,
+                growth_threshold_db: -2.2,
+                permanent_water_thresh_db: -12.5,
+                min_area_pixels: 8,
+                enable_median_filter: true,
+                otsu_bins: 256,
+                radar_band: RadarBand::SBand,
             },
             RadarBand::CBand => Self {
                 min_change_db: -2.5,
@@ -112,6 +125,8 @@ pub struct FloodAnalysisResult {
     pub flooded_pixels_med_conf: usize,
     pub flooded_pixels_low_conf: usize,
     pub total_flooded_pixels: usize,
+    pub receded_water_pixels: usize,
+    pub stable_non_water_pixels: usize,
     pub flood_regions_count: usize,
     pub confidence_reasons: Vec<String>,
     pub warnings: Vec<String>,
@@ -205,7 +220,11 @@ pub fn median_filter_3x3(data: &Array2<f32>, valid_mask: &Array2<bool>) -> Array
 ///
 /// delta_db = active_db - baseline_db
 pub fn compute_change_image(active_db: &Array2<f32>, baseline_db: &Array2<f32>) -> Array2<f32> {
-    assert_eq!(active_db.dim(), baseline_db.dim(), "Dimension mismatch in compute_change_image");
+    assert_eq!(
+        active_db.dim(),
+        baseline_db.dim(),
+        "Dimension mismatch in compute_change_image"
+    );
     active_db - baseline_db
 }
 
@@ -354,10 +373,7 @@ pub fn region_grow(
     // 1. Find all seed pixels
     for r in 0..rows {
         for c in 0..cols {
-            if valid_mask[[r, c]]
-                && !perm_water_mask[[r, c]]
-                && delta_db[[r, c]] < seed_thresh_db
-            {
+            if valid_mask[[r, c]] && !perm_water_mask[[r, c]] && delta_db[[r, c]] < seed_thresh_db {
                 grown[[r, c]] = true;
                 queue.push_back((r, c));
             }
@@ -366,9 +382,14 @@ pub fn region_grow(
 
     // 2. 8-connected region growing
     let neighbors: [(isize, isize); 8] = [
-        (-1, -1), (-1, 0), (-1, 1),
-        ( 0, -1),          ( 0, 1),
-        ( 1, -1), ( 1, 0), ( 1, 1),
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
     ];
 
     while let Some((r, c)) = queue.pop_front() {
@@ -396,15 +417,17 @@ pub fn region_grow(
 }
 
 /// Stage 6b: Morphological opening/closing and connected component size filtering
-pub fn morphological_cleanup(
-    flood_mask: &mut Array2<bool>,
-    min_area_pixels: usize,
-) -> usize {
+pub fn morphological_cleanup(flood_mask: &mut Array2<bool>, min_area_pixels: usize) -> usize {
     let (rows, cols) = flood_mask.dim();
     let neighbors: [(isize, isize); 8] = [
-        (-1, -1), (-1, 0), (-1, 1),
-        ( 0, -1),          ( 0, 1),
-        ( 1, -1), ( 1, 0), ( 1, 1),
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
     ];
 
     // 1. Morphological Opening (Erosion then Dilation) - Removes isolated noise
@@ -493,11 +516,12 @@ pub fn morphological_cleanup(
 /// threshold instead of a fixed constant.
 ///
 /// Output grid values:
-/// - 0: Land / No Flood
-/// - 1: Permanent Water
-/// - 2: High Confidence Flood
-/// - 3: Medium Confidence Flood
-/// - 4: Low Confidence Flood
+/// - 0: Land / No Flood (Stable Non-Water)
+/// - 1: Permanent Water (Stable Water)
+/// - 2: High Confidence Flood (Water Gain)
+/// - 3: Medium Confidence Flood (Water Gain)
+/// - 4: Low Confidence Flood (Water Gain)
+/// - 5: Water Loss / Receded Water
 pub fn compute_confidence(
     delta_db: &Array2<f32>,
     flood_mask: &Array2<bool>,
@@ -592,9 +616,14 @@ pub fn run_flood_detection_pipeline(
             base_db
         };
         info!("[FLOOD_PIPELINE] Stage 4a: Computing log-ratio change image (active_dB - baseline_dB)...");
-        (compute_change_image(&active_db_filtered, &base_db_filtered), base_db_filtered)
+        (
+            compute_change_image(&active_db_filtered, &base_db_filtered),
+            base_db_filtered,
+        )
     } else {
-        warn!("[FLOOD_PIPELINE] Single-image mode: Using active dB directly as baseline reference.");
+        warn!(
+            "[FLOOD_PIPELINE] Single-image mode: Using active dB directly as baseline reference."
+        );
         (active_db_filtered.clone(), active_db_filtered.clone())
     };
 
@@ -613,8 +642,8 @@ pub fn run_flood_detection_pipeline(
     // secondary mode - is never separated. Exclude them from the histogram.
     // (Region growing already refuses to grow into permanent water.)
     let otsu_valid = &valid_mask & &perm_water_mask.mapv(|is_water| !is_water);
-    let otsu_excluded = valid_mask.iter().filter(|&&v| v).count()
-        - otsu_valid.iter().filter(|&&v| v).count();
+    let otsu_excluded =
+        valid_mask.iter().filter(|&&v| v).count() - otsu_valid.iter().filter(|&&v| v).count();
 
     info!("[FLOOD_PIPELINE] Stage 4b: Computing Otsu's threshold on change image...");
     let otsu_thresh = otsu_threshold(&delta_db, &otsu_valid, opts.otsu_bins);
@@ -643,8 +672,8 @@ pub fn run_flood_detection_pipeline(
         }
     }
 
-    info!("[FLOOD_PIPELINE] Stage 7: Multi-tier confidence scoring...");
-    let (class_map, confidence_reasons) = compute_confidence(
+    info!("[FLOOD_PIPELINE] Stage 7: Multi-tier confidence scoring & 4-class temporal mapping...");
+    let (mut class_map, confidence_reasons) = compute_confidence(
         &delta_db,
         &flood_mask,
         &perm_water_mask,
@@ -656,14 +685,35 @@ pub fn run_flood_detection_pipeline(
     let mut high_count = 0;
     let mut med_count = 0;
     let mut low_count = 0;
+    let mut receded_count = 0;
+    let mut stable_non_water_count = 0;
 
     for r in 0..rows {
         for c in 0..cols {
+            // For any valid pixel where class_map == 0 (neither permanent water nor flood):
+            // Check for Class 5: Water Loss / Receded Water
+            // Baseline was water (< water_thresh_db) -> Active is non-water (>= water_thresh_db)
+            // with significant backscatter increase (active_dB - baseline_dB >= 3.0 dB).
+            if valid_mask[[r, c]] && class_map[[r, c]] == 0 {
+                if baseline_db[[r, c]] < opts.permanent_water_thresh_db
+                    && active_db_filtered[[r, c]] >= opts.permanent_water_thresh_db
+                    && delta_db[[r, c]] >= 3.0
+                {
+                    class_map[[r, c]] = 5;
+                }
+            }
+
             match class_map[[r, c]] {
                 1 => perm_count += 1,
                 2 => high_count += 1,
                 3 => med_count += 1,
                 4 => low_count += 1,
+                5 => receded_count += 1,
+                0 => {
+                    if valid_mask[[r, c]] {
+                        stable_non_water_count += 1;
+                    }
+                }
                 _ => {}
             }
         }
@@ -679,6 +729,8 @@ pub fn run_flood_detection_pipeline(
         flooded_pixels_med_conf: med_count,
         flooded_pixels_low_conf: low_count,
         total_flooded_pixels: high_count + med_count + low_count,
+        receded_water_pixels: receded_count,
+        stable_non_water_pixels: stable_non_water_count,
         flood_regions_count: regions_count,
         confidence_reasons,
         warnings: Vec::new(),
@@ -695,9 +747,9 @@ mod tests {
     #[test]
     fn test_gcov_to_db() {
         let mut slc = Array2::<Complex32>::zeros((2, 2));
-        slc[[0, 0]] = Complex32::new(1.0, 0.0);  // 1.0 -> 0 dB
+        slc[[0, 0]] = Complex32::new(1.0, 0.0); // 1.0 -> 0 dB
         slc[[0, 1]] = Complex32::new(10.0, 0.0); // 10.0 -> 10 dB
-        slc[[1, 0]] = Complex32::new(0.1, 0.0);  // 0.1 -> -10 dB
+        slc[[1, 0]] = Complex32::new(0.1, 0.0); // 0.1 -> -10 dB
         slc[[1, 1]] = Complex32::new(0.01, 0.0); // 0.01 -> -20 dB
 
         let db = gcov_to_db(&slc);
@@ -716,17 +768,25 @@ mod tests {
         slc[[1, 1]] = Complex32::new(1.0, 0.0);
 
         let db = gcov_to_db(&slc);
-        assert!(db[[0, 0]].is_nan(), "zero power must be nodata, not -100 dB");
+        assert!(
+            db[[0, 0]].is_nan(),
+            "zero power must be nodata, not -100 dB"
+        );
         assert!(db[[0, 1]].is_nan(), "negative power must be nodata");
-        assert!(db[[1, 0]].is_nan(), "noise floor dropout < -40 dB must become NaN");
-        assert!((db[[1, 1]] - 0.0).abs() < 1e-4, "valid power must convert normally");
+        assert!(
+            db[[1, 0]].is_nan(),
+            "noise floor dropout < -40 dB must become NaN"
+        );
+        assert!(
+            (db[[1, 1]] - 0.0).abs() < 1e-4,
+            "valid power must convert normally"
+        );
     }
 
     #[test]
     fn test_pipeline_excludes_nodata_from_flood() {
         let (rows, cols) = (16, 16);
-        let mut active =
-            Array2::<Complex32>::from_elem((rows, cols), Complex32::new(0.708, 0.0));
+        let mut active = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(0.708, 0.0));
         let baseline = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
         active[[8, 8]] = Complex32::new(0.0, 0.0);
         active[[9, 9]] = Complex32::new(f32::NAN, 0.0);
@@ -735,11 +795,19 @@ mod tests {
         let (class_map, _delta, summary) =
             run_flood_detection_pipeline(&active, Some(&baseline), None, None, &opts);
 
-        assert_eq!(class_map[[8, 8]], 0, "zero-power pixel must not be classified");
+        assert_eq!(
+            class_map[[8, 8]],
+            0,
+            "zero-power pixel must not be classified"
+        );
         assert_eq!(class_map[[9, 9]], 0, "NaN pixel must not be classified");
         assert_ne!(class_map[[0, 0]], 0, "valid drop pixel must be classified");
         assert!(summary.total_flooded_pixels >= 1);
-        assert_eq!(summary.valid_pixels, rows * cols - 2, "two nodata pixels excluded from valid count");
+        assert_eq!(
+            summary.valid_pixels,
+            rows * cols - 2,
+            "two nodata pixels excluded from valid count"
+        );
         assert_eq!(summary.total_pixels, rows * cols);
     }
 
@@ -759,7 +827,11 @@ mod tests {
         let (class_map, _delta, summary) =
             run_flood_detection_pipeline(&aligned, Some(&baseline), None, None, &opts);
 
-        assert_ne!(class_map[[8, 8]], 0, "interior of flood block must be classified");
+        assert_ne!(
+            class_map[[8, 8]],
+            0,
+            "interior of flood block must be classified"
+        );
         assert!(summary.total_flooded_pixels >= 1);
         assert_eq!(summary.valid_pixels, 16 * 16);
     }
@@ -784,7 +856,10 @@ mod tests {
         }
         let valid_mask = Array2::from_elem((rows, cols), true);
         let thresh = otsu_threshold(&delta, &valid_mask, 256);
-        assert!(thresh < 0.0, "Otsu threshold should separate negative change from positive");
+        assert!(
+            thresh < 0.0,
+            "Otsu threshold should separate negative change from positive"
+        );
     }
 
     #[test]
@@ -889,7 +964,11 @@ mod tests {
 
         assert_eq!(class_map[[30, 30]], 1, "permanent water must stay class 1");
         assert_ne!(class_map[[8, 8]], 0, "genuine flood must be detected");
-        assert_eq!(class_map[[8, 8]], 2, "seeded flood pixel must be High confidence");
+        assert_eq!(
+            class_map[[8, 8]],
+            2,
+            "seeded flood pixel must be High confidence"
+        );
         assert!(
             summary.total_flooded_pixels > 0,
             "permanent-water cluster suppressed flood detection: {summary:#?}"
@@ -935,13 +1014,8 @@ mod tests {
         let mut opts = FloodDetectionOptions::default();
         opts.min_change_db = -3.0; // User ceiling is -3.0 dB (more negative)
 
-        let (_class_map, _delta_db, summary) = run_flood_detection_pipeline(
-            &active,
-            Some(&baseline),
-            None,
-            None,
-            &opts,
-        );
+        let (_class_map, _delta_db, summary) =
+            run_flood_detection_pipeline(&active, Some(&baseline), None, None, &opts);
 
         // Raw Otsu computed ~ -1.5 dB, while ceiling is -3.0 dB.
         // effective_threshold = otsu_thresh.min(opts.min_change_db) -> -3.0 dB.
@@ -967,17 +1041,49 @@ mod tests {
         let mut opts = FloodDetectionOptions::default();
         opts.min_change_db = -3.0; // Ceiling is -3.0 dB
 
-        let (_class_map, _delta_db, summary) = run_flood_detection_pipeline(
-            &active,
-            Some(&baseline),
-            None,
-            None,
-            &opts,
-        );
+        let (_class_map, _delta_db, summary) =
+            run_flood_detection_pipeline(&active, Some(&baseline), None, None, &opts);
 
         // Severe drop makes Otsu threshold around -5 dB, which is < -3.0 dB ceiling.
         // Thus effective = min(-5, -3) = -5 = raw Otsu! Cap is not binding.
         assert!(summary.raw_otsu_threshold_db < opts.min_change_db);
         assert_eq!(summary.raw_otsu_threshold_db, summary.otsu_threshold_db);
+    }
+
+    #[test]
+    fn test_radar_band_s_band() {
+        let band: RadarBand = "s".parse().expect("Parse 's' as SBand");
+        assert_eq!(band, RadarBand::SBand);
+        let band_ssar: RadarBand = "ssar".parse().expect("Parse 'ssar' as SBand");
+        assert_eq!(band_ssar, RadarBand::SBand);
+        let opts = FloodDetectionOptions::for_band(band);
+        assert_eq!(opts.radar_band, RadarBand::SBand);
+        assert!((opts.min_change_db - -2.7).abs() < 1e-4);
+        assert!((opts.permanent_water_thresh_db - -12.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_pipeline_detects_receded_water() {
+        let (rows, cols) = (16, 16);
+        // Active: dry land everywhere (+10 dB)
+        let active = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+        // Baseline: dry land (+10 dB), except an 8x8 water body in the center (-20 dB)
+        let mut baseline = Array2::<Complex32>::from_elem((rows, cols), Complex32::new(10.0, 0.0));
+        for r in 4..12 {
+            for c in 4..12 {
+                baseline[[r, c]] = Complex32::new(0.01, 0.0); // 10 * log10(0.01) = -20 dB
+            }
+        }
+
+        let mut opts = FloodDetectionOptions::for_band(RadarBand::LBand);
+        opts.enable_median_filter = false;
+        let (class_map, _delta, summary) =
+            run_flood_detection_pipeline(&active, Some(&baseline), None, None, &opts);
+
+        // Center 8x8 (64 pixels) was water at T1, dry land at T2 -> Class 5 (Water Loss / Receded)
+        assert_eq!(summary.receded_water_pixels, 64);
+        assert_eq!(class_map[[8, 8]], 5, "receded water pixel must be class 5");
+        assert_eq!(summary.stable_non_water_pixels, (rows * cols) - 64);
+        assert_eq!(class_map[[0, 0]], 0, "dry land at both dates must be class 0");
     }
 }

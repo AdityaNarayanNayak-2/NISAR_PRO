@@ -1038,7 +1038,7 @@ setJobs(prev => ({
                 preferCanvas
             >
                 <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}" />
-                {viewingResult && viewingResult.url && viewingResult.bounds && !(viewingResult.floodReplayAvailable && replayPhase !== 'detected') && (
+                {viewingResult && viewingResult.url && viewingResult.bounds && !viewingResult.floodReplayAvailable && (
                     <ImageOverlay
                         url={viewingResult.url}
                         bounds={viewingResult.bounds}

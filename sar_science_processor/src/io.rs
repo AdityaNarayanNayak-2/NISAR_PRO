@@ -54,33 +54,44 @@ pub fn save_sar_image(
                 for c in c_start..c_end {
                     let pixel = complex_image[[r, c]];
                     if pixel.re.is_finite() && pixel.im.is_finite() {
-                        sum_intensity += pixel.re.powi(2) + pixel.im.powi(2);
-                        count += 1;
+                        let power = if pixel.im == 0.0 {
+                            pixel.re // GCOV real linear power
+                        } else {
+                            pixel.re.powi(2) + pixel.im.powi(2) // SLC complex voltage
+                        };
+                        if power > 1e-7 {
+                            sum_intensity += power;
+                            count += 1;
+                        }
                     }
                 }
             }
 
             if count > 0 {
                 let mean_intensity = sum_intensity / count as f32;
-                log_intensity.push((mean_intensity + 1e-10).log10());
-                num_finite += 1;
+                if mean_intensity > 1e-7 {
+                    log_intensity.push(mean_intensity.log10());
+                    num_finite += 1;
+                } else {
+                    log_intensity.push(f32::NAN);
+                }
             } else {
                 log_intensity.push(f32::NAN);
             }
         }
     }
 
-    // ── 3. Percentile stretch (2nd–98th) ─────────────────────────────────
+    // ── 3. Percentile stretch (2nd–98th) on valid pixels only ─────────────
     let mut sorted: Vec<f32> = log_intensity
         .iter()
         .copied()
-        .filter(|v| v.is_finite())
+        .filter(|v| v.is_finite() && *v > -7.0)
         .collect();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     let (p2, p98) = if sorted.is_empty() {
         info!("Warning: no finite values found, using default stretch");
-        (0.0_f32, 1.0_f32)
+        (-3.0_f32, -0.5_f32)
     } else {
         let n = sorted.len();
         let lo = sorted[((n as f32 * 0.02) as usize).min(n.saturating_sub(1))];
@@ -90,28 +101,22 @@ pub fn save_sar_image(
     let stretch_range = (p98 - p2).max(1e-6);
 
     info!(
-        "Contrast stretch: [{:.2}, {:.2}] dB (based on {} valid blocks)",
+        "Contrast stretch: [{:.2}, {:.2}] log10 (based on {} valid blocks)",
         p2, p98, num_finite
     );
 
-    // ── 4. Gamma + quantize to u8 ─────────────────────────────────────────
-    let pixels: Vec<u8> = log_intensity
-        .iter()
-        .map(|&v| {
-            if !v.is_finite() {
-                return 0u8; // NaN/Inf → black
-            }
+    // ── 4. Gamma + RGBA PNG export (transparent outside swath) ───────────
+    let mut img: ImageBuffer<image::Rgba<u8>, Vec<u8>> = ImageBuffer::new(out_cols as u32, out_rows as u32);
+    for (idx, pixel) in img.pixels_mut().enumerate() {
+        let v = log_intensity[idx];
+        if !v.is_finite() || v <= -7.0 {
+            *pixel = image::Rgba([0, 0, 0, 0]); // Transparent outside swath
+        } else {
             let normalized = ((v - p2) / stretch_range).clamp(0.0, 1.0);
             let gamma_corrected = normalized.powf(GAMMA);
-            (gamma_corrected * 255.0) as u8
-        })
-        .collect();
-
-    // ── 5. Write PNG ──────────────────────────────────────────────────────
-    let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(out_cols as u32, out_rows as u32);
-    for (idx, pixel) in img.pixels_mut().enumerate() {
-        let v = pixels[idx];
-        *pixel = Rgb([v, v, v]); // Grayscale
+            let byte = (gamma_corrected * 255.0) as u8;
+            *pixel = image::Rgba([byte, byte, byte, 255]); // Crisp grayscale inside swath
+        }
     }
 
     img.save(output_filename)?;
@@ -1357,6 +1362,13 @@ pub fn save_flood_map_png(
                     img_buf[idx + 1] = 102;
                     img_buf[idx + 2] = 193;
                     img_buf[idx + 3] = 180;
+                }
+                5 => {
+                    // Receded Water / Water Loss (Class 5) - warm amber/orange
+                    img_buf[idx] = 245;
+                    img_buf[idx + 1] = 158;
+                    img_buf[idx + 2] = 11;
+                    img_buf[idx + 3] = 200;
                 }
                 _ => {
                     // Dry land and new flood: transparent.

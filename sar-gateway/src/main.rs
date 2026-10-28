@@ -186,28 +186,45 @@ async fn preload_completed_jobs(state: AppState) {
                                 if let Ok(report) = serde_json::from_str::<serde_json::Value>(&content) {
                                     let (tx, _) = tokio::sync::broadcast::channel(256);
                                     
-                                    // Calculate approximate bbox
+                                    // Calculate exact georef bbox or fallback to approximate crop bbox
                                     let mut bbox = None;
-                                    if let Some(crop) = report.get("crop") {
-                                        if let (Some(center_lat), Some(center_lon)) = (crop.get("center_lat").and_then(|v| v.as_f64()), crop.get("center_lon").and_then(|v| v.as_f64())) {
-                                            let preset = crop.get("preset").and_then(|v| v.as_str()).unwrap_or("5x5km");
-                                            let (lat_half_km, lon_half_km) = match preset {
-                                                "1x1km" => (0.5, 0.5),
-                                                "5x5km" => (2.5, 2.5),
-                                                "1x2km" => (0.5, 1.0),
-                                                "10x10km" => (5.0, 5.0),
-                                                "20x20km" => (10.0, 10.0),
-                                                _ => (2.5, 2.5),
-                                            };
-                                            let lat_radius = lat_half_km / 111.0;
-                                            let cos_lat = center_lat.to_radians().cos().abs().max(0.01);
-                                            let lon_radius = lon_half_km / (111.0 * cos_lat);
+                                    if let Some(gb) = report.get("georef_bbox") {
+                                        if let (Some(s), Some(n), Some(w), Some(e)) = (
+                                            gb.get("south").and_then(|v| v.as_f64()),
+                                            gb.get("north").and_then(|v| v.as_f64()),
+                                            gb.get("west").and_then(|v| v.as_f64()),
+                                            gb.get("east").and_then(|v| v.as_f64()),
+                                        ) {
                                             bbox = Some(jobs::GeoBbox {
-                                                south: center_lat - lat_radius,
-                                                north: center_lat + lat_radius,
-                                                west: center_lon - lon_radius,
-                                                east: center_lon + lon_radius,
+                                                south: s,
+                                                north: n,
+                                                west: w,
+                                                east: e,
                                             });
+                                        }
+                                    }
+                                    if bbox.is_none() {
+                                        if let Some(crop) = report.get("crop") {
+                                            if let (Some(center_lat), Some(center_lon)) = (crop.get("center_lat").and_then(|v| v.as_f64()), crop.get("center_lon").and_then(|v| v.as_f64())) {
+                                                let preset = crop.get("preset").and_then(|v| v.as_str()).unwrap_or("5x5km");
+                                                let (lat_half_km, lon_half_km) = match preset {
+                                                    "1x1km" => (0.5, 0.5),
+                                                    "5x5km" => (2.5, 2.5),
+                                                    "1x2km" => (0.5, 1.0),
+                                                    "10x10km" => (5.0, 5.0),
+                                                    "20x20km" => (10.0, 10.0),
+                                                    _ => (2.5, 2.5),
+                                                };
+                                                let lat_radius = lat_half_km / 111.0;
+                                                let cos_lat = center_lat.to_radians().cos().abs().max(0.01);
+                                                let lon_radius = lon_half_km / (111.0 * cos_lat);
+                                                bbox = Some(jobs::GeoBbox {
+                                                    south: center_lat - lat_radius,
+                                                    north: center_lat + lat_radius,
+                                                    west: center_lon - lon_radius,
+                                                    east: center_lon + lon_radius,
+                                                });
+                                            }
                                         }
                                     }
                                     

@@ -21,7 +21,15 @@ pub struct AppState {
 * **`RwLock` (Read-Write Lock)**: Allows multiple threads to read the hashmap simultaneously (like checking job status), but enforces exclusive access when a new job is inserted or updated.
 * **`Arc` (Atomic Reference Count)**: Safely clones the pointer to this memory across Tokio asynchronous worker threads without duplicating the data itself.
 
-When `main()` starts, it initializes this state, starts a background cleanup task (`crate::jobs::start_cleanup_task(state.clone())`), and mounts the Axum routes.
+When `main()` starts, it initializes this state, starts a background cleanup task (`crate::jobs::start_cleanup_task(state.clone())`), preloads completed historical runs from disk via `preload_completed_jobs(state.clone()).await`, and mounts the Axum routes.
+
+### Historical Job Preloading (`preload_completed_jobs`)
+To provide an instantaneous experience on startup without re-running heavy satellite jobs:
+1. Scans the local `./results/` directory for existing job outputs.
+2. Identifies matching artifact pairs (such as `*_flood.json`, `*_flood.png`, `*_insar.json`, `*_defo_phase.tif`).
+3. Extracts `georef_bbox` directly from the serialized JSON reports.
+4. Registers these historical runs into `state.jobs` as `Completed`.
+5. When the user opens the React dashboard, historical showcase jobs (e.g. `sar-bihar-lband-full` and `assam_flood_pair`) appear immediately in the **Run History** sidebar, fully interactive with zero wait time.
 
 ---
 
@@ -36,9 +44,10 @@ If a user drags and drops a local `.h5` file, `upload_handler` intercepts the `m
 When the user clicks "Start Processing", React sends a JSON payload:
 ```json
 {
-    "input_file": "/results/uploads/temp.h5",
-    "pipeline": "insar",
-    "crop_lat": 18.7889, ...
+    "input_file": "/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_...20260912.h5",
+    "slave_file": "/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_...20260726.h5",
+    "pipeline": "flood",
+    "crop_preset": "full"
 }
 ```
 The `start_job_handler` parses this payload into a `ProcessRequest` struct and calls the orchestrator:
@@ -47,7 +56,7 @@ let job_id = crate::jobs::spawn_processing_job(
     state.clone(), payload.input_file, ...
 ).await;
 ```
-It immediately returns `{"job_id": "sar-...", "status": "queued"}` so the UI doesn't hang while the 30 GB file processes.
+It immediately returns `{"job_id": "sar-...", "status": "queued"}` so the UI doesn't hang while the multi-gigabyte files process.
 
 ---
 
@@ -60,8 +69,13 @@ The heavy lifting happens in `sar-gateway/src/jobs.rs`.
 
 It checks the `LOCAL_MODE` environment variable. If true (the default for the desktop app), it spawns an asynchronous Tokio task to run `spawn_local_job`. (If false, it uses the Kubernetes API to deploy a CRD `SarJob` to a Flux-managed cluster).
 
-### Spawning the Processor
-Inside `spawn_local_job`, the gateway locates the compiled `sar_processor` binary (checking `release` then `debug` folders). It uses `tokio::process::Command` to execute the binary:
+### Binary Resolution & Subprocess Execution
+Inside `spawn_local_job`, the gateway dynamically locates the compiled scientific compute binary. It prioritizes the modern SAR science engine:
+1. `../sar_science_processor/target/release/sar_science_processor`
+2. `../sar_science_processor/target/debug/sar_science_processor`
+3. Fallback to `sar_processor` for legacy RDA / simple InSAR runs.
+
+It uses `tokio::process::Command` to execute the binary:
 
 ```rust
 let mut cmd = Command::new(&binary);
@@ -69,40 +83,52 @@ cmd.stdout(Stdio::piped())
    .stderr(Stdio::piped());
 
 cmd.args(["--input", &input, "--output", &output_path]);
-// ... appends crop arguments
+if let Some(ref slave) = slave_file {
+    cmd.args(["--slave", slave]);
+}
+if pipeline == "flood" {
+    cmd.args(["--mode", "flood"]);
+}
+// ... appends crop arguments (--crop-preset full, or lat/lon)
 ```
 
 It calls `cmd.spawn()`, bypassing the system shell directly for security and speed. It captures the standard output (`stdout`) and standard error (`stderr`) pipes from the child process.
 
 ---
 
-## 4. Real-Time Log Streaming (SSE)
+## 4. Real-Time Log Streaming & Event Interception (SSE)
 
-The gateway needs to send processor logs (like `[1/5] Loading unwrapped phase...`) to the React UI in real-time. It uses Server-Sent Events (SSE).
+The gateway needs to send processor logs (like `[1/5] Loading active scene...`) to the React UI in real-time. It uses Server-Sent Events (SSE).
 
-### Log Interception
-Two background tasks are spawned to read the `stdout` and `stderr` pipes line-by-line using a `BufReader`:
+### Log Interception & Structured Event Parsing
+Two background tasks read the `stdout` and `stderr` pipes line-by-line using a `BufReader`:
 
 ```rust
 let reader = BufReader::new(stdout);
 let mut lines = reader.lines();
 while let Ok(Some(line)) = lines.next_line().await {
-    // 1. Check for special internal JSON events
+    // 1. Intercept structured JSON events
     if line.starts_with("{\"event\":\"georef\"") {
         // Parse bounding box and update job state
         let mut m = meta_stdout.write().await;
         m.bbox = Some(bbox.clone());
         let _ = m.tx.send(line.clone());
         continue;
+    } else if line.starts_with("{\"event\":\"flood_report\"") || line.starts_with("{\"event\":\"insar_report\"") {
+        // Store report path in job metadata
+        let mut m = meta_stdout.write().await;
+        m.report = Some(parsed_report);
+        let _ = m.tx.send(line.clone());
+        continue;
     }
     
-    // 2. Otherwise, store the log and broadcast it
+    // 2. Broadcast raw log line to SSE
     let mut m = meta_stdout.write().await;
     m.logs.push(line.clone());
     let _ = m.tx.send(line);
 }
 ```
-* **Event Interception**: The `sar_processor` binary communicates with the gateway by printing JSON strings to `stdout`. The gateway parses `georef` events to know exactly where on Earth the image is located.
+* **Event Interception**: The `sar_science_processor` communicates with the gateway by printing JSON strings to `stdout`. The gateway parses `georef` events to know exactly where on Earth the radar swath is located.
 * **Broadcasting**: It sends the raw log line into the `m.tx` broadcast channel.
 
 ### The SSE Endpoint (`GET /jobs/:id/logs`)

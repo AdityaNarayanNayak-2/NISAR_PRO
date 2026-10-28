@@ -180,6 +180,7 @@ pub async fn spawn_processing_job(
     seed_threshold_db: Option<f32>,
     growth_threshold_db: Option<f32>,
     min_area_pixels: Option<usize>,
+    radar_band: Option<String>,
 ) -> String {
     let job_id = format!("sar-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
     let (tx, _rx) = broadcast::channel(256);
@@ -228,6 +229,7 @@ pub async fn spawn_processing_job(
                 seed_threshold_db,
                 growth_threshold_db,
                 min_area_pixels,
+                radar_band,
                 cancel_rx,
             ).await;
         });
@@ -260,6 +262,7 @@ async fn spawn_local_job(
     seed_threshold_db: Option<f32>,
     growth_threshold_db: Option<f32>,
     min_area_pixels: Option<usize>,
+    radar_band: Option<String>,
     mut cancel_rx: tokio::sync::mpsc::Receiver<()>,
 ) {
     let results_dir = std::path::Path::new("results");
@@ -342,6 +345,9 @@ async fn spawn_local_job(
         }
         if let Some(min_area) = min_area_pixels {
             cmd.args(["--min-area-pixels", &min_area.to_string()]);
+        }
+        if let Some(ref band) = radar_band {
+            cmd.args(["--radar-band", band]);
         }
     } else {
         // ── Standard sar_processor args (unchanged) ──────────────────
@@ -699,7 +705,8 @@ pub fn start_cleanup_task(state: crate::AppState) {
                 let jobs = state.jobs.read().await;
                 for (id, meta_lock) in jobs.iter() {
                     let meta = meta_lock.read().await;
-                    if matches!(meta.status, JobStatus::Completed | JobStatus::Failed(_)) 
+                    if meta.flood_report_path.is_none()
+                        && matches!(meta.status, JobStatus::Completed | JobStatus::Failed(_)) 
                         && meta.created_at.elapsed() > one_hour 
                     {
                         to_remove.push(id.clone());

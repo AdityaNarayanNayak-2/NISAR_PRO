@@ -256,19 +256,19 @@ export default function SarSciencePanel({
                     <button
                         type="button"
                         onClick={() => {
-                            setCropLat('18.9306');
-                            setCropLon('82.3885');
-                            if (setFlyToCenter) setFlyToCenter([18.9306, 82.3885]);
+                            setCropLat('25.5000');
+                            setCropLon('86.5000');
+                            if (setFlyToCenter) setFlyToCenter([25.5000, 86.5000]);
                         }}
                         style={{
                             flex: 1, padding: '5px 4px', fontFamily: MONO, fontSize: '9px',
-                            background: (cropLat === '18.9306' && cropLon === '82.3885') ? 'rgba(0, 229, 255, 0.15)' : 'rgba(255,255,255,0.03)',
-                            border: `1px solid ${(cropLat === '18.9306' && cropLon === '82.3885') ? accent : 'rgba(255,255,255,0.08)'}`,
-                            color: (cropLat === '18.9306' && cropLon === '82.3885') ? accent : C.textMid,
+                            background: (cropLat === '25.5000' && cropLon === '86.5000') ? 'rgba(0, 229, 255, 0.15)' : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${(cropLat === '25.5000' && cropLon === '86.5000') ? accent : 'rgba(255,255,255,0.08)'}`,
+                            color: (cropLat === '25.5000' && cropLon === '86.5000') ? accent : C.textMid,
                             cursor: 'pointer', textAlign: 'center', borderRadius: '2px'
                         }}
                     >
-                        Kundra Block
+                        Bihar Ganga
                     </button>
                 </div>
 

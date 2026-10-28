@@ -15,10 +15,7 @@ import damMonitoringMd from '../../../Docs/UserGuide/dam_monitoring.md?raw'
 
 import architectureDiagramsMd from '../../../Docs/Architecture/architecture-diagrams.md?raw'
 import projectJourneyMd from '../../../Docs/Architecture/project_journey.md?raw'
-import sarGatewayInternalsMd from '../../../Docs/Architecture/sar_gateway_internals.md?raw'
 import gatewayOrchestrationMd from '../../../Docs/Architecture/gateway_orchestration.md?raw'
-import sarProcessorInternalsMd from '../../../Docs/Architecture/sar_processor_internals.md?raw'
-import sarProcessorWalkthroughMd from '../../../Docs/Architecture/sar_processor_walkthrough.md?raw'
 import processorIngestionMd from '../../../Docs/Architecture/processor_ingestion.md?raw'
 import coreSarMathMd from '../../../Docs/Architecture/core_sar_mathematics.md?raw'
 import dataExportHealthMd from '../../../Docs/Architecture/data_export_and_health.md?raw'
@@ -78,10 +75,7 @@ export const docGroups = [
         items: [
             { id: 'diagrams', label: 'Platform Architecture & Diagrams', file: 'Docs/Architecture/architecture-diagrams.md', md: architectureDiagramsMd },
             { id: 'journey', label: 'Project Journey', file: 'Docs/Architecture/project_journey.md', md: projectJourneyMd },
-            { id: 'gateway-internals', label: 'Gateway Internals', file: 'Docs/Architecture/sar_gateway_internals.md', md: sarGatewayInternalsMd },
             { id: 'gateway-orchestration', label: 'Gateway Orchestration Walkthrough', file: 'Docs/Architecture/gateway_orchestration.md', md: gatewayOrchestrationMd },
-            { id: 'processor-internals', label: 'SAR Processor Internals', file: 'Docs/Architecture/sar_processor_internals.md', md: sarProcessorInternalsMd },
-            { id: 'processor-walkthrough', label: 'Processor Code Walkthrough', file: 'Docs/Architecture/sar_processor_walkthrough.md', md: sarProcessorWalkthroughMd },
             { id: 'ingestion', label: 'Processor Ingestion & Subsetting', file: 'Docs/Architecture/processor_ingestion.md', md: processorIngestionMd },
             { id: 'mathematics', label: 'Core SAR Mathematics', file: 'Docs/Architecture/core_sar_mathematics.md', md: coreSarMathMd },
             { id: 'export', label: 'Data Export & Health Analysis', file: 'Docs/Architecture/data_export_and_health.md', md: dataExportHealthMd },

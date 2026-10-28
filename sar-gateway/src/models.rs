@@ -27,6 +27,7 @@ pub struct ProcessRequest {
     pub seed_threshold_db: Option<f32>,
     pub growth_threshold_db: Option<f32>,
     pub min_area_pixels: Option<usize>,
+    pub radar_band: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

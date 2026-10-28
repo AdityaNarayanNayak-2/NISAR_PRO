@@ -244,23 +244,7 @@ export default function FloodConfigPanel({
                 >
                     Kolab Dam
                 </button>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setCropLat('18.9306');
-                        setCropLon('82.3885');
-                        if (setFlyToCenter) setFlyToCenter([18.9306, 82.3885]);
-                    }}
-                    style={{
-                        flex: 1, padding: '5px 4px', fontFamily: MONO, fontSize: '9px',
-                        background: (cropLat === '18.9306' && cropLon === '82.3885') ? 'rgba(0, 229, 255, 0.15)' : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${(cropLat === '18.9306' && cropLon === '82.3885') ? accent : 'rgba(255,255,255,0.08)'}`,
-                        color: (cropLat === '18.9306' && cropLon === '82.3885') ? accent : C.textMid,
-                        cursor: 'pointer', textAlign: 'center', borderRadius: '2px'
-                    }}
-                >
-                    Kundra Block
-                </button>
+
                 <button
                     type="button"
                     onClick={() => {
@@ -278,6 +262,25 @@ export default function FloodConfigPanel({
                     }}
                 >
                     Brahmaputra
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setCropLat('25.5000');
+                        setCropLon('86.5000');
+                        setCropPreset('20x20km');
+                        if (setFlyToCenter) setFlyToCenter([25.5000, 86.5000]);
+                    }}
+                    style={{
+                        flex: 1, padding: '5px 4px', fontFamily: MONO, fontSize: '9px',
+                        background: (cropLat === '25.5000' && cropLon === '86.5000') ? 'rgba(0, 229, 255, 0.15)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${(cropLat === '25.5000' && cropLon === '86.5000') ? accent : 'rgba(255,255,255,0.08)'}`,
+                        color: (cropLat === '25.5000' && cropLon === '86.5000') ? accent : C.textMid,
+                        cursor: 'pointer', textAlign: 'center', borderRadius: '2px'
+                    }}
+                    title="InGARSS 2026 Target: Begusarai–Khagaria, Bihar"
+                >
+                    Bihar Ganga
                 </button>
             </div>
 
@@ -304,9 +307,9 @@ export default function FloodConfigPanel({
             {/* Crop preset toggles */}
             <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '6px' }}>CROP WINDOW</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
-                {['1x1km', '5x5km', '1x2km', '10x10km', '20x20km'].map(p => (
+                {['1x1km', '5x5km', '1x2km', '10x10km', '20x20km', 'full'].map(p => (
                     <button key={p} onClick={() => setCropPreset(p)} style={presetBtnStyle(cropPreset === p)}>
-                        {p.replace('km', ' km').replace('x', ' × ')}
+                        {p === 'full' ? 'FULL SCENE' : p.replace('km', ' km').replace('x', ' × ')}
                     </button>
                 ))}
             </div>
@@ -473,7 +476,7 @@ export default function FloodConfigPanel({
                         )}
                         {job.status === 'completed' && (
                             <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                                <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, floodReport: job.floodReport, floodGeoJson: job.floodGeoJson, floodReportPath: job.floodReportPath, floodGeoJsonPath: job.floodGeoJsonPath, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
+                                <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, floodReport: job.floodReport, floodGeoJson: job.floodGeoJson, floodReportPath: job.floodReportPath, floodGeoJsonPath: job.floodGeoJsonPath, floodBaselinePath: job.floodBaselinePath, floodActivePath: job.floodActivePath, floodReplayAvailable: job.floodReplayAvailable, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
                                     style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.stable, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>VIEW</button>
                                 <button onClick={(e) => { e.stopPropagation(); window.open(api(job.output_path), '_blank'); }}
                                     style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>DL</button>

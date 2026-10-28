@@ -6,17 +6,30 @@ export function parseNisarFilename(filepath) {
     const fname = filepath.split('/').pop();
     const parts = fname.split('_');
     if (parts.length < 10 || !parts[0].startsWith('NISAR')) return null;
-    const level = parts[1]; const mode = parts[2]; const product = parts[3]; const direction = parts[6];
+    const levelCode = parts[1]; const mode = parts[2]; const product = parts[3]; const direction = parts[6];
     const dateStr = parts.find(p => /^\d{8}T\d{6}$/.test(p));
     const productNames = { RSLC: 'Range-compressed SLC', GSLC: 'Geocoded SLC', GCOV: 'Geocoded Covariance', GUNW: 'Unwrapped Interferogram' };
-    const levelNames = { L1: 'Level-1', L2: 'Level-2', L0: 'Level-0' };
+    const levelNames = { L1: 'Level-1', L2: 'Level-2', L0: 'Level-0', S1: 'Level-1 (S-Band)', S2: 'Level-2 (S-Band)' };
     let acqDate = null;
     if (dateStr) { acqDate = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`; }
+    
+    const isSBand = levelCode.startsWith('S') || fname.includes('SSAR') || fname.includes('_S_');
+    const band = isSBand 
+        ? 'S-Band (3.20 GHz / 9.3 cm - ISRO)' 
+        : (mode === 'PR' ? 'L-Band (1.24 GHz - NASA)' : 'L-Band (1.24 GHz)');
+    const sensor = isSBand ? 'NISAR SSAR (ISRO)' : 'NISAR LSAR (NASA)';
+
     return {
-        mission: 'NISAR (NASA/ISRO)', level: levelNames[level] || level, product,
-        productFull: productNames[product] || product, mode: mode === 'PR' ? 'L-Band + S-Band' : mode,
-        band: 'L-Band (1.26 GHz)', direction: direction === 'D' ? 'Descending' : direction === 'A' ? 'Ascending' : direction,
-        acquisitionDate: acqDate, filename: fname,
+        mission: isSBand ? 'NISAR (ISRO S-Band)' : 'NISAR (NASA/ISRO)', 
+        level: levelNames[levelCode] || levelCode, 
+        product,
+        productFull: productNames[product] || product, 
+        mode: mode === 'PR' ? 'L-Band + S-Band' : mode,
+        band, 
+        sensor,
+        direction: direction === 'D' ? 'Descending' : direction === 'A' ? 'Ascending' : direction,
+        acquisitionDate: acqDate, 
+        filename: fname,
     };
 }
 

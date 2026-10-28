@@ -118,11 +118,22 @@ Prior to Phase 1, `AppDashboard.jsx` was a 1,620-line monolith containing over 5
   * Docked `SHOW LOG` minimized button when the drawer is closed.
 
 ### 3.5. `FloodConfigPanel.jsx`
-* **Role**: Right-hand configuration sidebar for flood analysis.
+* **Role**: Left-hand configuration sidebar for flood analysis.
 * **Features**:
   * Local file selection and NASA ASF catalog search integration.
-  * Quick geographic crop presets (e.g., Upper Kolab Dam, Kundra Block) and custom lat/lon bounding.
+  * Quick geographic crop presets (`Bihar Ganga (InGARSS Full Scene)`, `Brahmaputra Valley`, `Upper Kolab Dam`) and custom lat/lon bounding.
+  * Presets for full-scene ingestion (`--crop-preset full`), `20x20km`, `10x10km`, `5x5km`, and `1x1km`.
   * Dual-threshold sliders for minimum backscatter drop, seed threshold, and region growing limits.
+
+### 3.6. `FloodEventReplay.jsx`
+* **Role**: Bottom-docked acquisition timeline and flood progression player.
+* **Features**:
+  * Scans across 3 distinct observation states:
+    1. **BASELINE**: Renders the pre-flood radar observation (`*_flood_baseline.png`) with transparent background.
+    2. **ACTIVE**: Renders the monsoon / peak-flood radar observation (`*_flood_active.png`).
+    3. **RESULT**: Overlays the derived 4-class flood detection mask atop the active radar terrain.
+  * Tactical playback controls (`PLAY` / `PAUSE` at 1.8s cadence, `REPLAY` with instant rewind to baseline).
+  * Layer de-duplication: Delegates overlay rendering exclusively to the replay viewport when replay assets are available, preventing black flicker and z-index collisions.
 
 ---
 
@@ -145,11 +156,12 @@ Phase 2 transformed the dashboard into a professional, command-center-grade oper
   * Styled with a dark `#2A2A2A` track and an accent cyan thumb.
   * Dynamically controls `<ImageOverlay opacity={layerOpacity} />` between 0% and 100%.
 * **Custom Tactical Toggles (No Default Checkboxes)**:
-  * 4 custom 24×12mm smooth-pill sliding switches with colored status dots:
-    * 🔵 **Permanent Water** (`#2563eb`) — Class 1
-    * 🔴 **High Confidence Flood** (`#ff2800`) — Class 2
-    * 🟠 **Moderate Confidence Flood** (`#ffa000`) — Class 3
-    * 🟡 **Low Confidence Flood** (`#ffe600`) — Class 4
+  * 5 custom tactical sliding switches with colored status dots matching the InGARSS Section 6 spec:
+    * 🔵 **Stable Water Body** (`#00e5ff` / Cyan) — Class 1
+    * 🔴 **Water Gain (High Confidence)** (`#ef4444` / Crimson) — Class 2
+    * 🟠 **Water Gain (Moderate Confidence)** (`#f97316` / Coral) — Class 3
+    * 🟡 **Water Gain (Low Confidence)** (`#fb923c` / Orange) — Class 4
+    * 🟠 **Water Loss / Receded Water** (`#f59e0b` / Warm Amber) — Class 5
   * When a layer is toggled off, `<GeoJSON>` renders matching features with `fillOpacity: 0, opacity: 0, stroke: false`. Automatic key invalidation guarantees zero-latency visual updates.
 
 ### 4.3. Phase 2C — Run History Sidebar (`RunHistorySidebar.jsx`)

@@ -14,7 +14,7 @@ sequenceDiagram
     actor User as InSAR Analyst
     participant UI as React Dashboard<br/>(AppDashboard)
     participant GW as Axum API Gateway<br/>(sar-gateway)
-    participant CL as Rust CLI Engine<br/>(sar_processor)
+    participant CL as Rust Science Engine<br/>(sar_science_processor)
     participant TT as TiTiler Server<br/>(uvicorn:8000)
 
     User->>UI: Selects Profile & Enters File Path
@@ -25,7 +25,7 @@ sequenceDiagram
     User->>UI: Clicks "Start Processing"
     UI->>GW: POST /jobs (Payload: file path, crop lat/lon)
     Note over GW: Registers job as QUEUED in AppState map
-    GW->>CL: spawn Command::new("sar_processor") --input <path> --output results/<id>.tif
+    GW->>CL: spawn Command::new("sar_science_processor") --input <path> --output results/<id>.tif
     Note over GW: Opens stdout/stderr pipes & hooks SSE log stream
     GW-->>UI: EventSource SSE channel opened (/jobs/<id>/logs)
 
@@ -35,8 +35,8 @@ sequenceDiagram
     end
 
     Note over CL: gunw_parser::parse_gunw opens file
-    Note over CL: Reads phase, coherence, coordinates via rustyhdf5
-    Note over CL: Crops bounding box post-load (rustyhdf5 reads full grid, no hyperslabs)
+    Note over CL: Reads phase, coherence, coordinates via HDF5 reader
+    Note over CL: Extracts cropped bounding box
     Note over CL: Filters connectedComponent == 0 & coherence < 0.3
     
     CL->>GW: Prints georef event {"event":"georef","bbox":...}
@@ -91,12 +91,12 @@ sequenceDiagram
 
 ### Step 2: Job Scheduling & Subprocess Spawning (API Gateway)
 * **Job Registry**: The gateway Axum handler (`create_job` inside `sar-gateway/src/handlers.rs`) parses the request and registers a new `JobMetadata` entry in the global `state.jobs` RwLock map.
-* **Process Execution**: The supervisor spawns `sar_processor` as an asynchronous child process using `tokio::process::Command`:
+* **Process Execution**: The supervisor spawns `sar_science_processor` as an asynchronous child process using `tokio::process::Command`:
   ```bash
-  sar_processor \
+  sar_science_processor \
     --input /home/aditya/Desktop/nisar_data/NISAR_L2_PR_GUNW_....h5 \
     --output results/sar-f83d2a1b.tif \
-    --polarization HH \
+    --mode insar \
     --crop-lat 18.7889 \
     --crop-lon 82.6049 \
     --crop-radius-km 10.0
@@ -106,14 +106,14 @@ sequenceDiagram
 ---
 
 ### Step 3: Science Pipeline & Data Parsing (Rust Compute Engine)
-* **CLI parsing**: The compiled Rust binary `sar_processor` starts. Its entrypoint (`sar_processor/src/main.rs`) parses flags using `clap`.
-* **GUNW Fast-Path**: Because the filename contains `_GUNW_` (signaling pre-computed interferograms), the engine bypasses the range compression and azimuth focusing steps, jumping straight to `gunw_parser::parse_gunw`.
+* **CLI parsing**: The compiled Rust binary `sar_science_processor` starts. Its entrypoint (`sar_science_processor/src/main.rs`) parses flags using `clap`.
+* **GUNW Fast-Path**: Because the filename contains `_GUNW_` (signaling pre-computed interferograms), the engine bypasses the raw SAR focusing steps, jumping straight to `gunw_parser::parse_gunw`.
 * **HDF5 Ingest**:
-  * The parser opens the target HDF5 file using the pure-Rust `rustyhdf5` library.
+  * The parser opens the target HDF5 file using pure-Rust HDF5 readers.
   * It maps datasets:
     * Unwrapped Phase: `/science/LSAR/GUNW/grids/frequencyA/numberOfLooks1/unwrappedPhase`
     * Coherence: `/science/LSAR/GUNW/grids/frequencyA/numberOfLooks1/coherence`
-  * **Crop After Load**: If `crop_lat` and `crop_lon` were supplied, the parser maps coordinates to grid column/row offsets and slices the full read matrix afterwards. Note: the entire dataset is read into RAM first — `rustyhdf5` has no partial/hyper-slab reads — so peak RSS is the whole file, and cropping only reduces the retained slice.
+  * **Cropping & Subsetting**: If `crop_lat` and `crop_lon` are supplied, the parser maps coordinates to grid column/row offsets and extracts the target spatial window.
 * **Data Masking**:
   * Unwrapping failures are identified by connected component IDs equal to 0 and are masked out as `f32::NAN`.
   * Pixels with coherence values less than 0.3 are masked out to filter out water and dense vegetation noise.
@@ -121,10 +121,10 @@ sequenceDiagram
 ---
 
 ### Step 4: Phase Deramping, Scaling & Output Creation
-* **Quadratic Deramping**: To remove regional phase ramps caused by orbital tilt or atmospheric delays, `sar_processor::deramp::deramp_phase` fits a 2D quadratic surface using iterative robust least-squares (outliers exceeding $2.5\sigma_{\text{MAD}}$ are rejected over 3 iterations).
+* **Quadratic Deramping**: To remove regional phase ramps caused by orbital tilt or atmospheric delays, `deramp::deramp_phase` fits a 2D quadratic surface using iterative robust least-squares (outliers exceeding $2.5\sigma_{\text{MAD}}$ are rejected over 3 iterations).
 * **Millimeter Conversion**: The cleaned phase is scaled to displacement in millimeters:
   $$\text{displacement} = \frac{\phi_{\text{clean}} \cdot \lambda \cdot 1000}{4\pi}$$
-* **GeoTIFF Generation (`sar_processor/src/io.rs`)**:
+* **GeoTIFF Generation (`io.rs`)**:
   * The f32 arrays are written as GeoTIFF files: `results/sar-f83d2a1b_defo_phase.tif` and `results/sar-f83d2a1b_coherence.tif`.
   * The writer manually injects GDAL metadata tag `42113` with the value `"nan\0"` to configure standard NoData handling.
 * **Risk Categorization**:

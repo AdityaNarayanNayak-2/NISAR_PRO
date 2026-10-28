@@ -1,0 +1,11 @@
+[2026-10-27 20:10:01.722] [SESSION_START] SAR Science Processor v0.1.0 started
+  PID: 1874753
+  System: RAM: 7024 MB avail / 15612 MB total | Swap: 5805 MB free / 7999 MB total
+[2026-10-27 20:10:01.723] [PHASE] >>> STARTUP — mode=flood input=Some("NISAR_L2_PR_GCOV_030_098_A_014_4005_DHDH_A_20260912T233810_20260912T233845_P05023_N_F_J_001.h5") [RAM: 7024 MB avail]
+[2026-10-27 20:10:01.723] [PHASE] >>> FLOOD_STEP_1 — Loading Full-Scene Active GCOV: "NISAR_L2_PR_GCOV_030_098_A_014_4005_DHDH_A_20260912T233810_20260912T233845_P05023_N_F_J_001.h5" [RAM: 7024 MB avail]
+[2026-10-27 20:10:18.621] [ALLOC_FREED] Completed: Active GCOV parsed
+  System memory after: RAM: 6924 MB avail / 15612 MB total | Swap: 5805 MB free / 7999 MB total
+[2026-10-27 20:10:18.621] [PHASE] >>> FLOOD_STEP_2 — Loading Full-Scene Baseline GCOV: "NISAR_L2_PR_GCOV_026_098_A_014_4005_DHDH_A_20260726T233812_20260726T233846_P05023_N_F_J_001.h5" [RAM: 6924 MB avail]
+[2026-10-27 20:10:36.762] [ALLOC_FREED] Completed: Baseline GCOV parsed
+  System memory after: RAM: 7229 MB avail / 15612 MB total | Swap: 5559 MB free / 7999 MB total
+[2026-10-27 20:10:36.762] [PHASE] >>> FLOOD_STEP_5 — Running 7-stage flood detection pipeline [RAM: 7229 MB avail]

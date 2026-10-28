@@ -29,18 +29,16 @@ Deeper dives into the structural layout and internals of individual system modul
 
 | Document | Description | Key Topics Covered |
 | :--- | :--- | :--- |
-| 🗺️ [Platform Architecture & Ecosystem Blueprint](./Architecture/architecture-diagrams.md) | Mermaid topology, dual-path InSAR pipeline, math foundations, air-gapped security, multi-mission roadmap. | Topology, pipeline, security |
+| 🗺️ [Platform Architecture & Ecosystem Blueprint](./Architecture/architecture-diagrams.md) | Mermaid topology, dual-pipeline engine (Flood & InSAR), 1.157B pixel breakthrough, 4-class dynamics. | Topology, InGARSS 2026, dual pipeline |
+| 🌊 [Flood Detection Pipeline](./Architecture/flood_detection_pipeline.md) | InGARSS 2026 4-class temporal dynamics, 1.157B pixel hyperslab streaming, RGBA PNG/GeoJSON/GeoTIFF. | flood_detect.rs, 4-class, 8x8 multilook |
+| 🧮 [Core SAR Mathematics](./Architecture/core_sar_mathematics.md) | Coherence SAT, phase unwrapping, deramping, CFAR, calibrated log-ratio, Otsu change detection. | Math, SAT, Otsu, log-ratio |
+| 🎛️ [Gateway Orchestration](./Architecture/gateway_orchestration.md) | Axum routes, thread safety, job spawning, SSE log streaming, preloaded historical runs. | Axum, Tokio, SSE, preloading |
+| 📥 [Processor Ingestion, Windowing & Hyperslab Streaming](./Architecture/processor_ingestion.md) | CLI parsing, memory-mapped chunk indexing, spatial cropping, 1.157B pixel full-scene streaming. | clap, ChunkedF32Reader, hyperslabs |
+| 🖥️ [Dashboard Internals](./Architecture/sar_dashboard_internals.md) | React 19 + Leaflet tactical operations deck, FloodInsightPanel, FloodEventReplay, presets, hotkeys. | react-leaflet, Zustand, replay |
+| 🌊 [GUNW Data Flow](./Architecture/gunw_data_flow.md) | End-to-end trace of a GUNW file from upload to Leaflet displacement rendering. | HDF5, Axum, InSAR flow |
+| 📤 [Data Export, Flood Artifacts & Health Analysis](./Architecture/data_export_and_health.md) | Multi-format GeoTIFF, flood PNG/GeoJSON overlays, dual-unit reports, and PS-InSAR health metrics. | GeoTIFF, GeoJSON, dual-unit reports |
 | 🛤️ [Project Journey](./Architecture/project_journey.md) | Timeline of design iterations, architectural shifts, and technical decisions. | Evolution, tech choices |
-| 🎛️ [Gateway Internals](./Architecture/sar_gateway_internals.md) | Thread safety, tokio-spawn local supervisors, K8s CRD job interfaces. | Axum, SSE, jobs scheduler |
-| 🎛️ [Gateway Orchestration Walkthrough](./Architecture/gateway_orchestration.md) | Line-by-line breakdown of Axum routes, job spawning, and SSE log streaming. | Axum, tokio, SSE |
-| 🔬 [SAR Processor Internals](./Architecture/sar_processor_internals.md) | Pure-Rust math engine, HDF5 parsing, and GeoTIFF generation. | ndarray, rustyhdf5, deramping |
-| 🦀 [Processor Code Walkthrough](./Architecture/sar_processor_walkthrough.md) | Exhaustive line-by-line guide of main.rs execution loops and module bindings. | Rust, Rayon, H5 |
-| 📥 [Processor Ingestion & Subsetting](./Architecture/processor_ingestion.md) | CLI parsing, HDF5 reads, spatial cropping, invalid-pixel masking. | clap, rustyhdf5, read-then-slice (no hyperslabs) |
-| 🧮 [Core SAR Mathematics](./Architecture/core_sar_mathematics.md) | Interferogram & coherence (SAT), quality-guided phase unwrapping, deramping, CA-CFAR ship detection. | Rust, Rayon, CFAR, SAT |
-| 📤 [Data Export & Health Analysis](./Architecture/data_export_and_health.md) | PS-InSAR MAD thresholding, raw GeoTIFF construction, SSE emission. | IFD tags, JSON, stdout |
-| 🌊 [Flood Detection Pipeline](./Architecture/flood_detection_pipeline.md) | End-to-end 7-stage flood/inundation engine, output exporters, gateway + dashboard integration. | flood_detect.rs, exporters |
-| 🌊 [GUNW Data Flow](./Architecture/gunw_data_flow.md) | End-to-end trace of a GUNW file from upload to Leaflet and TiTiler rendering. | HDF5, Axum, udev, flow |
-| 🖥️ [Dashboard Internals](./Architecture/sar_dashboard_internals.md) | Leaflet map layer structures, localStorage API bridges, TiTiler COG pipelines. | react-leaflet, sslip.io, state |
+| 📖 [Flood Monitoring Walkthrough](./FloodWalkthrough/README.md) | Comprehensive walkthrough of `main.rs`, `nisar_parser.rs`, `windowed.rs`, `flood_detect.rs`, and `io.rs`. | beginner guide, SAR, dB, HDF5, Otsu |
 
 ---
 
@@ -63,5 +61,3 @@ nisar_pro/
 ├── Docs/                   → Comprehensive documentation (You are here!)
 └── .github/                → Workflow automation
 ```
-
-Note: `Docs/Archive/` and `Docs/Hireme/` are historical/out-of-band material and are not part of the active documentation index.

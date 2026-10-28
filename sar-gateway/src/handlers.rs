@@ -59,6 +59,7 @@ pub async fn start_job_handler(
         payload.seed_threshold_db,
         payload.growth_threshold_db,
         payload.min_area_pixels,
+        payload.radar_band,
     ).await;
     
     Json(json!({
@@ -181,14 +182,14 @@ pub async fn search_assets_handler(
             state: Some("Odisha".to_string()),
         },
         AssetResult {
-            id: "local-kundra-block".to_string(),
-            name: "Kundra (Kundura)".to_string(),
-            asset_type: "AGRICULTURE".to_string(),
-            lat: 18.9306,
-            lon: 82.3885,
-            display_name: "Kundra Block (Agricultural Delta), Koraput, Odisha, India".to_string(),
+            id: "bihar-ganga-basin".to_string(),
+            name: "Ganga Alluvial Plain (Bihar)".to_string(),
+            asset_type: "FLOOD_PLAIN".to_string(),
+            lat: 25.5000,
+            lon: 86.5000,
+            display_name: "Ganga Alluvial Plain (Begusarai–Khagaria), Bihar, India".to_string(),
             country: "India".to_string(),
-            state: Some("Odisha".to_string()),
+            state: Some("Bihar".to_string()),
         },
         AssetResult {
             id: "local-kolab-res".to_string(),

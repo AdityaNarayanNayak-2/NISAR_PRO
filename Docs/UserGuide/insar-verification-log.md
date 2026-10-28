@@ -91,7 +91,7 @@ To re-run this exact verification test in the future:
 
 Findings recorded against the actual gateway, processor binary, and a NASA/ASF search:
 
-* **Real product sizes (authoritative):** GCOV ≈ 8–10 GB, RSLC ≈ 25–30 GB. Both are read fully into RAM before any crop (`rustyhdf5` has no partial reads), so peak RSS ≈ 4× on-disk for f32 GCOV grids (~30–40 GB) and far more for RSLC. An 8 GB laptop can only run the small bundled test products; a chunked/hyperslab-read fix is planned.
+* **Real product sizes (authoritative):** GCOV ≈ 8–10 GB, RSLC ≈ 25–30 GB. The flood GCOV path now uses the memory-bounded chunk reader in `windowed.rs`, so its peak memory tracks the crop size rather than the whole granule. The InSAR path still reads RSLC/GSLC/GUNW datasets fully before cropping (`rustyhdf5` exposes no hyperslabs), so peak RSS there remains roughly proportional to the product size. An 8 GB laptop can comfortably run crop-sized flood jobs today; full-scene InSAR still needs a larger machine.
 * **Frontend fixes applied this session:**
   * `src/config/api.js` collapses double slashes — fixed the `//results/` double-slash 404 on flood reload.
   * `normalizeJobStatus`/`jobErrorMessage` in `helpers.js` — the gateway serializes a failed job as `{"status": {"failed": "<reason>"}}` (object, not string); the UI now normalizes it everywhere (poller, SSE, details drawer, exports).

@@ -15,10 +15,18 @@ function ReplayViewport({ bounds, phase, baselineUrl, activeUrl, maskUrl, opacit
 
     return (
         <>
-            {phase === 'baseline' && baselineUrl && <ImageOverlay url={baselineUrl} bounds={bounds} opacity={opacity} eventHandlers={{ error: onAssetError }} />}
-            {phase === 'active' && activeUrl && <ImageOverlay url={activeUrl} bounds={bounds} opacity={opacity} eventHandlers={{ error: onAssetError }} />}
-            {phase === 'detected' && activeUrl && <ImageOverlay url={activeUrl} bounds={bounds} opacity={opacity * 0.78} eventHandlers={{ error: onAssetError }} />}
-            {phase === 'detected' && maskUrl && <ImageOverlay url={maskUrl} bounds={bounds} opacity={Math.min(1, opacity + 0.08)} />}
+            {phase === 'baseline' && baselineUrl && (
+                <ImageOverlay url={baselineUrl} bounds={bounds} opacity={opacity} eventHandlers={{ error: onAssetError }} />
+            )}
+            {phase === 'active' && activeUrl && (
+                <ImageOverlay url={activeUrl} bounds={bounds} opacity={opacity} eventHandlers={{ error: onAssetError }} />
+            )}
+            {phase === 'detected' && (
+                <>
+                    {activeUrl && <ImageOverlay url={activeUrl} bounds={bounds} opacity={0.65} eventHandlers={{ error: onAssetError }} />}
+                    {maskUrl && <ImageOverlay url={maskUrl} bounds={bounds} opacity={Math.min(1, opacity + 0.08)} />}
+                </>
+            )}
         </>
     );
 }
@@ -48,6 +56,20 @@ export default function FloodEventReplay({ result, report, bounds, onPhaseChange
         return () => media?.removeEventListener?.('change', update);
     }, []);
 
+    const handleTogglePlay = () => {
+        if (!playing && phaseIndex >= PHASES.length - 1) {
+            setPhaseIndex(0);
+            setPlaying(true);
+        } else {
+            setPlaying(v => !v);
+        }
+    };
+
+    const handleReplay = () => {
+        setPhaseIndex(0);
+        setPlaying(true);
+    };
+
     useEffect(() => {
         if (!playing || reducedMotion) return undefined;
         const timer = window.setInterval(() => {
@@ -58,7 +80,7 @@ export default function FloodEventReplay({ result, report, bounds, onPhaseChange
                 }
                 return current + 1;
             });
-        }, 1500);
+        }, 1800);
         return () => window.clearInterval(timer);
     }, [playing, reducedMotion]);
 
@@ -118,11 +140,11 @@ export default function FloodEventReplay({ result, report, bounds, onPhaseChange
                     ))}
                 </div>
                 <div className="flood-replay-actions">
-                    <button type="button" onClick={() => setPlaying(value => !value)} disabled={reducedMotion} aria-label={playing ? 'Pause replay' : 'Play replay'}>
+                    <button type="button" onClick={handleTogglePlay} disabled={reducedMotion} aria-label={playing ? 'Pause replay' : 'Play replay'}>
                         {playing ? <Pause size={13} /> : <Play size={13} />}
                         {playing ? 'PAUSE' : 'PLAY'}
                     </button>
-                    <button type="button" onClick={() => { setPlaying(false); setPhaseIndex(0); }} aria-label="Replay from baseline">
+                    <button type="button" onClick={handleReplay} aria-label="Replay from baseline">
                         <RotateCcw size={13} /> REPLAY
                     </button>
                 </div>

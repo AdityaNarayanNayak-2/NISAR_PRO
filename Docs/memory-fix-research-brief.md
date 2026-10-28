@@ -1,5 +1,7 @@
 # MEMORY-OPTIMIZATION RESEARCH BRIEF — Processing Real NISAR GCOV Granules on a Notebook (Hackathon: InGARSS 2026, ~1 month)
 
+> **Status note (current code):** the GCOV flood path no longer uses the full-band read-then-crop pattern described below. `sar_science_processor/src/windowed.rs` implements a memory-mapped, chunk-aware windowed reader, and `nisar_parser::parse_nisar_cropped_window` uses it for GCOV. The old path is kept only behind `NISAR_GCOV_LEGACY_FULL_READ`. This document is retained as the historical problem statement and design research; see [Blog 02](./Blog/02-byte-for-byte-or-it-didnt-happen.md) and [Blog 03](./Blog/03-engineering-diary-from-crash-to-0-12-seconds.md) for the implementation story.
+
 **IMPORTANT — YOU ARE A TECHNICAL RESEARCH ASSISTANT.** Read this entire brief, then deeply research the Open Questions section. Validate my claims, correct anything wrong, and return: (1) a verdict on the best implementation path, (2) concrete crate/library choices with version + API names, (3) a step-by-step implementation plan with risk notes, (4) exact memory numbers to expect, (5) a test/verification matrix. Do NOT write code unless asked. Be skeptical of everything — the team has been burned by library assumptions before.
 
 ---
