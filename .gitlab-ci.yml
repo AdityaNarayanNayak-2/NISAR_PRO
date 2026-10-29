@@ -207,8 +207,15 @@ sync_to_github:
   image:
     name: alpine/git:latest
     entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0"
+    GIT_STRATEGY: clone
+    GITHUB_REPOSITORY: "AdityaNarayanNayak-2/NISAR_PRO"
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - git remote add github https://AdityaNarayanNayak-2:${GITHUB_PAT}@github.com/AdityaNarayanNayak-2/NISAR_PRO.git || true
+    - test -n "$GITHUB_PAT" || (echo "GITHUB_PAT is not configured" >&2; exit 1)
+    - git fetch --unshallow 2>/dev/null || true
+    - git remote remove github 2>/dev/null || true
+    - git remote add github "https://x-access-token:${GITHUB_PAT}@github.com/${GITHUB_REPOSITORY}.git"
     - git push github HEAD:main --force
