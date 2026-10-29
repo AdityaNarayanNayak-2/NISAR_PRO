@@ -1,21 +1,21 @@
 {
   "areas": {
-    "new_inundation_high_acres": 10929.571005244565,
-    "new_inundation_high_km2": 44.230399999999996,
+    "new_inundation_high_acres": 10926.408056031645,
+    "new_inundation_high_km2": 44.2176,
     "new_inundation_low_acres": 0.0,
     "new_inundation_low_km2": 0.0,
-    "new_inundation_medium_acres": 49239.21187212987,
-    "new_inundation_medium_km2": 199.26399999999998,
-    "permanent_water_acres": 657199.1689350943,
-    "permanent_water_km2": 2659.5903999999996,
-    "receded_water_acres": 655391.5434599106,
-    "receded_water_km2": 2652.2751999999996,
-    "stable_non_water_acres": 13479828.48907893,
-    "stable_non_water_km2": 54550.9248,
+    "new_inundation_medium_acres": 49220.23417685235,
+    "new_inundation_medium_km2": 199.18719999999996,
+    "permanent_water_acres": 636089.6458880672,
+    "permanent_water_km2": 2574.1632,
+    "receded_water_acres": 654894.9604334822,
+    "receded_water_km2": 2650.2655999999997,
+    "stable_non_water_acres": 13428527.034319974,
+    "stable_non_water_km2": 54343.31519999999,
     "total_area_acres": 28596407.285062775,
     "total_area_km2": 115725.54239999999,
-    "total_flood_acres": 60168.78287737443,
-    "total_flood_km2": 243.49439999999998
+    "total_flood_acres": 60146.64223288399,
+    "total_flood_km2": 243.40479999999997
   },
   "confidence_reasons": [
     "calibrated_log_ratio_change_detection",
@@ -28,7 +28,7 @@
     "center_lon": 86.5,
     "preset": "full"
   },
-  "flood_regions": 642,
+  "flood_regions": 641,
   "georef_bbox": {
     "east": 87.88372482354465,
     "north": 26.27675901256385,
@@ -62,17 +62,17 @@
     "wavelength_m": 0.2419632429378531
   },
   "replay": {
-    "active_preview": "./results/sar-bihar-sep12-oct18-recession_flood_active.png",
+    "active_preview": "results/sar-bihar-sep12-oct18-recession_flood_active.png",
     "available": true,
-    "baseline_preview": "./results/sar-bihar-sep12-oct18-recession_flood_baseline.png",
+    "baseline_preview": "results/sar-bihar-sep12-oct18-recession_flood_baseline.png",
     "columns": 4293,
     "intermediate_observations": false,
-    "mask_preview": "./results/sar-bihar-sep12-oct18-recession_flood.png",
+    "mask_preview": "results/sar-bihar-sep12-oct18-recession_flood.png",
     "observation_model": "two_observations_plus_derived_detection",
     "row_order": "north_to_south",
     "rows": 4212
   },
   "warnings": [
-    "Full-scene swath coverage: 51.9% valid pixels (rotated track within UTM bounding grid)"
+    "Full-scene swath coverage: 51.7% valid pixels (rotated track within UTM bounding grid)"
   ]
 }

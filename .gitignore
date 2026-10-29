@@ -30,6 +30,10 @@ SarScienceFrontendExample/
 # rebuilt by `scripts/nisar_probe.py goldens`, so neither belongs in git.
 Download/
 *.h5
+*.npz
+results/*.npz
+cache_*.npz
+crash_journal.log
 
 # ══════════════════════════════════════════════
 # SECRETS

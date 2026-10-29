@@ -104,6 +104,10 @@ struct Cli {
     /// Minimum connected component area in pixels (default: 8)
     #[arg(long, default_value = "8")]
     min_area_pixels: usize,
+
+    /// Swath boundary erosion in pixels to eliminate edge roll-off artifacts (default: 3)
+    #[arg(long, default_value = "3")]
+    swath_edge_erosion: usize,
 }
 
 /// Parse crop preset string into rectangular half-dimensions (km)
@@ -860,6 +864,9 @@ fn main() -> Result<()> {
             }
             if cli.min_area_pixels != 8 {
                 pipeline_opts.min_area_pixels = cli.min_area_pixels;
+            }
+            if cli.swath_edge_erosion != 3 {
+                pipeline_opts.swath_edge_erosion_pixels = cli.swath_edge_erosion;
             }
 
             let (class_map, _delta_db, report) =

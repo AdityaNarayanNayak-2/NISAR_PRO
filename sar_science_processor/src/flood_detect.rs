@@ -53,6 +53,8 @@ pub struct FloodDetectionOptions {
     pub enable_median_filter: bool,
     /// Number of histogram bins for Otsu threshold computation
     pub otsu_bins: usize,
+    /// Swath boundary erosion in pixels to eliminate edge roll-off artifacts
+    pub swath_edge_erosion_pixels: usize,
     /// Radar band preset to map default values
     pub radar_band: RadarBand,
 }
@@ -69,6 +71,7 @@ impl FloodDetectionOptions {
                 min_area_pixels: 8,
                 enable_median_filter: true,
                 otsu_bins: 256,
+                swath_edge_erosion_pixels: 3,
                 radar_band: RadarBand::LBand,
             },
             RadarBand::SBand => Self {
@@ -79,6 +82,7 @@ impl FloodDetectionOptions {
                 min_area_pixels: 8,
                 enable_median_filter: true,
                 otsu_bins: 256,
+                swath_edge_erosion_pixels: 3,
                 radar_band: RadarBand::SBand,
             },
             RadarBand::CBand => Self {
@@ -89,6 +93,7 @@ impl FloodDetectionOptions {
                 min_area_pixels: 8,
                 enable_median_filter: true,
                 otsu_bins: 256,
+                swath_edge_erosion_pixels: 3,
                 radar_band: RadarBand::CBand,
             },
             RadarBand::XBand => Self {
@@ -99,6 +104,7 @@ impl FloodDetectionOptions {
                 min_area_pixels: 12,
                 enable_median_filter: true,
                 otsu_bins: 256,
+                swath_edge_erosion_pixels: 3,
                 radar_band: RadarBand::XBand,
             },
         }
@@ -416,6 +422,44 @@ pub fn region_grow(
     grown
 }
 
+/// Erode valid_mask by `iterations` pixels inward from the boundary of any invalid / nodata pixel.
+/// This eliminates swath-edge radiometric roll-off and feathering artifacts where RTC interpolation
+/// drops into the water detection range right before terminating at nodata.
+pub fn erode_swath_boundary(valid_mask: &Array2<bool>, iterations: usize) -> Array2<bool> {
+    if iterations == 0 {
+        return valid_mask.clone();
+    }
+    let (rows, cols) = valid_mask.dim();
+    let neighbors: [(isize, isize); 8] = [
+        (-1, -1), (-1, 0), (-1, 1),
+        (0, -1),           (0, 1),
+        (1, -1),  (1, 0),  (1, 1),
+    ];
+
+    let mut current = valid_mask.clone();
+    for _ in 0..iterations {
+        let mut next = current.clone();
+        for r in 0..rows {
+            for c in 0..cols {
+                if current[[r, c]] {
+                    for &(dr, dc) in &neighbors {
+                        let nr = r as isize + dr;
+                        let nc = c as isize + dc;
+                        if nr >= 0 && nr < rows as isize && nc >= 0 && nc < cols as isize {
+                            if !current[[nr as usize, nc as usize]] {
+                                next[[r, c]] = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        current = next;
+    }
+    current
+}
+
 /// Stage 6b: Morphological opening/closing and connected component size filtering
 pub fn morphological_cleanup(flood_mask: &mut Array2<bool>, min_area_pixels: usize) -> usize {
     let (rows, cols) = flood_mask.dim();
@@ -594,6 +638,15 @@ pub fn run_flood_detection_pipeline(
     if let Some(base_db) = &baseline_db_conv {
         valid_mask = &valid_mask & &base_db.mapv(|v| v.is_finite());
     }
+
+    if opts.swath_edge_erosion_pixels > 0 {
+        info!(
+            "[FLOOD_PIPELINE] Eroding swath boundary by {} pixels to eliminate RTC edge roll-off...",
+            opts.swath_edge_erosion_pixels
+        );
+        valid_mask = erode_swath_boundary(&valid_mask, opts.swath_edge_erosion_pixels);
+    }
+
     let valid_pixels = valid_mask.iter().filter(|&&v| v).count();
     info!(
         "[FLOOD_PIPELINE] Nodata mask: {} / {} pixels valid ({:.1}%)",
@@ -628,12 +681,17 @@ pub fn run_flood_detection_pipeline(
     };
 
     info!("[FLOOD_PIPELINE] Stage 5: Identifying permanent water...");
-    let perm_water_mask = build_permanent_water_mask(
+    let mut perm_water_mask = build_permanent_water_mask(
         &active_db_filtered,
         &baseline_db,
         opts.permanent_water_thresh_db,
         external_mask,
     );
+    for (is_perm, &valid) in perm_water_mask.iter_mut().zip(valid_mask.iter()) {
+        if !valid {
+            *is_perm = false;
+        }
+    }
 
     // Permanent water is a stable, seasonally-persistent radar target whose
     // delta clusters around 0 dB with roughness-driven variance. Leaving those
@@ -680,6 +738,15 @@ pub fn run_flood_detection_pipeline(
         coherence,
         seed_thresh,
     );
+
+    // Strictly ensure no out-of-swath or boundary-eroded pixel is classified
+    for r in 0..rows {
+        for c in 0..cols {
+            if !valid_mask[[r, c]] {
+                class_map[[r, c]] = 0;
+            }
+        }
+    }
 
     let mut perm_count = 0;
     let mut high_count = 0;
@@ -791,7 +858,8 @@ mod tests {
         active[[8, 8]] = Complex32::new(0.0, 0.0);
         active[[9, 9]] = Complex32::new(f32::NAN, 0.0);
 
-        let opts = FloodDetectionOptions::for_band(RadarBand::LBand);
+        let mut opts = FloodDetectionOptions::for_band(RadarBand::LBand);
+        opts.swath_edge_erosion_pixels = 0;
         let (class_map, _delta, summary) =
             run_flood_detection_pipeline(&active, Some(&baseline), None, None, &opts);
 
@@ -1086,4 +1154,22 @@ mod tests {
         assert_eq!(summary.stable_non_water_pixels, (rows * cols) - 64);
         assert_eq!(class_map[[0, 0]], 0, "dry land at both dates must be class 0");
     }
+
+    #[test]
+    fn test_swath_edge_erosion() {
+        let mut mask = Array2::<bool>::from_elem((10, 10), true);
+        // Column 9 is nodata (swath edge)
+        for r in 0..10 {
+            mask[[r, 9]] = false;
+        }
+
+        let eroded = erode_swath_boundary(&mask, 2);
+        for r in 0..10 {
+            assert_eq!(eroded[[r, 9]], false, "original nodata remains false");
+            assert_eq!(eroded[[r, 8]], false, "1st pixel layer eroded");
+            assert_eq!(eroded[[r, 7]], false, "2nd pixel layer eroded");
+            assert_eq!(eroded[[r, 6]], true, "interior remains valid");
+        }
+    }
 }
+
