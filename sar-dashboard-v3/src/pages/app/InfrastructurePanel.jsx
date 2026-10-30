@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FolderOpen, Upload } from 'lucide-react';
+import { Activity, FolderOpen, Upload } from 'lucide-react';
 import { MONO, SANS, C, INFRA_LAYOUT } from './constants';
 import { sevColor, formatElapsed } from './helpers';
 import { api } from '../../config/api';
@@ -582,7 +582,7 @@ export default function InfrastructurePanel({
                                     marginBottom: '14px'
                                 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                                        <span style={{ fontSize: '11px', color: '#c8a96e' }}>📈</span>
+                                        <Activity size={12} color="#c8a96e" aria-hidden="true" />
                                         <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#555560' }}>STRUCTURAL DISPLACEMENT</span>
                                     </div>
 
@@ -644,7 +644,7 @@ export default function InfrastructurePanel({
                                     marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '8px'
                                 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ fontSize: '11px', color: '#3a3a44' }}>📈</span>
+                                        <Activity size={12} color="#3a3a44" aria-hidden="true" />
                                         <span style={{ fontFamily: MONO, fontSize: '9px', fontWeight: 600, letterSpacing: '0.1em', color: '#3a3a44' }}>STRUCTURAL DISPLACEMENT</span>
                                     </div>
                                     <div style={{ fontFamily: MONO, fontSize: '10px', color: '#555560', marginTop: '4px' }}>

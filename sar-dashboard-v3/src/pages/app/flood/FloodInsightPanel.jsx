@@ -8,13 +8,24 @@ import { Activity, Radio, Cpu, Download, FileText, ArrowLeft, ArrowUpRight, Chev
 export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedRegion, onSelectRegion, elapsed, onClose, onExportGeoJson, onViewReport }) {
     const [sections, setSections] = useState({
         impact: true,
-        acquisition: true,
-        methodology: true,
-        actions: true
+        acquisition: false,
+        methodology: false,
+        actions: false
     });
+    const [activeTab, setActiveTab] = useState('impact');
 
     const toggleSection = (sec) => {
         setSections(prev => ({ ...prev, [sec]: !prev[sec] }));
+    };
+
+    const selectTab = (tab) => {
+        setActiveTab(tab);
+        setSections({
+            impact: tab === 'impact' || tab === 'evidence',
+            acquisition: tab === 'method',
+            methodology: tab === 'method',
+            actions: tab === 'exports'
+        });
     };
 
     const handleSectionKeyDown = (event, section) => {
@@ -41,6 +52,11 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
     const medPct = totalWater > 0 ? (p.medConfAcres / totalWater) * 100 : 0;
     const recededPct = totalWater > 0 ? (receded / totalWater) * 100 : 0;
     const permPct = totalWater > 0 ? (p.permWaterAcres / totalWater) * 100 : 0;
+    const physicalGates = floodReport.full_scene_comparison?.physical_gates || floodReport.physical_gates || {};
+    const sandbarKm2 = physicalGates.l_band_water_misclassifications_corrected_km2 ?? physicalGates.sandbar_false_positives?.km2;
+    const canopyKm2 = physicalGates.canopy_recovery_km2 ?? physicalGates.sub_canopy_recovery?.km2;
+    const riffleKm2 = physicalGates.wind_riffle_recovery_km2 ?? physicalGates.wind_riffle_recovery?.km2;
+    const formatArea = value => value == null ? 'Not in this report' : `${Number(value).toFixed(2)} km² · ${(Number(value) * 247.105381).toFixed(1)} acres`;
 
     const handleExportReportJson = () => {
         const blob = new Blob([JSON.stringify(floodReport, null, 2)], { type: 'application/json' });
@@ -74,7 +90,7 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
     };
 
     const renderMethodologyRow = (label, value, isHighlight = false) => (
-        <div style={{
+        <div className="flood-methodology-row" style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -94,7 +110,7 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
     );
 
     return (
-        <div style={{
+        <div className="flood-result-inspector" style={{
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
@@ -182,6 +198,11 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
             </div>
 
             {/* ── SCROLLABLE CONTENT ── */}
+            <div className="scientist-inspector-tabs" role="tablist" aria-label="Flood analysis workspace">
+                {[['impact', 'Impact'], ['evidence', 'Evidence'], ['method', 'Method'], ['exports', 'Exports']].map(([tab, label]) => (
+                    <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'is-active' : ''} onClick={() => selectTab(tab)}>{label}</button>
+                ))}
+            </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px 16px' }}>
 
                 {/* SECTION 1: FLOOD IMPACT */}
@@ -486,6 +507,17 @@ export default function FloodInsightPanel({ floodReport, floodGeoJson, selectedR
                         </motion.div>
                     )}
                 </AnimatePresence>
+
+                {/* PHYSICAL GATES */}
+                {activeTab === 'evidence' && (sandbarKm2 != null || canopyKm2 != null || riffleKm2 != null) && (
+                    <section className="flood-physical-gates" aria-labelledby="physical-gates-title" style={{ marginTop: '18px', padding: '14px', border: '1px solid rgba(255,255,255,.09)', borderRadius: '16px', background: 'rgba(43, 29, 24, .34)' }}>
+                        <div id="physical-gates-title" style={{ fontFamily: SANS, fontSize: '12px', color: C.text, fontWeight: 600, marginBottom: '4px' }}>Physical decision gates</div>
+                        <div style={{ fontFamily: SANS, fontSize: '10px', color: C.textDim, lineHeight: 1.45, marginBottom: '10px' }}>Report-backed corrections. Spatial overlays appear only when the processor exports those artifacts.</div>
+                        <div style={{ display: 'grid', gap: '7px' }}>
+                            {[[sandbarKm2, 'Sandbar rejection', 'S-band roughness gate'], [canopyKm2, 'Canopy recovery', 'L-band penetration gate'], [riffleKm2, 'Wind-riffle recovery', 'Cross-pol gate']].filter(([value]) => value != null).map(([value, label, note]) => <div key={label} style={{ padding: '9px 10px', borderLeft: '2px solid #f59e0b', background: 'rgba(255,255,255,.035)', borderRadius: '8px' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontFamily: SANS, fontSize: '10px', color: C.text }}><span>{label}</span><strong style={{ fontFamily: MONO, fontSize: '10px', color: '#fbbf24' }}>{formatArea(value)}</strong></div><div style={{ marginTop: '4px', fontFamily: SANS, fontSize: '9px', color: C.textDim }}>✦ {note} · verified in report summary</div></div>)}
+                        </div>
+                    </section>
+                )}
 
                 {/* SECTION 4: DATA & REPORTS */}
                 <div role="button" tabIndex={0} aria-expanded={sections.actions} style={sectionHeaderStyle} onClick={() => toggleSection('actions')} onKeyDown={(event) => handleSectionKeyDown(event, 'actions')} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.textDim}>

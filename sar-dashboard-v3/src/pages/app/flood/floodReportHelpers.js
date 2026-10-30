@@ -20,23 +20,11 @@ export function parseNisarDate(filename) {
 
 // Map coordinates to location names
 export function getGeoLocation(lat, lon) {
-    if (!lat || !lon) return 'Unknown Area';
+    if (!lat || !lon) return 'Selected scene';
     const lLat = parseFloat(lat);
     const lLon = parseFloat(lon);
-    
-    // Check known geographic assets in Koraput / Odisha
-    if (Math.abs(lLat - 18.7883) < 0.08 && Math.abs(lLon - 82.6003) < 0.08) {
-        return 'Upper Kolab Reservoir, Odisha, India';
-    }
-    if (Math.abs(lLat - 18.9306) < 0.08 && Math.abs(lLon - 82.3885) < 0.08) {
-        return 'Kundra Block, Koraput, Odisha, India';
-    }
-    if (Math.abs(lLat - 27.2055) < 0.25 && Math.abs(lLon - 94.8948) < 0.25) {
-        return 'Brahmaputra Valley (Dibrugarh–Dhemaji Sector), Assam, India';
-    }
-    if (Math.abs(lLat - 25.5000) < 0.60 && Math.abs(lLon - 86.5000) < 0.60) {
-        return 'Ganga Alluvial Plain (Begusarai–Khagaria), Bihar, India';
-    }
+    // Location names come from report metadata or explicit user presets. Do not
+    // infer a named site from coordinates in a generic report helper.
     return `${lLat.toFixed(4)}° N, ${lLon.toFixed(4)}° E`;
 }
 

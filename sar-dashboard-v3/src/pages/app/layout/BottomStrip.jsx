@@ -14,7 +14,7 @@ export default function BottomStrip({ activeView = 'map' }) {
     }
 
     return (
-        <div style={{
+        <div className="nisar-bottom-strip" style={{
             position: 'absolute',
             bottom: terminalOpen && activeJobId ? '240px' : 0,
             left: `${TM.side}px`,

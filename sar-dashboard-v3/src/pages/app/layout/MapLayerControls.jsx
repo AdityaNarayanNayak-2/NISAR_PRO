@@ -35,7 +35,7 @@ export default function MapLayerControls({ profile = 'flood', activeView = 'map'
     ];
 
     return (
-        <div style={{
+        <div className="nisar-layer-controls" style={{
             position: 'absolute',
             top: '54px',
             left: `calc(${TM.side}px + 12px)`,

@@ -35,9 +35,25 @@ impl NasaClient {
                 "https://api.daac.asf.alaska.edu/services/search/param?platform=NISAR&output=geojson&intersectsWith={}&maxResults=50",
                 encoded_wkt
             );
-            let level = query.processing_level.as_deref().unwrap_or("GCOV,RSLC,GSLC,GUNW");
+            // Flood processing consumes L2 GCOV only. The old default requested
+            // four product families, which made the catalog UI return RSLC and
+            // other large products alongside the required GCOV granules.
+            let level = query.processing_level.as_deref().unwrap_or("GCOV");
             if !level.trim().is_empty() {
                 base.push_str(&format!("&processingLevel={}", urlencoding::encode(level)));
+            }
+            if let Some(orbit) = &query.relative_orbit {
+                if !orbit.trim().is_empty() {
+                    base.push_str(&format!("&relativeOrbit={}", urlencoding::encode(orbit.trim())));
+                }
+            }
+            if let Some(frame) = &query.asfframe {
+                if !frame.trim().is_empty() {
+                    base.push_str(&format!("&asfframe={}", urlencoding::encode(frame.trim())));
+                }
+            }
+            if let Some(joint) = query.joint_observation {
+                base.push_str(&format!("&jointObservation={}", joint));
             }
             base
         };
@@ -63,7 +79,19 @@ impl NasaClient {
         log::info!("Querying NASA ASF: {}", url);
 
         let res = self.client.get(&url).send().await?.json::<Value>().await?;
-        let scenes = Self::parse_asf_geojson(&res, &platform_query);
+        let mut scenes = Self::parse_asf_geojson(&res, &platform_query);
+
+        // ASF occasionally returns auxiliary records or product variants in a
+        // broad query. Keep the gateway contract safe for the flood workflow:
+        // an NISAR GCOV search must never offer a non-GCOV HDF5 file.
+        if platform_query.eq_ignore_ascii_case("NISAR") {
+            let requested_level = query.processing_level.as_deref().unwrap_or("GCOV");
+            if requested_level.eq_ignore_ascii_case("GCOV") {
+                scenes.retain(|scene| scene.id.contains("_GCOV_") && scene.download_url.ends_with(".h5"));
+            }
+        }
+        scenes.sort_by(|a, b| b.date.cmp(&a.date));
+        scenes.dedup_by(|a, b| a.id == b.id);
 
         Ok(scenes)
     }
@@ -118,6 +146,7 @@ impl NasaClient {
 
                     let download_url = props
                         .get("url")
+                        .or_else(|| props.get("downloadUrl"))
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
@@ -240,12 +269,35 @@ mod tests {
             end_date: None,
             platform: None,
             processing_level: None,
+            relative_orbit: None,
+            asfframe: None,
+            joint_observation: None,
         };
         let url = NasaClient::build_search_url(&query);
         assert!(url.contains("platform=NISAR"));
-        assert!(url.contains("processingLevel=GCOV%2CRSLC%2CGSLC%2CGUNW"));
+        assert!(url.contains("processingLevel=GCOV"));
         assert!(url.contains("maxResults=50"));
         assert!(url.contains("intersectsWith=POLYGON"));
+    }
+
+    #[test]
+    fn test_build_search_url_supports_bihar_reference_stack_filters() {
+        let query = NisarSearchQuery {
+            bbox: "86.3946,25.4098,86.6054,25.5902".to_string(),
+            start_date: Some("2026-07-01T00:00:00Z".to_string()),
+            end_date: Some("2026-10-30T23:59:59Z".to_string()),
+            platform: None,
+            processing_level: None,
+            relative_orbit: Some("98".to_string()),
+            asfframe: Some("14".to_string()),
+            joint_observation: None,
+        };
+        let url = NasaClient::build_search_url(&query);
+        assert!(url.contains("processingLevel=GCOV"));
+        assert!(url.contains("relativeOrbit=98"));
+        assert!(url.contains("asfframe=14"));
+        assert!(url.contains("start=2026-07-01T00%3A00%3A00Z"));
+        assert!(url.contains("end=2026-10-30T23%3A59%3A59Z"));
     }
 
     #[test]

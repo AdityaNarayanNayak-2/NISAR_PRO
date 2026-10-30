@@ -22,7 +22,7 @@ export default function CoordinatesHud({ profile, activeView, metadata }) {
     const leftOffset = profile === 'infrastructure' ? '248px' : profile === 'flood' ? `${TM.side + 8}px` : '16px';
 
     return (
-        <div style={{
+        <div className="nisar-coordinates-hud" style={{
             position: 'absolute',
             bottom: bottomOffset,
             left: leftOffset,

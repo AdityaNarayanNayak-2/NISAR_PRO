@@ -154,6 +154,19 @@ These facts were confirmed against the actual gateway, processor, and a NASA/ASF
 - **Only the Flood (`science`) profile runs out of the box.** The standard `sar_processor` binary is not built on a fresh clone, so `Infrastructure`/`Standard RDA` jobs fail with `SPAWN_FAILED` until you build it (see Terminal 1 above). The flood pipeline uses `sar_science_processor` and works with just that one build.
 - **Real product sizes vs. RAM.** GCOV files are **8–10 GB** and RSLC files are **25–30 GB**. The flood GCOV path now reads only the HDF5 chunks under the crop (`windowed.rs`), so RAM tracks the AOI size, not the granule size. The InSAR path still applies its crop *after* a full dataset read in several places, so that mode needs memory proportional to the product; an 8 GB laptop is fine for crop-sized flood runs but not full-scene InSAR.
 - **NASA/ASF search needs no login.** `GET /search/nisar` searches anonymously; only the *download* step requires Earthdata credentials (`EARTHDATA_USERNAME`/`EARTHDATA_PASSWORD` or a token in `sar-gateway/.env`). `GET /asf/auth-status` reports whether auth is configured. ESA `GET /search` requires `ESA_USERNAME`/`ESA_PASSWORD` even to search.
+
+The NISAR search defaults to L2 GCOV only, which prevents the flood workflow
+from accidentally selecting a much larger RSLC product. For the Bihar
+reference stack, ASF supports the exact Track 098 / Frame 014 filters:
+
+```text
+http://127.0.0.1:3000/search/nisar?bbox=86.3946,25.4098,86.6054,25.5902&processing_level=GCOV&relative_orbit=98&asfframe=14&start_date=2026-07-01T00:00:00Z&end_date=2026-10-30T23:59:59Z
+```
+
+Granules are typically several GB each. Downloads are written under
+`sar-gateway/data/` through a temporary `.part` file and renamed only after a
+complete transfer, so interrupted downloads can be retried safely. Never
+commit Earthdata tokens.
 - **Job status serialization:** a failed job comes back as `{"status": {"failed": "<reason>"}}` (an object, not a string). The dashboard normalizes this; any new API client must do the same.
 - **Cancelling a job** via `POST /jobs/:id/cancel` kills the child process and emits `[SYSTEM] PROCESS_CANCELLED` in the SSE stream (timeouts emit `PROCESS_TIMEOUT`).
 - **Flood artifacts** land in `results/` as `<id>_flood.png`, `<id>_flood.json`, `<id>_flood.geo.json`, `<id>_flood_baseline.png`, `<id>_flood_active.png`, and `<id>_flood_class.tif`, served at `/results/*`. The gateway advertises the four named paths in `GET /jobs/:id`; the `.tif` is written by the processor but not advertised in the job response.

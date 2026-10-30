@@ -94,8 +94,8 @@ export default function AnalysisReportModal({ floodReport, onClose }) {
     };
 
     return (
-        <div style={modalOverlayStyle} onClick={onClose}>
-            <div style={modalContainerStyle} onClick={e => e.stopPropagation()}>
+        <div className="nisar-report-modal" style={modalOverlayStyle} onClick={onClose}>
+            <div className="nisar-report-modal-card" style={modalContainerStyle} onClick={e => e.stopPropagation()}>
                 {/* Modal Header */}
                 <div style={headerStyle}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

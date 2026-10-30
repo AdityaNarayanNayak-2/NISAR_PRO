@@ -108,6 +108,10 @@ struct Cli {
     /// Swath boundary erosion in pixels to eliminate edge roll-off artifacts (default: 3)
     #[arg(long, default_value = "3")]
     swath_edge_erosion: usize,
+
+    /// Permanent-water floor in dB; omitted uses the calibrated radar-band default
+    #[arg(long, allow_hyphen_values = true)]
+    permanent_water_thresh_db: Option<f32>,
 }
 
 /// Parse crop preset string into rectangular half-dimensions (km)
@@ -867,6 +871,9 @@ fn main() -> Result<()> {
             }
             if cli.swath_edge_erosion != 3 {
                 pipeline_opts.swath_edge_erosion_pixels = cli.swath_edge_erosion;
+            }
+            if let Some(threshold) = cli.permanent_water_thresh_db {
+                pipeline_opts.permanent_water_thresh_db = threshold;
             }
 
             let (class_map, _delta_db, report) =

@@ -10,6 +10,40 @@
   background: var(--landing-paper);
 }
 
+/* Flagship evidence direction: quiet slate, one cyan signal, and a real figure
+   carrying the story. The rest of the page can retain its editorial rhythm. */
+.landing-hero-flagship {
+  color: #e7edf2;
+  background: #071018;
+  --landing-paper: #071018;
+  --landing-ink: #e7edf2;
+  --landing-muted: #a8b6bd;
+  --landing-line: rgba(221, 235, 238, .14);
+  --landing-teal: #53c6cc;
+}
+.landing-hero-flagship .landing-hero-inner { padding-top: 150px; }
+.landing-hero-flagship .landing-hero-copy > p { color: #a8b6bd; }
+.landing-hero-flagship .landing-primary { color: #071018; background: #b9eef0; }
+.landing-hero-flagship .landing-primary:hover, .landing-hero-flagship .landing-primary:focus-visible { color: #071018; background: #76dfe2; }
+.landing-hero-flagship .landing-secondary { color: #dbe7e9; border-color: rgba(221,235,238,.25); }
+.landing-hero-flagship .landing-secondary:hover, .landing-hero-flagship .landing-secondary:focus-visible { color: #76dfe2; border-color: #76dfe2; }
+.landing-hero-flagship .landing-earth-stage { background: #0a1720; border: 1px solid rgba(139, 213, 218, .14); box-shadow: 0 30px 80px rgba(0,0,0,.34); }
+.landing-hero-flagship .landing-event-window { background: rgba(9, 19, 27, .92); border: 1px solid rgba(139, 213, 218, .18); box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+.landing-hero-flagship .landing-event-poster { display: block; width: 100%; aspect-ratio: 1.55; object-fit: cover; background: #0d1820; }
+.landing-hero-flagship .landing-event-window-top, .landing-hero-flagship .landing-event-window figcaption { color: #9cb9bf; }
+.landing-hero-flagship .landing-event-window figcaption strong { color: #b9eef0; }
+.landing-hero-flagship .landing-hero-strip { color: #8da7ad; border-color: rgba(221,235,238,.14); }
+.landing-hero-flagship .landing-hero-kicker { font-size: 0; }
+.landing-hero-flagship .landing-hero-kicker::after { content: 'OPEN SAR ANALYSIS WORKSPACE  ·  NISAR L2 GCOV'; font-size: 10px; }
+.landing-hero-flagship .landing-earth-label { font-size: 0; }
+.landing-hero-flagship .landing-earth-label::after { content: 'GLOBAL CONTEXT  ·  NISAR OBSERVATION'; font-size: 9px; }
+.landing-hero-flagship .landing-event-window-top span:first-child { font-size: 0; }
+.landing-hero-flagship .landing-event-window-top span:first-child::after { content: 'FUSED OBSERVATION / REAL OUTPUT'; font-size: 9px; }
+
+@media (max-width: 900px) {
+  .landing-hero-flagship .landing-hero-inner { padding-top: 120px; }
+}
+
 .landing-hero { min-height: 100vh; overflow: hidden; background: var(--landing-paper); }
 .landing-hero-inner { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(560px, 1.28fr); align-items: center; gap: clamp(36px, 6vw, 110px); width: min(1420px, calc(100% - 72px)); min-height: 100vh; margin: 0 auto; padding: 132px 0 72px; }
 .landing-hero-copy { position: relative; z-index: 2; max-width: 600px; }
@@ -172,16 +206,17 @@
 }
 
 @media (max-width: 680px) {
+  .landing-page { overflow-x: hidden; }
   .landing-hero-inner, .landing-section-inner { width: calc(100% - 32px); }
-  .landing-hero-inner { padding: 122px 0 48px; }
-  .landing-hero-copy { width: 100%; }
+  .landing-hero-inner { grid-template-columns: minmax(0, 1fr); padding: 122px 0 48px; min-width: 0; }
+  .landing-hero-copy, .landing-hero-visual { width: 100%; min-width: 0; max-width: 100%; }
   .landing-hero h1 { max-width: 100%; font-size: clamp(2.7rem, 12.4vw, 4.5rem); letter-spacing: -.08em; }
   .landing-mobile-break { display: inline; }
-  .landing-hero-copy > p { margin-top: 24px; font-size: 1rem; }
+  .landing-hero-copy > p { width: 100%; max-width: 100%; margin-top: 24px; font-size: 1rem; white-space: normal; text-wrap: wrap !important; overflow-wrap: anywhere; }
   .landing-hero-note { margin-top: 48px; }
   .landing-hero-visual { min-height: 500px; }
   .landing-earth-stage { width: 100%; height: 68%; }
-  .landing-event-window { right: -3%; width: 91%; }
+  .landing-event-window { right: 0; width: 100%; max-width: 100%; }
   .landing-earth-label { left: 15px; font-size: 8px; }
   .landing-earth-marker { left: 46%; }
   .landing-section-inner { padding: 88px 0; }

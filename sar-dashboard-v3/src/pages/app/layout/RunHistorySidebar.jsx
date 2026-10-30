@@ -67,6 +67,7 @@ export default function RunHistorySidebar({ profile = 'flood', activeView = 'map
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="flood-run-history"
             style={{
                 position: 'relative',
                 width: '100%',
@@ -183,6 +184,7 @@ export default function RunHistorySidebar({ profile = 'flood', activeView = 'map
                                         onClick={() => handleJobClick(job)}
                                         onMouseEnter={() => setHoveredId(job.id)}
                                         onMouseLeave={() => setHoveredId(null)}
+                                        className="flood-run-card"
                                         style={{
                                             display: 'flex',
                                             alignItems: 'center',

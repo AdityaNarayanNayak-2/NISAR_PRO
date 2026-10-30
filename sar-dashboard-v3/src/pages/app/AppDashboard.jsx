@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, ImageOverlay, GeoJSON, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { api } from '../../config/api';
-import { Terminal, Play, ChevronDown, CheckCircle, AlertTriangle, Loader, Search, FolderOpen, Satellite, Eye, Download, ArrowLeft, MapPin, Calendar, Layers, X, Anchor, Crosshair, Waves, Palette, WifiOff, Clock, Info, Ship, FileText } from 'lucide-react';
+import { Terminal, Play, ChevronDown, CheckCircle, AlertTriangle, Loader, Search, FolderOpen, Eye, Download, ArrowLeft, MapPin, Calendar, Layers, X, Anchor, Crosshair, Waves, Palette, WifiOff, Clock, Info, Ship, FileText } from 'lucide-react';
 
 import { MONO, SANS, C, PROFILES, TM, INFRA_LAYOUT } from './constants';
 import { parseNisarFilename, normalizeJobStatus, jobErrorMessage } from './helpers';
@@ -165,6 +165,26 @@ function AppDashboard() {
     const [selectedScene, setSelectedScene] = useState(null);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [catalogTrack, setCatalogTrack] = useState('');
+    const [catalogFrame, setCatalogFrame] = useState('');
+    const uploadLocalFile = async (file, setPath) => {
+        if (!file || !setPath) return;
+        if (!gatewayOnline) {
+            showError('Gateway is offline. Start the local gateway before choosing a file.');
+            return;
+        }
+        try {
+            const form = new FormData();
+            form.append('file', file, file.name);
+            const response = await fetch(api('/upload'), { method: 'POST', body: form });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.path) throw new Error(payload.error || `Upload failed (${response.status})`);
+            setPath(payload.path);
+        } catch (error) {
+            console.error('Local file upload failed:', error);
+            showError(error.message || 'Could not upload the selected file to the gateway.');
+        }
+    };
     const [isSearching, setIsSearching] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
     const terminalRef = useRef(null);
@@ -179,13 +199,18 @@ function AppDashboard() {
     const paramProfile = urlParams.get('profile');
 
     const savedProfile = typeof localStorage !== 'undefined' ? localStorage.getItem('nisarpro_active_profile') : null;
-    const initialProfile = paramProfile || savedProfile || (paramJobId ? 'flood' : 'infrastructure');
-    const initialMissionSelected = Boolean(paramJobId || paramReport || savedProfile || (typeof localStorage !== 'undefined' && localStorage.getItem('nisarpro_active_flood_result')));
+    const requestedProfile = paramProfile || savedProfile;
+    const initialProfile = requestedProfile === 'flood' || paramJobId ? 'flood' : 'infrastructure';
+    // A saved profile should not silently open an old analysis. Explicit URL
+    // deep-links may open a result; otherwise the user chooses a demo or run.
+    const initialMissionSelected = Boolean(paramJobId || paramReport);
 
     // ── Profile State ──
     const [missionSelected, setMissionSelected] = useState(initialMissionSelected);
+    const [demoDialogOpen, setDemoDialogOpen] = useState(false);
     const [profile, setProfileState] = useState(initialProfile);
     const setProfile = useCallback((newProfile) => {
+        if (newProfile !== 'flood' && newProfile !== 'infrastructure') return;
         setProfileState(newProfile);
         if (newProfile === 'infrastructure') {
             setDataMode('local');
@@ -211,7 +236,7 @@ function AppDashboard() {
     const [assetSearchOpen, setAssetSearchOpen] = useState(false);
     const [assetState, setAssetState] = useState('');
 
-    // ── SAR Science InSAR crop state ──
+    // ── Shared crop state for the supported profiles ──
     const [cropLat, setCropLat] = useState('18.7883');
     const [cropLon, setCropLon] = useState('82.6003');
     const [cropPreset, setCropPreset] = useState('5x5km');
@@ -222,6 +247,13 @@ function AppDashboard() {
     const [seedThresholdDb, setSeedThresholdDb] = useState(-5.0);
     const [growthThresholdDb, setGrowthThresholdDb] = useState(-2.5);
     const [minAreaPixels, setMinAreaPixels] = useState(8);
+    const [radarBand, setRadarBand] = useState('l');
+    const [permanentWaterThreshold, setPermanentWaterThreshold] = useState(-13.0);
+    const [swathEdgeErosion, setSwathEdgeErosion] = useState(3);
+    const [recededWaterThreshold, setRecededWaterThreshold] = useState(3.0);
+    const [speckleFilter, setSpeckleFilter] = useState('median-3');
+    const [multilookFactor, setMultilookFactor] = useState(8);
+    const [polarization, setPolarization] = useState('HHHH');
 
     // ── Flood Workspace Multi-view States ──
     const [activeView, setActiveView] = useState(paramView || 'map');
@@ -297,7 +329,7 @@ function AppDashboard() {
         if (profile !== 'flood') return;
         setSelectedRegion(null);
         let cancelled = false;
-        setJobsSyncing(true);
+        const syncStart = window.setTimeout(() => setJobsSyncing(true), 0);
         fetch(api('/jobs'))
             .then(r => r.ok ? r.json() : [])
             .then(async (allJobs) => {
@@ -339,10 +371,10 @@ function AppDashboard() {
                 if (Object.keys(loadedJobs).length > 0) {
                     setJobs(prev => ({ ...prev, ...loadedJobs }));
 
-                    // Determine which job to display: URL param > current persisted result > most recent
-                    const targetId = paramJobId || useMapStore.getState().viewingResult?.id;
-                    const targetJob = (targetId && loadedJobs[targetId]) || Object.values(loadedJobs)[0];
-                    if (targetJob && (!useMapStore.getState().viewingResult || targetJob.id === paramJobId)) {
+                    // History is loaded into the sidebar, but never selected
+                    // automatically. Only an explicit URL job_id may open a result.
+                    const targetJob = paramJobId ? loadedJobs[paramJobId] : null;
+                    if (targetJob) {
                         ensureFloodGeoJson(targetJob.floodGeoJsonPath).then(geoJson => {
                             if (cancelled) return;
                             setViewingResult({
@@ -363,7 +395,7 @@ function AppDashboard() {
             })
             .catch(console.error)
             .finally(() => { if (!cancelled) setJobsSyncing(false); });
-        return () => { cancelled = true; };
+        return () => { cancelled = true; window.clearTimeout(syncStart); };
     }, [profile, paramJobId, ensureFloodGeoJson, setFlyToCenter, setJobs, setSelectedRegion, setViewingResult]);
 
     // Center map to bounds of newly active results
@@ -405,7 +437,7 @@ function AppDashboard() {
     // const formatElapsed = (secs) => { if (!secs) return '0s'; const m = Math.floor(secs / 60); const s = secs % 60; return m > 0 ? `${m}m ${s}s` : `${s}s`; };
     const getInputFile = () => { if (dataMode === 'catalog' && selectedScene) return selectedScene.download_url; if (dataMode === 'local' && localFilePath) return localFilePath; return null; };
     const getInputLabel = () => { if (dataMode === 'catalog' && selectedScene) return selectedScene.id; if (dataMode === 'local' && localFilePath) return localFilePath.split('/').pop(); return null; };
-    const showError = useCallback((msg) => { setErrorToast(msg); setTimeout(() => setErrorToast(null), 5000); }, []);
+    const showError = useCallback((msg) => { setErrorToast(msg); setTimeout(() => setErrorToast(null), 5000); }, [setErrorToast]);
 
     // ── Catalog Search (PRESERVED) ──
     const handleSearch = async () => {
@@ -419,6 +451,8 @@ function AppDashboard() {
             let searchUrl = `/search/nisar?bbox=${bbox}`;
             if (startDate) searchUrl += `&start_date=${startDate}T00:00:00Z`;
             if (endDate) searchUrl += `&end_date=${endDate}T23:59:59Z`;
+            if (catalogTrack.trim()) searchUrl += `&relative_orbit=${encodeURIComponent(catalogTrack.trim())}`;
+            if (catalogFrame.trim()) searchUrl += `&asfframe=${encodeURIComponent(catalogFrame.trim())}`;
             const res = await fetch(api(searchUrl));
             const data = await res.json();
             const scenes = Array.isArray(data) ? data : [];
@@ -502,7 +536,7 @@ function AppDashboard() {
         const inputFile = getInputFile();
         if (!inputFile) return;
         if (!gatewayOnline) { showError('Gateway is offline. Start it with: LOCAL_MODE=true RUST_LOG=info cargo run --release'); return; }
-        const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'flood' ? 'flood' : 'standard_rda';
+        const activePipeline = profile === 'infrastructure' ? 'insar' : 'flood';
 
         try {
             const body = {
@@ -530,6 +564,11 @@ function AppDashboard() {
                 body.seed_threshold_db = parseFloat(seedThresholdDb);
                 body.growth_threshold_db = parseFloat(growthThresholdDb);
                 body.min_area_pixels = parseInt(minAreaPixels);
+                body.radar_band = radarBand;
+                body.permanent_water_thresh_db = parseFloat(permanentWaterThreshold);
+                body.swath_edge_erosion = parseInt(swathEdgeErosion);
+                body.polarization = polarization;
+                body.multilook_factor = parseInt(multilookFactor);
             }
             const res = await fetch(api('/jobs'), {
                 method: 'POST',
@@ -591,7 +630,7 @@ function AppDashboard() {
     // ── Start job from path (for ASF download flow) ──
     const startJobFromPath = async (filePath) => {
         if (!filePath) return;
-        const activePipeline = profile === 'infrastructure' ? 'insar' : profile === 'flood' ? 'flood' : 'standard_rda';
+        const activePipeline = profile === 'infrastructure' ? 'insar' : 'flood';
         try {
             const body = {
                 input_file: filePath,
@@ -617,6 +656,11 @@ function AppDashboard() {
                 body.seed_threshold_db = parseFloat(seedThresholdDb);
                 body.growth_threshold_db = parseFloat(growthThresholdDb);
                 body.min_area_pixels = parseInt(minAreaPixels);
+                body.radar_band = radarBand;
+                body.permanent_water_thresh_db = parseFloat(permanentWaterThreshold);
+                body.swath_edge_erosion = parseInt(swathEdgeErosion);
+                body.polarization = polarization;
+                body.multilook_factor = parseInt(multilookFactor);
             }
             const res = await fetch(api('/jobs'), {
                 method: 'POST',
@@ -770,7 +814,7 @@ function AppDashboard() {
                                     bounds: jobBounds,
                                     insarReport: jobsRef.current[id]?.insarReport || null,
                                     ships: jobsRef.current[id]?.ships || null,
-                                    pipeline: currentJobs[id].pipeline || 'standard_rda',
+                                    pipeline: currentJobs[id].pipeline || (profile === 'infrastructure' ? 'insar' : 'flood'),
                                     elapsed: elapsedRef.current[id] || null,
                                     bbox: jobsRef.current[id]?.bbox || data.bbox || null
                                 });
@@ -798,7 +842,7 @@ setJobs(prev => ({
             }
         }, 3000);
         return () => clearInterval(interval);
-    }, [setJobs, setViewingResult]);
+    }, [profile, setJobs, setViewingResult]);
 
     // ── Terminal scroll (PRESERVED) ──
 
@@ -824,7 +868,7 @@ setJobs(prev => ({
         finally {
             setFetchingContext(false);
         }
-    }, [assetLat, assetLon, assetType, showError]);
+    }, [assetLat, assetLon, assetType, showError, setEnvContext, setFetchingContext]);
 
 
     // ── Search infrastructure assets via Nominatim ──
@@ -863,7 +907,7 @@ setJobs(prev => ({
     }, [viewingResult, setFlyToCenter]);
 
     return (
-        <div style={{ width: '100%', height: '100vh', position: 'relative', backgroundColor: C.bg0, overflow: 'hidden' }}>
+        <div className={`nisar-app-shell nisar-profile-${profile}`} style={{ width: '100%', height: '100vh', position: 'relative', backgroundColor: C.bg0, overflow: 'hidden' }}>
 
             {/* ═══ MISSION SELECT OVERLAY ═══ */}
             {!missionSelected && (
@@ -942,74 +986,35 @@ setJobs(prev => ({
                                 </div>
                             </motion.div>
 
-                            {/* Card 3: SAR SCIENCE */}
-                            <motion.div
-                                onClick={() => { setProfile('sar_science'); setMissionSelected(true); }}
-                                style={{
-                                    width: '280px',
-                                    height: '160px',
-                                    background: 'rgba(255, 255, 255, 0.015)',
-                                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                                    borderRadius: '2px',
-                                    padding: '24px',
-                                    cursor: 'pointer',
-                                    boxSizing: 'border-box',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between'
-                                }}
-                                whileHover={{ y: -4, borderColor: C.accent.sar, background: 'rgba(255, 255, 255, 0.025)' }}
-                                whileTap={{ scale: 0.98 }}
-                                transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                            >
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                                    SAR SCIENCE
-                                </div>
-                                <div>
-                                    <div style={{ fontFamily: SANS, fontSize: '13px', color: C.text, fontWeight: 500 }}>
-                                        RSLC / GCOV / RDA viewer (Telemetry)
-                                    </div>
-                                    <div style={{ width: '12px', height: '2px', background: C.accent.sar, marginTop: '8px' }} />
-                                </div>
-                            </motion.div>
-
-                            {/* Card 4: INSAR PROCESSING */}
-                            <motion.div
-                                onClick={() => { setProfile('insar'); setMissionSelected(true); }}
-                                style={{
-                                    width: '280px',
-                                    height: '160px',
-                                    background: 'rgba(255, 255, 255, 0.015)',
-                                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                                    borderRadius: '2px',
-                                    padding: '24px',
-                                    cursor: 'pointer',
-                                    boxSizing: 'border-box',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between'
-                                }}
-                                whileHover={{ y: -4, borderColor: C.accent.insar, background: 'rgba(255, 255, 255, 0.025)' }}
-                                whileTap={{ scale: 0.98 }}
-                                transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                            >
-                                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                                    INSAR PROCESSING
-                                </div>
-                                <div>
-                                    <div style={{ fontFamily: SANS, fontSize: '13px', color: C.text, fontWeight: 500 }}>
-                                        Advanced multi-pass interferometry
-                                    </div>
-                                    <div style={{ width: '12px', height: '2px', background: C.accent.insar, marginTop: '8px' }} />
-                                </div>
-                            </motion.div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setDemoDialogOpen(true)}
+                            style={{ marginTop: '24px', padding: '11px 18px', borderRadius: '999px', border: `1px solid ${C.accent.flood}`, background: 'rgba(15,150,156,.12)', color: C.text, fontFamily: SANS, fontSize: '12px', cursor: 'pointer' }}
+                        >Open verified flood demo</button>
+                        <div style={{ marginTop: '10px', color: C.textDim, fontFamily: SANS, fontSize: '11px' }}>
+                            Previous results appear only when the local gateway reports them.
                         </div>
                     </div>
+                    {demoDialogOpen && (
+                        <div role="dialog" aria-modal="true" aria-labelledby="demo-dialog-title" style={{ position: 'absolute', inset: 0, zIndex: 2, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.58)', padding: '20px' }}>
+                            <div style={{ width: 'min(440px, 100%)', padding: '26px', borderRadius: '20px', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(17,22,29,.96)', boxShadow: '0 24px 80px rgba(0,0,0,.55)', fontFamily: SANS }}>
+                                <div id="demo-dialog-title" style={{ color: C.text, fontSize: '18px', fontWeight: 600 }}>Open the verified flood workspace?</div>
+                                <p style={{ color: C.textMid, fontSize: '13px', lineHeight: 1.6, margin: '12px 0 20px' }}>
+                                    This opens the flood configuration workspace. A result is shown only after the gateway provides a real report and artifacts; no synthetic history or invented intermediate observations are loaded.
+                                </p>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                    <button type="button" onClick={() => setDemoDialogOpen(false)} style={{ padding: '10px 14px', borderRadius: '999px', border: '1px solid rgba(255,255,255,.14)', background: 'transparent', color: C.textMid, cursor: 'pointer' }}>Cancel</button>
+                                    <button type="button" onClick={() => { setProfile('flood'); setMissionSelected(true); setDemoDialogOpen(false); }} style={{ padding: '10px 14px', borderRadius: '999px', border: `1px solid ${C.accent.flood}`, background: C.accent.flood, color: C.bg0, fontWeight: 600, cursor: 'pointer' }}>Open workspace</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* ═══ TOPBAR ═══ */}
-            <TopBar profile={profile} setProfile={setProfile} onOpenReport={() => setReportModalOpen(true)} />
+            <TopBar profile={profile} setProfile={setProfile} activeView={activeView} onSelectView={setActiveView} onOpenReport={() => setReportModalOpen(true)} />
 
             {/* ═══ REAL-TIME PROCESSING PROGRESS BAR ═══ */}
             <ProcessingProgressBar profile={profile} onCancel={cancelJob} />
@@ -1026,10 +1031,10 @@ setJobs(prev => ({
                 style={{
                     display: (profile === 'flood' && activeView !== 'map') ? 'none' : 'block',
                     position: 'absolute',
-                    top: '42px',
-                    left: profile === 'infrastructure' ? `${INFRA_LAYOUT.left}px` : profile === 'flood' ? `${TM.side}px` : '0px',
-                    right: profile === 'infrastructure' ? '0px' : (profile === 'flood' && activeView === 'map') ? `${TM.panel}px` : '0px',
-                    bottom: profile === 'infrastructure' ? `${INFRA_LAYOUT.bottom}px` : (viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport) ? '32px' : '0px',
+                    top: '0px',
+                    left: '0px',
+                    right: '0px',
+                    bottom: '0px',
                     cursor: 'crosshair',
                     zIndex: 0
                 }}
@@ -1037,7 +1042,8 @@ setJobs(prev => ({
                 attributionControl={false}
                 preferCanvas
             >
-                <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}" />
+                <TileLayer className="nisar-satellite-tiles" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+                <TileLayer className="nisar-map-labels" opacity={0.65} url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
                 {viewingResult && viewingResult.url && viewingResult.bounds && !viewingResult.floodReplayAvailable && (
                     <ImageOverlay
                         url={viewingResult.url}
@@ -1315,10 +1321,10 @@ setJobs(prev => ({
                 <div
                     style={{
                         position: 'absolute',
-                        top: '42px',
-                        left: profile === 'infrastructure' ? `${INFRA_LAYOUT.left}px` : profile === 'flood' ? `${TM.side}px` : '0px',
-                        right: profile === 'infrastructure' ? '0px' : (profile === 'flood' && activeView === 'map') ? `${TM.panel}px` : '0px',
-                        bottom: profile === 'infrastructure' ? `${INFRA_LAYOUT.bottom}px` : (viewingResult && viewingResult.pipeline === 'flood' && viewingResult.floodReport) ? '32px' : '0px',
+                        top: '0px',
+                        left: '0px',
+                        right: '0px',
+                        bottom: '0px',
                         pointerEvents: 'none',
                         zIndex: 500,
                         overflow: 'hidden',
@@ -1368,11 +1374,12 @@ setJobs(prev => ({
                 />
             )}
 
-            {/* ═══ RIGHT PANEL (SAR Science / Maritime only) ═══ */}
-            <div style={{
-                position: 'absolute', top: '42px', right: 0, bottom: 0, width: `${TM.panel}px`, zIndex: 100,
-                background: 'rgba(17, 17, 17, 0.82)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
+            {/* ═══ PROFILE-SPECIFIC RIGHT INSPECTOR ═══ */}
+            <div className="nisar-inspector-panel" style={{
+                position: 'absolute', top: '20px', right: '20px', bottom: '20px', width: '380px', zIndex: 100,
+                background: 'rgba(18, 19, 22, 0.84)', backdropFilter: 'blur(28px) saturate(140%)', WebkitBackdropFilter: 'blur(28px) saturate(140%)',
+                border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px',
+                boxShadow: '0 24px 60px rgba(0, 0, 0, 0.75)',
                 display: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map')) ? 'none' : 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
@@ -1386,21 +1393,21 @@ setJobs(prev => ({
                         background: 'rgba(10, 14, 20, 0.75)',
                         flexShrink: 0
                     }}>
-                        <button
+                        <button className="scientist-mode-tab"
                             onClick={() => setViewingResult(null)}
                             style={{
                                 flex: 1, padding: '10px 8px', fontFamily: MONO, fontSize: '10px', fontWeight: 600,
-                                background: (!viewingResult || viewingResult.pipeline !== 'flood') ? 'rgba(0, 229, 255, 0.12)' : 'transparent',
+                                background: (!viewingResult || viewingResult.pipeline !== 'flood') ? 'rgba(255, 255, 255, 0.13)' : 'transparent',
                                 border: 'none',
-                                borderBottom: (!viewingResult || viewingResult.pipeline !== 'flood') ? `2px solid ${C.accent.flood}` : '2px solid transparent',
-                                color: (!viewingResult || viewingResult.pipeline !== 'flood') ? C.accent.flood : C.textDim,
+                                borderBottom: (!viewingResult || viewingResult.pipeline !== 'flood') ? '2px solid rgba(255, 255, 255, 0.35)' : '2px solid transparent',
+                                color: (!viewingResult || viewingResult.pipeline !== 'flood') ? C.text : C.textDim,
                                 cursor: 'pointer', textAlign: 'center', letterSpacing: '0.06em',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                             }}
                         >
-                            ⚙ CONFIGURE & RUN
+                            Configure & Run
                         </button>
-                        <button
+                        <button className="scientist-mode-tab"
                             onClick={() => {
                                 const floodJob = Object.values(jobs).find(j => j.pipeline === 'flood' && j.floodReport);
                                 if (floodJob) {
@@ -1422,15 +1429,15 @@ setJobs(prev => ({
                             }}
                             style={{
                                 flex: 1, padding: '10px 8px', fontFamily: MONO, fontSize: '10px', fontWeight: 600,
-                                background: (viewingResult && viewingResult.pipeline === 'flood') ? 'rgba(0, 229, 255, 0.12)' : 'transparent',
+                                background: (viewingResult && viewingResult.pipeline === 'flood') ? 'rgba(255, 255, 255, 0.13)' : 'transparent',
                                 border: 'none',
-                                borderBottom: (viewingResult && viewingResult.pipeline === 'flood') ? `2px solid ${C.accent.flood}` : '2px solid transparent',
-                                color: (viewingResult && viewingResult.pipeline === 'flood') ? C.accent.flood : C.textDim,
+                                borderBottom: (viewingResult && viewingResult.pipeline === 'flood') ? '2px solid rgba(255, 255, 255, 0.35)' : '2px solid transparent',
+                                color: (viewingResult && viewingResult.pipeline === 'flood') ? C.text : C.textDim,
                                 cursor: 'pointer', textAlign: 'center', letterSpacing: '0.06em',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                             }}
                         >
-                            📊 ANALYSIS REPORT
+                            Analysis Report
                         </button>
                     </div>
                 )}
@@ -1485,6 +1492,11 @@ setJobs(prev => ({
                             setStartDate={setStartDate}
                             endDate={endDate}
                             setEndDate={setEndDate}
+                            catalogTrack={catalogTrack}
+                            setCatalogTrack={setCatalogTrack}
+                            catalogFrame={catalogFrame}
+                            setCatalogFrame={setCatalogFrame}
+                            onUploadFile={uploadLocalFile}
                             handleSearch={handleSearch}
                             isSearching={isSearching}
                             searchResults={searchResults}
@@ -1511,6 +1523,20 @@ setJobs(prev => ({
                             setGrowthThresholdDb={setGrowthThresholdDb}
                             minAreaPixels={minAreaPixels}
                             setMinAreaPixels={setMinAreaPixels}
+                            radarBand={radarBand}
+                            setRadarBand={setRadarBand}
+                            permanentWaterThreshold={permanentWaterThreshold}
+                            setPermanentWaterThreshold={setPermanentWaterThreshold}
+                            swathEdgeErosion={swathEdgeErosion}
+                            setSwathEdgeErosion={setSwathEdgeErosion}
+                            recededWaterThreshold={recededWaterThreshold}
+                            setRecededWaterThreshold={setRecededWaterThreshold}
+                            speckleFilter={speckleFilter}
+                            setSpeckleFilter={setSpeckleFilter}
+                            multilookFactor={multilookFactor}
+                            setMultilookFactor={setMultilookFactor}
+                            polarization={polarization}
+                            setPolarization={setPolarization}
                             downloadProgress={downloadProgress}
                             handleAcquireAndProcess={handleAcquireAndProcess}
                             onCancel={cancelJob}
@@ -1518,23 +1544,6 @@ setJobs(prev => ({
                     )
                 )}
 
-                {/* ── PROFILE: SAR SCIENCE / INSAR PROCESSING PLACEHOLDERS ── */}
-                {(profile === 'sar_science' || profile === 'insar') && (
-                    <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '12px', textAlign: 'center' }}>
-                        <Satellite size={32} color={activeProfile.accent} style={{ opacity: 0.6 }} />
-                        <div style={{ fontFamily: MONO, fontSize: '12px', fontWeight: 600, color: C.text }}>
-                            {activeProfile.label}
-                        </div>
-                        <div style={{ fontFamily: SANS, fontSize: '11px', color: C.textDim, lineHeight: 1.5 }}>
-                            {profile === 'sar_science'
-                                ? 'Telemetry analysis viewer modules are currently being calibrated for standard NISAR GCOV, RSLC, and RDA products.'
-                                : 'Interferometric coregistration and baseline processing tools are currently under review.'}
-                        </div>
-                        <div style={{ fontFamily: MONO, fontSize: '9px', color: activeProfile.accent, background: 'rgba(255,255,255,0.03)', padding: '4px 8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                            COMING SOON · v0.5.0
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* ═══ BOTTOM PROCESSING SUMMARY STRIP ═══ */}

@@ -60,6 +60,10 @@ pub async fn start_job_handler(
         payload.growth_threshold_db,
         payload.min_area_pixels,
         payload.radar_band,
+        payload.permanent_water_thresh_db,
+        payload.swath_edge_erosion,
+        payload.polarization,
+        payload.multilook_factor,
     ).await;
     
     Json(json!({
@@ -709,6 +713,23 @@ pub async fn download_stream_handler(
         None => return (StatusCode::BAD_REQUEST, "Missing id or granule_id parameter").into_response(),
     };
 
+    // The browser sends the ASF URL returned by the catalog. Keep this route
+    // scoped to ASF/NASA hosts; otherwise a local gateway could be turned into
+    // an arbitrary URL downloader by editing the request in DevTools.
+    let parsed_url = match reqwest::Url::parse(&url) {
+        Ok(value) if value.scheme() == "https" => value,
+        _ => return (StatusCode::BAD_REQUEST, "Download URL must be an HTTPS URL").into_response(),
+    };
+    let allowed_host = parsed_url.host_str().map(|host| {
+        host == "nisar.asf.earthdatacloud.nasa.gov"
+            || host == "cumulus.asf.earthdatacloud.nasa.gov"
+            || host == "datapool.asf.alaska.edu"
+            || host.ends_with(".asf.alaska.edu")
+    }).unwrap_or(false);
+    if !allowed_host {
+        return (StatusCode::BAD_REQUEST, "Download URL is not an approved ASF host").into_response();
+    }
+
     // Ensure the data/ directory exists
     tokio::fs::create_dir_all("data").await.ok();
 
@@ -727,7 +748,10 @@ pub async fn download_stream_handler(
         None => format!("{}.{}", id, extension),
     };
 
+    // Write to a sidecar first. An interrupted 6–8 GB transfer must never be
+    // mistaken for a valid cached granule on the next attempt.
     let filepath = format!("data/{}", filename);
+    let partial_filepath = format!("{}.part", filepath);
 
     // Create a channel for SSE events
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(100);
@@ -816,9 +840,17 @@ pub async fn download_stream_handler(
 
         if !response.status().is_success() {
             let status_code = response.status();
+            let response_hint = response
+                .text()
+                .await
+                .unwrap_or_default()
+                .chars()
+                .take(240)
+                .collect::<String>();
             let err_msg = match status_code.as_u16() {
                 401 | 403 => "Earthdata authentication failed (401/403). Please verify your Earthdata credentials or Token.".to_string(),
-                code => format!("HTTP error status: {}", code),
+                code if response_hint.is_empty() => format!("HTTP error status: {}", code),
+                code => format!("HTTP error status: {} ({})", code, response_hint.replace('\n', " ")),
             };
             let _ = tx.send(Ok(Event::default().json_data(json!({
                 "status": "error",
@@ -829,7 +861,7 @@ pub async fn download_stream_handler(
         }
 
         let total_size = response.content_length();
-        let mut file = match tokio::fs::File::create(&filepath).await {
+        let mut file = match tokio::fs::File::create(&partial_filepath).await {
             Ok(f) => f,
             Err(e) => {
                 let _ = tx.send(Ok(Event::default().json_data(json!({
@@ -920,6 +952,14 @@ pub async fn download_stream_handler(
             return;
         }
 
+        if let Err(e) = tokio::fs::rename(&partial_filepath, &filepath).await {
+            let _ = tx.send(Ok(Event::default().json_data(json!({
+                "status": "error",
+                "message": format!("Failed to finalize downloaded granule: {}", e)
+            })).unwrap())).await;
+            return;
+        }
+
         log::info!("Download completed successfully. File saved to: {}", filepath);
 
         let _ = tx.send(Ok(Event::default().json_data(json!({
@@ -949,8 +989,6 @@ pub async fn upload_handler(
         let file_name = field.file_name().unwrap_or_default().to_string();
 
         if name == "file" && !file_name.is_empty() {
-            let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
-
             // Ensure directory exists
             std::fs::create_dir_all("results/uploads").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -966,9 +1004,22 @@ pub async fn upload_handler(
             let mut file = tokio::fs::File::create(&saved_path)
                 .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            
+
+            // Stream chunks directly to disk. GCOV files are multi-GB; using
+            // field.bytes() here previously attempted to hold the entire file
+            // in gateway memory before the processor could use it.
             use tokio::io::AsyncWriteExt;
-            file.write_all(&data)
+            let mut field = field;
+            while let Some(chunk) = field
+                .chunk()
+                .await
+                .map_err(|_| StatusCode::BAD_REQUEST)?
+            {
+                file.write_all(&chunk)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            }
+            file.flush()
                 .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

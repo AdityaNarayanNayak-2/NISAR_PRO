@@ -9,6 +9,8 @@ import { useMapStore } from '../stores/useMapStore';
 export default function FloodConfigPanel({
     dataMode, setDataMode, localFilePath, setLocalFilePath, metadata,
     startDate, setStartDate, endDate, setEndDate,
+    catalogTrack, setCatalogTrack, catalogFrame, setCatalogFrame,
+    onUploadFile,
     handleSearch, isSearching, searchResults, selectedScene, setSelectedScene,
     startJob, getInputFile, runningJobs,
     cropLat, setCropLat, cropLon, setCropLon, cropPreset, setCropPreset,
@@ -18,6 +20,13 @@ export default function FloodConfigPanel({
     seedThresholdDb, setSeedThresholdDb,
     growthThresholdDb, setGrowthThresholdDb,
     minAreaPixels, setMinAreaPixels,
+    radarBand, setRadarBand,
+    permanentWaterThreshold, setPermanentWaterThreshold,
+    swathEdgeErosion, setSwathEdgeErosion,
+    recededWaterThreshold, setRecededWaterThreshold,
+    speckleFilter, setSpeckleFilter,
+    multilookFactor, setMultilookFactor,
+    polarization, setPolarization,
     downloadProgress, handleAcquireAndProcess,
     onCancel,
 }) {
@@ -25,6 +34,18 @@ export default function FloodConfigPanel({
     const activeBg = 'rgba(42, 139, 145, 0.08)';
 
     const [advancedOpen, setAdvancedOpen] = useState(false);
+    const bandDefaults = radarBand === 's' ? { permanent: -12.5, seed: -4.8, growth: -2.2, min: -2.7 } : { permanent: -13.0, seed: -5.0, growth: -2.5, min: -3.0 };
+    const resetCalibratedDefaults = () => {
+        setPermanentWaterThreshold(bandDefaults.permanent);
+        setSeedThresholdDb(bandDefaults.seed);
+        setGrowthThresholdDb(bandDefaults.growth);
+        setMinChangeDb(bandDefaults.min);
+        setSwathEdgeErosion(3);
+        setRecededWaterThreshold(3.0);
+        setSpeckleFilter('median-3');
+        setMultilookFactor(8);
+        setPolarization('HHHH');
+    };
 
     // Stores
     const gatewayOnline = useGatewayStore(state => state.gatewayOnline);
@@ -46,6 +67,24 @@ export default function FloodConfigPanel({
         fontSize: '12px', boxSizing: 'border-box', outline: 'none', borderRadius: '2px',
     };
 
+    const chooseLocalFile = (setPath) => {
+        const picker = document.createElement('input');
+        picker.type = 'file';
+        picker.accept = '.h5,.hdf5,.nc,.tif,.tiff';
+        picker.onchange = () => onUploadFile?.(picker.files?.[0], setPath);
+        picker.click();
+    };
+
+    const fileField = (label, value, setPath, placeholder, optional = false) => (
+        <label className={optional ? 'flood-input-optional' : undefined}>
+            <span>{label}</span>
+            <div className="local-file-field">
+                <input type="text" value={value || ''} onChange={e => setPath(e.target.value)} placeholder={placeholder} style={inputStyle} />
+                <button type="button" onClick={() => chooseLocalFile(setPath)} aria-label={`Choose ${label.toLowerCase()} file`}>Choose file</button>
+            </div>
+        </label>
+    );
+
     const presetBtnStyle = (active) => ({
         flex: 1, padding: '6px 4px', background: active ? activeBg : 'transparent',
         border: active ? `1px solid ${accent}` : `1px solid ${C.bg3}`,
@@ -54,7 +93,16 @@ export default function FloodConfigPanel({
     });
 
     return (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div className="scientist-inspector scientist-inspector-config" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+
+            <div className="scientist-config-intro">
+                <div>
+                    <div className="scientist-config-kicker">FLOOD ANALYSIS</div>
+                    <h2>Configure analysis</h2>
+                    <p>Adjust calibrated radar parameters, inspect the expected effect, then run the Rust pipeline explicitly.</p>
+                </div>
+                <div className={`scientist-engine-state ${gatewayOnline ? 'is-ready' : 'is-offline'}`}><span />{gatewayOnline ? 'Gateway ready' : 'Gateway offline'}</div>
+            </div>
 
             {/* DATA SOURCE */}
             <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>DATA SOURCE</div>
@@ -75,7 +123,7 @@ export default function FloodConfigPanel({
                 <input
                     type="text" value={localFilePath} onChange={e => setLocalFilePath(e.target.value)}
                     placeholder="/path/to/NISAR_*.h5"
-                    style={inputStyle}
+                    style={{ ...inputStyle, display: 'none' }}
                     onFocus={e => e.target.style.borderColor = C.bg4}
                     onBlur={e => e.target.style.borderColor = C.bg3}
                 />
@@ -97,6 +145,13 @@ export default function FloodConfigPanel({
                     </div>
                 )}
             </>)}
+
+            <section className="flood-input-card" aria-labelledby="acquisition-pair-title">
+                <div className="flood-input-card-heading"><div><span className="flood-input-step">01</span><h3 id="acquisition-pair-title">Acquisition pair</h3></div><span className="flood-input-card-note">Active + baseline</span></div>
+                {fileField('Active observation', localFilePath, setLocalFilePath, 'Choose active GCOV .h5')}
+                {fileField('Baseline reference', slaveFilePath, setSlaveFilePath, 'Choose baseline GCOV .h5')}
+                {fileField('Optional coherence helper', gunwFilePath, setGunwFilePath, 'Choose GUNW .h5 (optional)', true)}
+            </section>
 
             {dataMode === 'catalog' && (<>
                 {/* AOI Bounding Box Selector */}
@@ -151,6 +206,11 @@ export default function FloodConfigPanel({
                     <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, fontSize: '11px' }} />
                     <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, fontSize: '11px' }} />
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    <input type="text" inputMode="numeric" value={catalogTrack} onChange={e => setCatalogTrack(e.target.value.replace(/[^0-9,-]/g, ''))} placeholder="Track / orbit (optional)" aria-label="ASF relative orbit or NISAR track" style={{ ...inputStyle, fontSize: '11px' }} />
+                    <input type="text" inputMode="numeric" value={catalogFrame} onChange={e => setCatalogFrame(e.target.value.replace(/[^0-9,-]/g, ''))} placeholder="Frame (optional)" aria-label="ASF frame" style={{ ...inputStyle, fontSize: '11px' }} />
+                </div>
+                <div style={{ fontFamily: SANS, fontSize: '10px', color: C.textDim, marginBottom: '8px' }}>For the Bihar reference stack: track <strong style={{ color: C.text }}>98</strong>, frame <strong style={{ color: C.text }}>14</strong>.</div>
                 <button onClick={handleSearch} disabled={isSearching} style={{ width: '100%', padding: '8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '11px', cursor: 'pointer', borderRadius: '2px' }}
                     onMouseEnter={e => { e.target.style.borderColor = C.bg4; e.target.style.color = C.text; }}
                     onMouseLeave={e => { e.target.style.borderColor = C.bg3; e.target.style.color = C.textMid; }}
@@ -216,6 +276,33 @@ export default function FloodConfigPanel({
                     </div>
                 )}
             </>)}
+
+            {/* SCIENTIST PHYSICS WORKBENCH */}
+            <div className="flood-processing-controls" style={{ marginTop: '16px', padding: '12px', background: 'rgba(15,150,156,.05)', border: `1px solid ${C.accent.flood}55`, borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <div><div style={{ fontFamily: SANS, fontSize: '13px', color: C.text, fontWeight: 600 }}>Processing controls</div><div style={{ fontFamily: SANS, fontSize: '10px', color: C.textDim, marginTop: '3px' }}>Calibrated parameters sent with the next run.</div></div>
+                    <button type="button" onClick={resetCalibratedDefaults} style={{ border: `1px solid ${C.bg3}`, background: 'transparent', color: C.textDim, padding: '6px 8px', borderRadius: '999px', fontFamily: SANS, fontSize: '10px', cursor: 'pointer' }}>Reset defaults</button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px', marginBottom: '12px' }}>
+                    {[['l','L-band','1.24 GHz'],['s','S-band','3.20 GHz'],['fusion','L+S','paired report']].map(([value, label, detail]) => <button key={value} type="button" disabled={value === 'fusion'} onClick={() => setRadarBand(value)} title={value === 'fusion' ? 'Fusion requires a dual-granule gateway run and is not enabled by this request contract yet.' : detail} style={{ padding: '8px 4px', borderRadius: '7px', border: `1px solid ${radarBand === value ? accent : C.bg3}`, background: radarBand === value ? activeBg : 'transparent', color: value === 'fusion' ? C.textDim : radarBand === value ? accent : C.textMid, opacity: value === 'fusion' ? .55 : 1, cursor: value === 'fusion' ? 'not-allowed' : 'pointer', fontFamily: SANS, fontSize: '10px' }}><strong style={{ display: 'block' }}>{label}</strong><span style={{ fontSize: '9px' }}>{detail}</span></button>)}
+                </div>
+                <label style={{ display: 'block', fontFamily: SANS, fontSize: '10px', color: C.textMid, marginBottom: '10px' }}>Permanent water floor <strong style={{ color: C.text }}>{permanentWaterThreshold.toFixed(1)} dB</strong><input type="range" min="-18" max="-9" step="0.1" value={permanentWaterThreshold} onChange={e => setPermanentWaterThreshold(parseFloat(e.target.value))} style={{ width: '100%', accentColor: accent }} /></label>
+                <label style={{ display: 'block', fontFamily: SANS, fontSize: '10px', color: C.textMid, marginBottom: '10px' }}>Swath-edge erosion <strong style={{ color: C.text }}>{swathEdgeErosion} px · {(swathEdgeErosion * 0.08).toFixed(2)} km</strong><input type="range" min="0" max="60" step="1" value={swathEdgeErosion} onChange={e => setSwathEdgeErosion(parseInt(e.target.value, 10))} style={{ width: '100%', accentColor: accent }} /></label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                    <label style={{ fontFamily: SANS, fontSize: '10px', color: C.textMid }}>Seed threshold <strong style={{ color: C.text }}>{seedThresholdDb.toFixed(1)} dB</strong><input type="range" min="-10" max="0" step="0.1" value={seedThresholdDb} onChange={e => setSeedThresholdDb(parseFloat(e.target.value))} style={{ width: '100%', accentColor: accent }} /></label>
+                    <label style={{ fontFamily: SANS, fontSize: '10px', color: C.textMid }}>Growth threshold <strong style={{ color: C.text }}>{growthThresholdDb.toFixed(1)} dB</strong><input type="range" min="-8" max="2" step="0.1" value={growthThresholdDb} onChange={e => setGrowthThresholdDb(parseFloat(e.target.value))} style={{ width: '100%', accentColor: accent }} /></label>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <label style={{ fontFamily: SANS, fontSize: '10px', color: C.textMid }}>Covariance channel<select value={polarization} onChange={e => setPolarization(e.target.value)} style={{ ...inputStyle, marginTop: '4px', fontFamily: SANS, fontSize: '10px' }}><option value="HHHH">HHHH · co-pol</option><option value="HVHV">HVHV · cross-pol</option><option value="dual">Dual-pol gated</option><option value="span">Polarimetric span</option></select></label>
+                    <label style={{ fontFamily: SANS, fontSize: '10px', color: C.textMid }}>Multilook factor<select value={multilookFactor} onChange={e => setMultilookFactor(parseInt(e.target.value, 10))} style={{ ...inputStyle, marginTop: '4px', fontFamily: SANS, fontSize: '10px' }}><option value="8">8×8 · 80 m</option><option value="4">4×4 · 40 m</option><option value="2">2×2 · 20 m</option><option value="1">1×1 · 10 m</option></select></label>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
+                    <label style={{ fontFamily: SANS, fontSize: '10px', color: C.textDim }}>Speckle filter<select value={speckleFilter} onChange={e => setSpeckleFilter(e.target.value)} style={{ ...inputStyle, marginTop: '4px', fontFamily: SANS, fontSize: '10px' }}><option value="median-3">3×3 spatial median · active</option><option value="lee-frost" disabled>Lee + Frost · engine pending</option><option value="raw" disabled>Raw · engine pending</option></select></label>
+                    <label style={{ fontFamily: SANS, fontSize: '10px', color: C.textDim }}>Recession threshold <strong style={{ color: C.text }}>+{recededWaterThreshold.toFixed(1)} dB</strong><input type="number" min="0" max="12" step="0.1" value={recededWaterThreshold} onChange={e => setRecededWaterThreshold(parseFloat(e.target.value) || 0)} style={{ ...inputStyle, marginTop: '4px' }} /><span style={{ display: 'block', fontSize: '9px', marginTop: '3px' }}>Displayed for audit; processor currently uses calibrated +3.0 dB.</span></label>
+                </div>
+                <div style={{ marginTop: '10px', paddingTop: '9px', borderTop: `1px solid ${C.bg3}`, display: 'flex', justifyContent: 'space-between', gap: '8px', fontFamily: SANS, fontSize: '9px', color: C.textDim }}><span>NESZ floor · -40.0 dB</span><span>Current filter · {speckleFilter}</span></div>
+                <div style={{ marginTop: '7px', fontFamily: SANS, fontSize: '9px', color: C.textDim }}>Preview: seed → Otsu/min-change → growth. Histogram appears after a report supplies scene statistics; thresholds are not interpolated.</div>
+            </div>
 
             {/* DIVIDER */}
             <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />
@@ -306,8 +393,8 @@ export default function FloodConfigPanel({
 
             {/* Crop preset toggles */}
             <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '6px' }}>CROP WINDOW</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
-                {['1x1km', '5x5km', '1x2km', '10x10km', '20x20km', 'full'].map(p => (
+            <div className="flood-crop-grid flood-window-choices" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px', marginBottom: '6px' }}>
+                {['10x10km', '20x20km', 'full'].map(p => (
                     <button key={p} onClick={() => setCropPreset(p)} style={presetBtnStyle(cropPreset === p)}>
                         {p === 'full' ? 'FULL SCENE' : p.replace('km', ' km').replace('x', ' × ')}
                     </button>
@@ -320,8 +407,19 @@ export default function FloodConfigPanel({
             {/* ══ FLOOD MAPPING CONTROLS ══ */}
             <div style={{ height: '1px', background: C.bg3, margin: '14px 0' }} />
             
+            {/* SCIENTIST PHYSICS WORKBENCH */}
+            <section aria-labelledby="physics-workbench-title" style={{ display: 'none' }}>
+                <div id="physics-workbench-title" style={{ fontFamily: SANS, fontSize: '12px', color: C.text, fontWeight: 600, marginBottom: '4px' }}>Scientist physics workbench</div>
+                <div style={{ fontFamily: SANS, fontSize: '10px', color: C.textDim, lineHeight: 1.45, marginBottom: '10px' }}>Expose the calibrated band choice before a run. The processor still owns the final metadata and report.</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px', marginBottom: '10px' }}>
+                    {[['l', 'L-band', '1.24 GHz'], ['s', 'S-band', '3.20 GHz'], ['fusion', 'L + S', 'paired report']].map(([value, label, note]) => <button key={value} type="button" onClick={() => value !== 'fusion' && setRadarBand(value)} disabled={value === 'fusion'} aria-pressed={radarBand === value} title={value === 'fusion' ? 'Use the verified fused report; paired fusion execution is the next gateway batch.' : undefined} style={{ padding: '8px 5px', borderRadius: '9px', border: `1px solid ${radarBand === value ? accent : C.bg3}`, background: radarBand === value ? 'rgba(15,150,156,.16)' : 'transparent', color: radarBand === value ? C.text : C.textDim, fontFamily: SANS, fontSize: '10px', cursor: value === 'fusion' ? 'not-allowed' : 'pointer', opacity: value === 'fusion' ? .55 : 1 }}><span style={{ display: 'block', fontWeight: 600 }}>{label}</span><span style={{ display: 'block', marginTop: '3px', fontFamily: MONO, fontSize: '8px', opacity: .75 }}>{note}</span></button>)}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontFamily: MONO, fontSize: '9px', color: C.textDim }}><span>NESZ FLOOR · -40.0 dB</span><span>MEDIAN · 3×3</span></div>
+                <button type="button" onClick={() => { setRadarBand('l'); setMinChangeDb(-3); setSeedThresholdDb(-5); setGrowthThresholdDb(-2.5); setMinAreaPixels(8); }} style={{ marginTop: '10px', padding: '6px 8px', border: '1px solid rgba(255,255,255,.12)', borderRadius: '8px', background: 'transparent', color: C.textMid, fontFamily: SANS, fontSize: '10px', cursor: 'pointer' }}>Reset to calibrated L-band defaults</button>
+            </section>
+
             {/* Baseline reference GCOV input */}
-            <div style={{ marginBottom: '10px' }}>
+            <div style={{ marginBottom: '10px', display: 'none' }}>
                 <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>BASELINE REFERENCE (GCOV H5)</div>
                 <input
                     type="text" value={slaveFilePath || ''} onChange={e => setSlaveFilePath(e.target.value)}
@@ -331,7 +429,7 @@ export default function FloodConfigPanel({
             </div>
 
             {/* Coherence helper GUNW input (Optional) */}
-            <div style={{ marginBottom: '14px' }}>
+            <div style={{ marginBottom: '14px', display: 'none' }}>
                 <div style={{ fontFamily: MONO, fontSize: '9px', color: C.textDim, marginBottom: '4px' }}>COHERENCE FILE (GUNW H5 - OPTIONAL)</div>
                 <input
                     type="text" value={gunwFilePath || ''} onChange={e => setGunwFilePath(e.target.value)}
@@ -409,7 +507,7 @@ export default function FloodConfigPanel({
             <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />
 
             {/* EXECUTE */}
-            <button onClick={startJob} disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline || downloadProgress?.status === 'downloading'} style={{
+            <button className="flood-primary-action" onClick={startJob} disabled={!getInputFile() || runningJobs.length > 0 || !gatewayOnline || downloadProgress?.status === 'downloading'} style={{
                 width: '100%', padding: '10px', background: accent, color: C.bg0,
                 fontFamily: MONO, fontSize: '12px', fontWeight: 600, border: 'none', borderRadius: '2px',
                 cursor: (!getInputFile() || runningJobs.length > 0 || !gatewayOnline || downloadProgress?.status === 'downloading') ? 'not-allowed' : 'pointer',

@@ -28,6 +28,10 @@ pub struct ProcessRequest {
     pub growth_threshold_db: Option<f32>,
     pub min_area_pixels: Option<usize>,
     pub radar_band: Option<String>,
+    pub permanent_water_thresh_db: Option<f32>,
+    pub swath_edge_erosion: Option<usize>,
+    pub polarization: Option<String>,
+    pub multilook_factor: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -68,6 +72,13 @@ pub struct NisarSearchQuery {
     pub end_date: Option<String>,
     pub platform: Option<String>,
     pub processing_level: Option<String>,
+    /// ASF relative orbit / NISAR track, e.g. 98.
+    pub relative_orbit: Option<String>,
+    /// ASF frame filter. For the Bihar reference stack this is 14.
+    #[serde(alias = "frame")]
+    pub asfframe: Option<String>,
+    /// NISAR simultaneous L/S observation filter.
+    pub joint_observation: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

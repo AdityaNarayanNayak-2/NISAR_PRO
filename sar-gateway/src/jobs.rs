@@ -181,6 +181,10 @@ pub async fn spawn_processing_job(
     growth_threshold_db: Option<f32>,
     min_area_pixels: Option<usize>,
     radar_band: Option<String>,
+    permanent_water_thresh_db: Option<f32>,
+    swath_edge_erosion: Option<usize>,
+    polarization: Option<String>,
+    multilook_factor: Option<usize>,
 ) -> String {
     let job_id = format!("sar-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>());
     let (tx, _rx) = broadcast::channel(256);
@@ -230,6 +234,10 @@ pub async fn spawn_processing_job(
                 growth_threshold_db,
                 min_area_pixels,
                 radar_band,
+                permanent_water_thresh_db,
+                swath_edge_erosion,
+                polarization,
+                multilook_factor,
                 cancel_rx,
             ).await;
         });
@@ -263,6 +271,10 @@ async fn spawn_local_job(
     growth_threshold_db: Option<f32>,
     min_area_pixels: Option<usize>,
     radar_band: Option<String>,
+    permanent_water_thresh_db: Option<f32>,
+    swath_edge_erosion: Option<usize>,
+    polarization: Option<String>,
+    multilook_factor: Option<usize>,
     mut cancel_rx: tokio::sync::mpsc::Receiver<()>,
 ) {
     let results_dir = std::path::Path::new("results");
@@ -348,6 +360,18 @@ async fn spawn_local_job(
         }
         if let Some(ref band) = radar_band {
             cmd.args(["--radar-band", band]);
+        }
+        if let Some(ref channel) = polarization {
+            cmd.args(["--polarization", channel]);
+        }
+        if let Some(looks) = multilook_factor {
+            cmd.args(["--multilook-factor", &looks.to_string()]);
+        }
+        if let Some(threshold) = permanent_water_thresh_db {
+            cmd.args(["--permanent-water-thresh-db", &threshold.to_string()]);
+        }
+        if let Some(erosion) = swath_edge_erosion {
+            cmd.args(["--swath-edge-erosion", &erosion.to_string()]);
         }
     } else {
         // ── Standard sar_processor args (unchanged) ──────────────────
