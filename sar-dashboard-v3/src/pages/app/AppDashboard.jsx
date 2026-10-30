@@ -1623,7 +1623,7 @@ setJobs(prev => ({
                     display: 'flex',
                     flexDirection: 'column'
                 }}>
-                    {activeView === 'timeseries' && <TimeSeriesView floodReport={viewingResult?.floodReport} />}
+                    {activeView === 'timeseries' && <TimeSeriesView floodReport={viewingResult?.floodReport} allJobs={jobs} />}
                     {activeView === 'regions' && (
                         <RegionsView
                             floodGeoJson={viewingResult?.floodGeoJson}
