@@ -337,6 +337,38 @@ pub fn parse_nisar_cropped(
 /// When `window_override` is supplied, the explicit pixel window is used
 /// instead of the region search. This is required for cross-resolution
 /// pre/post pairs where one grid must be phase-aligned to the other.
+/// Normalize GCOV covariance term from 2-letter or 4-letter polarization.
+/// Handles "HH" -> "HHHH", "HV" -> "HVHV", "VV" -> "VVVV", "VH" -> "VHVH",
+/// and preserves already-expanded terms like "HHHH", "HVHV", "dual" -> "HHHH", etc.
+pub fn normalize_gcov_cov_term(pol: &str) -> String {
+    let clean = pol.trim().to_uppercase();
+    match clean.as_str() {
+        "HHHH" | "HVHV" | "VVVV" | "VHVH" | "HHHV" | "HVHH" | "VVVH" | "VHVV" => clean,
+        "HH" => "HHHH".to_string(),
+        "HV" => "HVHV".to_string(),
+        "VV" => "VVVV".to_string(),
+        "VH" => "VHVH".to_string(),
+        "DUAL" | "SPAN" => "HHHH".to_string(),
+        s if s.len() == 2 => format!("{}{}", s, s),
+        _ => clean,
+    }
+}
+
+/// Normalize GSLC polarization term.
+/// Handles "HHHH" -> "HH", "HVHV" -> "HV", "HH" -> "HH", etc.
+pub fn normalize_gslc_pol(pol: &str) -> String {
+    let clean = pol.trim().to_uppercase();
+    match clean.as_str() {
+        "HHHH" => "HH".to_string(),
+        "HVHV" => "HV".to_string(),
+        "VVVV" => "VV".to_string(),
+        "VHVH" => "VH".to_string(),
+        "DUAL" | "SPAN" => "HH".to_string(),
+        s if s.len() == 4 && &s[0..2] == &s[2..4] => s[0..2].to_string(),
+        _ => clean,
+    }
+}
+
 pub fn parse_nisar_cropped_window(
     path: &Path,
     polarization: &str,
@@ -384,8 +416,14 @@ pub fn parse_nisar_cropped_window(
 
     if let (Some(lons), Some(lats)) = (x_coords, y_coords) {
         let data_path = match product_type {
-            NisarProductType::GCOV => format!("/science/{}/GCOV/grids/frequencyA/{}{}", instr, pol, pol),
-            NisarProductType::GSLC => format!("/science/{}/GSLC/grids/frequencyA/{}", instr, pol),
+            NisarProductType::GCOV => {
+                let cov_term = normalize_gcov_cov_term(&pol);
+                format!("/science/{}/GCOV/grids/frequencyA/{}", instr, cov_term)
+            }
+            NisarProductType::GSLC => {
+                let gslc_pol = normalize_gslc_pol(&pol);
+                format!("/science/{}/GSLC/grids/frequencyA/{}", instr, gslc_pol)
+            }
             NisarProductType::GUNW => {
                 format!("/science/{}/GUNW/grids/frequencyA/unwrappedPhase", instr)
             }
@@ -726,8 +764,14 @@ pub fn parse_nisar_full_scene_multilooked(
     let full_cols = x_coords.len();
 
     let data_path = match product_type {
-        NisarProductType::GCOV => format!("/science/{}/GCOV/grids/frequencyA/{}{}", instr, pol, pol),
-        NisarProductType::GSLC => format!("/science/{}/GSLC/grids/frequencyA/{}", instr, pol),
+        NisarProductType::GCOV => {
+            let cov_term = normalize_gcov_cov_term(&pol);
+            format!("/science/{}/GCOV/grids/frequencyA/{}", instr, cov_term)
+        }
+        NisarProductType::GSLC => {
+            let gslc_pol = normalize_gslc_pol(&pol);
+            format!("/science/{}/GSLC/grids/frequencyA/{}", instr, gslc_pol)
+        }
         NisarProductType::GUNW => format!("/science/{}/GUNW/grids/frequencyA/unwrappedPhase", instr),
         _ => bail!("Unsupported full-scene product type: {:?}", product_type),
     };
@@ -1008,14 +1052,14 @@ pub fn parse_nisar_rslc(path: &Path, polarization: &str) -> Result<NisarProduct>
 
 /// Parse a NISAR GSLC HDF5 file (Level-2, geocoded SLC)
 fn parse_nisar_gslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
-    let pol = polarization.to_uppercase();
-    info!("Opening NISAR GSLC: {:?} (pol={})", path, pol);
+    let gslc_pol = normalize_gslc_pol(polarization);
+    info!("Opening NISAR GSLC: {:?} (pol={})", path, gslc_pol);
 
     let file = File::open(path).with_context(|| format!("Failed to open HDF5 file: {:?}", path))?;
     let params = extract_radar_params(&file, "GSLC")?;
     let instr = &params.instrument;
 
-    let slc_path = format!("/science/{}/GSLC/grids/frequencyA/{}", instr, pol);
+    let slc_path = format!("/science/{}/GSLC/grids/frequencyA/{}", instr, gslc_pol);
     let slc = read_complex_dataset(&file, &slc_path)?;
 
     // GSLC is geocoded — extract bbox from coordinate grids
@@ -1033,7 +1077,7 @@ fn parse_nisar_gslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
     Ok(NisarProduct {
         slc,
         params,
-        polarization: pol,
+        polarization: gslc_pol,
         product_type: NisarProductType::GSLC,
         bbox,
         pixel_spacing_x_m: dx,
@@ -1053,9 +1097,7 @@ fn parse_nisar_gslc(path: &Path, polarization: &str) -> Result<NisarProduct> {
 /// We read the diagonal term (real-valued intensity) and wrap it
 /// as Complex32 (magnitude in real, zero imaginary) for pipeline compat.
 fn parse_nisar_gcov(path: &Path, polarization: &str) -> Result<NisarProduct> {
-    let pol = polarization.to_uppercase();
-    // For GCOV, "HH" maps to diagonal term "HHHH", "HV" → "HVHV", etc.
-    let cov_term = format!("{}{}", pol, pol);
+    let cov_term = normalize_gcov_cov_term(polarization);
     info!("Opening NISAR GCOV: {:?} (term={})", path, cov_term);
 
     let file = File::open(path).with_context(|| format!("Failed to open HDF5 file: {:?}", path))?;
@@ -1091,7 +1133,7 @@ fn parse_nisar_gcov(path: &Path, polarization: &str) -> Result<NisarProduct> {
     Ok(NisarProduct {
         slc,
         params,
-        polarization: pol,
+        polarization: cov_term,
         product_type: NisarProductType::GCOV,
         bbox,
         pixel_spacing_x_m: dx,
@@ -2105,5 +2147,22 @@ mod tests {
             assert!((params.center_frequency - 1.239e9).abs() < 1e7, "L-band fc should be ~1.239 GHz");
             assert!((params.wavelength() - 0.242).abs() < 1e-2, "L-band λ should be ~24.2 cm");
         }
+    }
+
+    #[test]
+    fn test_normalize_polarization_terms() {
+        assert_eq!(normalize_gcov_cov_term("HH"), "HHHH");
+        assert_eq!(normalize_gcov_cov_term("HV"), "HVHV");
+        assert_eq!(normalize_gcov_cov_term("VV"), "VVVV");
+        assert_eq!(normalize_gcov_cov_term("VH"), "VHVH");
+        assert_eq!(normalize_gcov_cov_term("HHHH"), "HHHH");
+        assert_eq!(normalize_gcov_cov_term("HVHV"), "HVHV");
+        assert_eq!(normalize_gcov_cov_term("dual"), "HHHH");
+        assert_eq!(normalize_gcov_cov_term("span"), "HHHH");
+
+        assert_eq!(normalize_gslc_pol("HH"), "HH");
+        assert_eq!(normalize_gslc_pol("HV"), "HV");
+        assert_eq!(normalize_gslc_pol("HHHH"), "HH");
+        assert_eq!(normalize_gslc_pol("HVHV"), "HV");
     }
 }
