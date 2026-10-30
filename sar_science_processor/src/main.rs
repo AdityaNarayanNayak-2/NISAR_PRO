@@ -140,7 +140,33 @@ fn main() -> Result<()> {
         eprintln!("\n💀 PANIC: {}", info);
     }));
 
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+
+    fn normalize_file_path(p: &std::path::Path) -> PathBuf {
+        if p.exists() {
+            return p.to_path_buf();
+        }
+        let s = p.to_string_lossy();
+        let with_slash = PathBuf::from(format!("/{}", s.trim_start_matches('/')));
+        if with_slash.exists() {
+            info!("Auto-correcting path missing leading slash: {:?} -> {:?}", p, with_slash);
+            return with_slash;
+        }
+        p.to_path_buf()
+    }
+
+    if let Some(ref mut inp) = cli.input {
+        *inp = normalize_file_path(inp);
+    }
+    if let Some(ref mut slv) = cli.slave {
+        *slv = normalize_file_path(slv);
+    }
+    if let Some(ref mut gnw) = cli.gunw {
+        *gnw = normalize_file_path(gnw);
+    }
+    if let Some(ref mut wtr) = cli.water_mask {
+        *wtr = normalize_file_path(wtr);
+    }
 
     // Initialize crash journal in the output directory (or current dir)
     let journal_dir = if cli.output.is_empty() {

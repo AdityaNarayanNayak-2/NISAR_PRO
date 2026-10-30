@@ -296,6 +296,25 @@ async fn spawn_local_job(
         }
     };
 
+    fn normalize_path_str(raw: &str) -> String {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        if std::path::Path::new(trimmed).exists() {
+            return trimmed.to_string();
+        }
+        let with_slash = format!("/{}", trimmed.trim_start_matches('/'));
+        if std::path::Path::new(&with_slash).exists() {
+            info!("Auto-correcting missing leading slash: {} -> {}", trimmed, with_slash);
+            return with_slash;
+        }
+        trimmed.to_string()
+    }
+
+    let input = normalize_path_str(&input);
+    let slave_file = slave_file.map(|s| normalize_path_str(&s));
+
     // ═══════════════════════════════════════════════════════════════════
     // BINARY DISPATCH: SAR Science Processor vs Standard Processor
     // ═══════════════════════════════════════════════════════════════════
