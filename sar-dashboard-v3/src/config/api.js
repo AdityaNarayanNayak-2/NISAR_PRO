@@ -5,7 +5,17 @@ const STORAGE_KEY = 'nisarpro_gateway_url';
 const DEFAULT_URL = 'http://localhost:3000';
 
 export function getGatewayUrl() {
-    return localStorage.getItem(STORAGE_KEY) || DEFAULT_URL;
+    const custom = localStorage.getItem(STORAGE_KEY);
+    if (custom) return custom;
+    if (typeof window !== 'undefined' && window.location) {
+        if (window.location.port === '5173') {
+            return `http://${window.location.hostname}:3000`;
+        }
+        if (window.location.origin && window.location.origin !== 'null') {
+            return window.location.origin;
+        }
+    }
+    return DEFAULT_URL;
 }
 
 export function setGatewayUrl(url) {
