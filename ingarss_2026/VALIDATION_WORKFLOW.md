@@ -61,7 +61,8 @@ reference and score each method with one command:
 chmod +x ingarss_2026/scripts/run_independent_validation.sh
 ./ingarss_2026/scripts/run_independent_validation.sh \
   "$PWD" \
-  "$PWD/ingarss_2026/results/validation/sentinel2_20261018_reference.tif" \
+  "$PWD/ingarss_2026/results/validation/sentinel2_20260913_reference.tif" \
+  S2B_MSIL2A_20260913T044659_R076_T45RVJ_20260913T084712 \
   l_band=/path/to/l_band_flood_class.tif \
   s_band=/path/to/s_band_flood_class.tif \
   ls_fused=/path/to/ls_fused_flood_class.tif
