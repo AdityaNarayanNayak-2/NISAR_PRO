@@ -51,3 +51,22 @@ Report the Sentinel acquisition date, cloud cover, NDWI threshold, excluded SCL 
 | L+S | to fill | to fill | to fill | to fill | to fill | to fill | gate configuration recorded |
 
 Do not fill this table with the comparison JSON's internal agreement values. Those are algorithm-to-algorithm or overlap statistics, not independent validation metrics.
+
+## RHEL helper
+
+When georeferenced masks are available, generate the dated Sentinel-2
+reference and score each method with one command:
+
+```bash
+chmod +x ingarss_2026/scripts/run_independent_validation.sh
+./ingarss_2026/scripts/run_independent_validation.sh \
+  "$PWD" \
+  "$PWD/ingarss_2026/results/validation/sentinel2_20261018_reference.tif" \
+  l_band=/path/to/l_band_flood_class.tif \
+  s_band=/path/to/s_band_flood_class.tif \
+  ls_fused=/path/to/ls_fused_flood_class.tif
+```
+
+If only the live L-band mask is available, score that method alone. Never
+copy its score to S-band or fusion; those require their own georeferenced
+classification rasters on comparable support.
