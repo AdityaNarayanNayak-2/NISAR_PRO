@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { MONO, SANS, C } from '../constants';
 import { formatBytes, formatElapsed } from '../helpers';
-import { api } from '../../../config/api';
 import { useGatewayStore } from '../stores/useGatewayStore';
 import { useJobStore } from '../stores/useJobStore';
 import { useMapStore } from '../stores/useMapStore';
@@ -49,16 +48,12 @@ export default function FloodConfigPanel({
 
     // Stores
     const gatewayOnline = useGatewayStore(state => state.gatewayOnline);
-    const jobs = useJobStore(state => state.jobs);
     const elapsed = useJobStore(state => state.elapsed);
-    const setActiveJobId = useJobStore(state => state.setActiveJobId);
-    const setTerminalOpen = useJobStore(state => state.setTerminalOpen);
 
     const drawnAoi = useMapStore(state => state.drawnAoi);
     const setDrawnAoi = useMapStore(state => state.setDrawnAoi);
     const isDrawingAoi = useMapStore(state => state.isDrawingAoi);
     const setIsDrawingAoi = useMapStore(state => state.setIsDrawingAoi);
-    const setViewingResult = useMapStore(state => state.setViewingResult);
     const setFlyToCenter = useMapStore(state => state.setFlyToCenter);
 
     const inputStyle = {

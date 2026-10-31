@@ -5,7 +5,7 @@ try {
     if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem('nisarpro_active_flood_result');
     }
-} catch (e) {
+} catch {
     // Ignore storage quota/permission errors
 }
 

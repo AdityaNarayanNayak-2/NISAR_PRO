@@ -8,7 +8,7 @@ export default function RegionsView({ floodGeoJson, floodGeoJsonPath, onSelectRe
     const [filterConf, setFilterConf] = useState('all'); // 'all' | 'high' | 'medium'
     const [pageLimit, setPageLimit] = useState(60);
 
-    const rawFeatures = floodGeoJson?.features || [];
+    const rawFeatures = useMemo(() => floodGeoJson?.features || [], [floodGeoJson]);
 
     // Filter and search
     const filteredFeatures = useMemo(() => {

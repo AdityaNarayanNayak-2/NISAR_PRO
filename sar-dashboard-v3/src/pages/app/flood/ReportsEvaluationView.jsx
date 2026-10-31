@@ -18,9 +18,8 @@ import {
 } from 'lucide-react';
 import { MONO, SANS, C } from '../constants';
 import { parseFloodReport } from './floodReportHelpers';
-import { api } from '../../../config/api';
 
-export default function ReportsEvaluationView({ floodReport, viewingResult, onOpenModal, initialTab = 'report' }) {
+export default function ReportsEvaluationView({ floodReport, initialTab = 'report' }) {
     const [activeTab, setActiveTab] = useState(initialTab); // 'report' | 'evaluation'
     const report = parseFloodReport(floodReport);
 

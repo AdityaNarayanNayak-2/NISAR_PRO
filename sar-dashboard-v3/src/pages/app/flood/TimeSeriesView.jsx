@@ -8,6 +8,59 @@ export default function TimeSeriesView({ floodReport, allJobs = [] }) {
     const report = parseFloodReport(floodReport);
     const [activeSection, setActiveSection] = useState('hydrograph'); // 'hydrograph' | 'persistence'
 
+    // Build epochs dynamically from active report
+    const EPOCHS = useMemo(() => {
+        if (report) {
+            const baseKm2 = report.permWaterKm2 || 0;
+            const peakKm2 = baseKm2 + (report.totalFloodKm2 || 0);
+            return [
+                {
+                    id: 'epoch-baseline',
+                    date: report.baselineDate || 'Baseline Reference',
+                    cycle: 'Baseline',
+                    title: 'Reference Observation',
+                    desc: 'Pre-event SAR baseline: permanent water bodies and reference backscatter.',
+                    waterKm2: baseKm2,
+                    waterAcres: Math.round(baseKm2 * 247.105),
+                    status: 'Pre-Event Baseline',
+                    color: '#38bdf8',
+                },
+                {
+                    id: 'epoch-active',
+                    date: report.activeDate || 'Active Observation',
+                    cycle: 'Active',
+                    title: 'Active Flood Delineation',
+                    desc: `Detected inundation extent with ${report.clusterCount || 0} breach clusters identified.`,
+                    waterKm2: peakKm2,
+                    waterAcres: Math.round(peakKm2 * 247.105),
+                    status: 'Active Observation',
+                    color: '#ef4444',
+                    isPeak: true,
+                }
+            ];
+        }
+        return [];
+    }, [report]);
+
+    const TRANSITIONS = useMemo(() => {
+        if (!report) return [];
+        return [
+            {
+                phase: 'Inundation Delineation Dynamics',
+                window: `${report.baselineDate || 'Baseline'} → ${report.activeDate || 'Active'}`,
+                interval: 'Temporal Observation Pair',
+                waterGainKm2: report.totalFloodKm2 || 0,
+                waterGainAcres: report.totalFloodAcres || Math.round((report.totalFloodKm2 || 0) * 247.105),
+                waterLossKm2: report.recededWaterKm2 || 0,
+                waterLossAcres: Math.round((report.recededWaterKm2 || 0) * 247.105),
+                netKm2: (report.totalFloodKm2 || 0) - (report.recededWaterKm2 || 0),
+                direction: (report.totalFloodKm2 || 0) >= (report.recededWaterKm2 || 0) ? 'expansion' : 'recession',
+                clusters: report.clusterCount || 0,
+                desc: `Delineated flood dynamics derived from NISAR GCOV observations with ${report.highConfPixels || 0} high-confidence pixels.`
+            }
+        ];
+    }, [report]);
+
     if (!report && allJobs.length === 0) {
         return (
             <motion.div 
@@ -65,59 +118,6 @@ export default function TimeSeriesView({ floodReport, allJobs = [] }) {
             </motion.div>
         );
     }
-
-    // Build epochs dynamically from active report
-    const EPOCHS = useMemo(() => {
-        if (report) {
-            const baseKm2 = report.permWaterKm2 || 0;
-            const peakKm2 = baseKm2 + (report.totalFloodKm2 || 0);
-            return [
-                {
-                    id: 'epoch-baseline',
-                    date: report.baselineDate || 'Baseline Reference',
-                    cycle: 'Baseline',
-                    title: 'Reference Observation',
-                    desc: 'Pre-event SAR baseline: permanent water bodies and reference backscatter.',
-                    waterKm2: baseKm2,
-                    waterAcres: Math.round(baseKm2 * 247.105),
-                    status: 'Pre-Event Baseline',
-                    color: '#38bdf8',
-                },
-                {
-                    id: 'epoch-active',
-                    date: report.activeDate || 'Active Observation',
-                    cycle: 'Active',
-                    title: 'Active Flood Delineation',
-                    desc: `Detected inundation extent with ${report.clusterCount || 0} breach clusters identified.`,
-                    waterKm2: peakKm2,
-                    waterAcres: Math.round(peakKm2 * 247.105),
-                    status: 'Active Observation',
-                    color: '#ef4444',
-                    isPeak: true,
-                }
-            ];
-        }
-        return [];
-    }, [report]);
-
-    const TRANSITIONS = useMemo(() => {
-        if (!report) return [];
-        return [
-            {
-                phase: 'Inundation Delineation Dynamics',
-                window: `${report.baselineDate || 'Baseline'} → ${report.activeDate || 'Active'}`,
-                interval: 'Temporal Observation Pair',
-                waterGainKm2: report.totalFloodKm2 || 0,
-                waterGainAcres: report.totalFloodAcres || Math.round((report.totalFloodKm2 || 0) * 247.105),
-                waterLossKm2: report.recededWaterKm2 || 0,
-                waterLossAcres: Math.round((report.recededWaterKm2 || 0) * 247.105),
-                netKm2: (report.totalFloodKm2 || 0) - (report.recededWaterKm2 || 0),
-                direction: (report.totalFloodKm2 || 0) >= (report.recededWaterKm2 || 0) ? 'expansion' : 'recession',
-                clusters: report.clusterCount || 0,
-                desc: `Delineated flood dynamics derived from NISAR GCOV observations with ${report.highConfPixels || 0} high-confidence pixels.`
-            }
-        ];
-    }, [report]);
 
     return (
         <motion.div 
