@@ -59,6 +59,8 @@ function AppDashboard() {
     const setSelectedRegion = useMapStore(state => state.setSelectedRegion);
 
     const layerOpacity = useMapStore(state => state.layerOpacity);
+    const showFloodPng = useMapStore(state => state.showFloodPng);
+    const showFloodGeoJson = useMapStore(state => state.showFloodGeoJson);
     const showPermanentWater = useMapStore(state => state.showPermanentWater);
     const showHighConf = useMapStore(state => state.showHighConf);
     const showMedConf = useMapStore(state => state.showMedConf);
@@ -907,7 +909,7 @@ setJobs(prev => ({
     }, [viewingResult, setFlyToCenter]);
 
     return (
-        <div className={`nisar-app-shell nisar-profile-${profile}`} style={{ width: '100%', height: '100vh', position: 'relative', backgroundColor: C.bg0, overflow: 'hidden' }}>
+        <div className={`nisar-app-shell nisar-profile-${profile}`} style={{ width: '100%', height: '100dvh', minHeight: 0, position: 'relative', backgroundColor: C.bg0, overflow: 'hidden' }}>
 
             {/* ═══ MISSION SELECT OVERLAY ═══ */}
             {!missionSelected && (
@@ -1044,7 +1046,7 @@ setJobs(prev => ({
             >
                 <TileLayer className="nisar-satellite-tiles" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                 <TileLayer className="nisar-map-labels" opacity={0.65} url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
-                {viewingResult && viewingResult.url && viewingResult.bounds && !viewingResult.floodReplayAvailable && (
+                {viewingResult && viewingResult.url && viewingResult.bounds && showFloodPng && !viewingResult.floodReplayAvailable && (
                     <ImageOverlay
                         url={viewingResult.url}
                         bounds={viewingResult.bounds}
@@ -1052,10 +1054,11 @@ setJobs(prev => ({
                     />
                 )}
                 <FloodEventReplay
+                    key={viewingResult?.url || 'flood-replay'}
                     result={viewingResult}
                     report={viewingResult?.floodReport}
                     bounds={viewingResult?.bounds}
-                    floodGeoJson={viewingResult?.floodGeoJson}
+                    showRaster={showFloodPng}
                     onPhaseChange={setReplayPhase}
                     onReplayUnavailable={() => setReplayPhase('detected')}
                 />
@@ -1183,7 +1186,7 @@ setJobs(prev => ({
                     />
                 )}
 
-{profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && showFloodVectors && (!viewingResult.floodReplayAvailable || replayPhase === 'detected') && (
+{profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && showFloodGeoJson && showFloodVectors && (!viewingResult.floodReplayAvailable || replayPhase === 'detected') && (
                     <GeoJSON
                         ref={geoJsonRef}
                         key={viewingResult.floodGeoJsonPath || viewingResult.url}

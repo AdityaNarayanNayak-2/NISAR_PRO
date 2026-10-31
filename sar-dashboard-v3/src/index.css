@@ -138,17 +138,21 @@ input:focus-visible {
 
 .flood-replay-control {
   position: absolute;
-  left: 232px;
-  bottom: 48px;
+  left: var(--flood-map-left, 252px);
+  right: var(--flood-map-right, 422px);
+  bottom: 76px;
   z-index: 1000;
-  width: min(460px, calc(100vw - 280px));
+  width: auto;
+  max-width: 620px;
+  margin: 0 auto;
   padding: 14px 16px;
   color: #f4fafc;
-  background: rgba(7, 20, 28, 0.94);
-  border: 1px solid rgba(66, 198, 213, 0.32);
+  background: rgba(18, 19, 22, 0.90);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(14px);
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  backdrop-filter: blur(20px) saturate(130%);
+  font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif;
 }
 
 /* The flood workspace owns one stable left rail. Navigation and run history
@@ -174,23 +178,23 @@ input:focus-visible {
   pointer-events: none;
 }
 
-.flood-replay-kicker { color: #42c6d5; font-size: 9px; letter-spacing: .14em; font-weight: 700; }
+.flood-replay-kicker { color: #aeb2ba; font-size: 9px; letter-spacing: .14em; font-weight: 700; }
 .flood-replay-title { margin-top: 5px; font-size: 12px; letter-spacing: .05em; font-weight: 700; }
 .flood-replay-date { margin-top: 4px; color: #9db4bd; font-size: 10px; }
 .flood-replay-track { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: 16px 0 12px; }
 .flood-replay-step { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 8px 6px; color: #6f8993; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.08); text-align: left; font: inherit; font-size: 9px; cursor: pointer; }
-.flood-replay-step.is-active { color: #f4fafc; border-color: #42c6d5; background: rgba(66,198,213,.12); }
+.flood-replay-step.is-active { color: #f4fafc; border-color: rgba(255,255,255,.24); background: rgba(255,255,255,.10); }
 .flood-replay-step small { overflow: hidden; color: #9db4bd; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .flood-replay-dot { width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; }
-.flood-replay-step.is-active .flood-replay-dot { background: #42c6d5; box-shadow: 0 0 9px #42c6d5; }
+.flood-replay-step.is-active .flood-replay-dot { background: #f3f4f6; box-shadow: 0 0 9px rgba(255,255,255,.65); }
 .flood-replay-actions { display: flex; gap: 8px; }
 .flood-replay-actions button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; color: #d9edf1; background: transparent; border: 1px solid rgba(255,255,255,.13); font: inherit; font-size: 9px; cursor: pointer; }
-.flood-replay-actions button:hover:not(:disabled), .flood-replay-actions button:focus-visible { border-color: #42c6d5; color: #42c6d5; outline: none; }
+.flood-replay-actions button:hover:not(:disabled), .flood-replay-actions button:focus-visible { border-color: rgba(255,255,255,.24); color: #fff; outline: none; }
 .flood-replay-actions button:disabled { cursor: not-allowed; opacity: .45; }
 .flood-replay-note { margin-top: 10px; color: #6f8993; font-size: 8px; line-height: 1.45; }
 
 @media (max-width: 760px) {
-  .flood-replay-control { left: 16px; bottom: 42px; width: calc(100vw - 32px); }
+  .flood-replay-control { left: 12px; right: 12px; bottom: 70px; width: auto; max-width: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -507,5 +511,60 @@ input:focus-visible {
 
 @media (max-width: 1180px) {
   .nisar-profile-flood .nisar-topbar { max-width: calc(100vw - 40px) !important; }
-  .nisar-profile-flood .nisar-command-pill { right: 20px; width: 300px; }
+.nisar-profile-flood .nisar-command-pill { right: 20px; width: 300px; }
+}
+
+/* Final viewport contract: reserve map-canvas space for floating panels so
+   the replay instrument cannot slide underneath the left rail or inspector. */
+.nisar-profile-flood {
+  /* 20px rail offset + 320px saved-runs rail + 16px breathing room. */
+  --flood-map-left: 356px;
+  --flood-map-right: 422px;
+  height: 100dvh !important;
+  min-height: 0 !important;
+}
+.nisar-profile-flood .leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+.nisar-profile-flood .flood-replay-control {
+  left: var(--flood-map-left) !important;
+  right: var(--flood-map-right) !important;
+  bottom: 78px !important;
+  width: auto !important;
+  max-width: none !important;
+  padding: 10px 12px !important;
+  border-radius: 16px !important;
+  max-height: 150px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.nisar-profile-flood .flood-replay-kicker { font-size: 8px; }
+.nisar-profile-flood .flood-replay-title { margin-top: 3px; font-size: 11px; }
+.nisar-profile-flood .flood-replay-date { margin-top: 2px; font-size: 9px; }
+.nisar-profile-flood .flood-replay-track { gap: 5px; margin: 9px 0 8px; }
+.nisar-profile-flood .flood-replay-step { gap: 3px; padding: 6px 5px; font-size: 8px; }
+.nisar-profile-flood .flood-replay-step small { font-size: 7px; }
+.nisar-profile-flood .flood-replay-actions { gap: 6px; }
+.nisar-profile-flood .flood-replay-actions button { padding: 5px 7px; font-size: 8px; }
+.nisar-profile-flood .flood-replay-note { margin-top: 6px; font-size: 7px; }
+.nisar-profile-flood .nisar-inspector-panel,
+.nisar-profile-flood .flood-result-inspector { min-height: 0; }
+.nisar-profile-flood .flood-result-inspector > div[style*="overflowY"] { flex: 1 1 auto; min-height: 0; overflow-y: auto !important; }
+
+@media (max-width: 1180px) {
+  .nisar-profile-flood {
+    --flood-map-left: 220px;
+    --flood-map-right: 380px;
+  }
+}
+
+@media (max-width: 900px) {
+  .nisar-profile-flood {
+    --flood-map-left: 12px;
+    --flood-map-right: 12px;
+  }
+  .nisar-profile-flood .flood-replay-control {
+    bottom: 70px !important;
+  }
 }

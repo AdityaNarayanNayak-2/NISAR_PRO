@@ -7,7 +7,7 @@ import { parseNisarDate } from './floodReportHelpers';
 
 const PHASES = ['baseline', 'active', 'detected'];
 
-function ReplayViewport({ bounds, phase, baselineUrl, activeUrl, maskUrl, opacity, onAssetError }) {
+function ReplayViewport({ bounds, phase, baselineUrl, activeUrl, maskUrl, opacity, showRaster, onAssetError }) {
     const map = useMap();
     useEffect(() => {
         if (bounds) map.fitBounds(bounds, { padding: [24, 24], animate: false });
@@ -15,13 +15,13 @@ function ReplayViewport({ bounds, phase, baselineUrl, activeUrl, maskUrl, opacit
 
     return (
         <>
-            {phase === 'baseline' && baselineUrl && (
+            {showRaster && phase === 'baseline' && baselineUrl && (
                 <ImageOverlay url={baselineUrl} bounds={bounds} opacity={opacity} eventHandlers={{ error: onAssetError }} />
             )}
-            {phase === 'active' && activeUrl && (
+            {showRaster && phase === 'active' && activeUrl && (
                 <ImageOverlay url={activeUrl} bounds={bounds} opacity={opacity} eventHandlers={{ error: onAssetError }} />
             )}
-            {phase === 'detected' && (
+            {showRaster && phase === 'detected' && (
                 <>
                     {activeUrl && <ImageOverlay url={activeUrl} bounds={bounds} opacity={0.65} eventHandlers={{ error: onAssetError }} />}
                     {maskUrl && <ImageOverlay url={maskUrl} bounds={bounds} opacity={Math.min(1, opacity + 0.08)} />}
@@ -31,7 +31,7 @@ function ReplayViewport({ bounds, phase, baselineUrl, activeUrl, maskUrl, opacit
     );
 }
 
-export default function FloodEventReplay({ result, report, bounds, onPhaseChange, onReplayUnavailable }) {
+export default function FloodEventReplay({ result, report, bounds, showRaster = true, onPhaseChange, onReplayUnavailable }) {
     const [phaseIndex, setPhaseIndex] = useState(2);
     const [playing, setPlaying] = useState(false);
     const [reducedMotion, setReducedMotion] = useState(false);
@@ -113,6 +113,7 @@ export default function FloodEventReplay({ result, report, bounds, onPhaseChange
                 activeUrl={paths.active}
                 maskUrl={paths.mask}
                 opacity={0.92}
+                showRaster={showRaster}
                 onAssetError={() => { setAssetError(true); onReplayUnavailable?.(); }}
             />
             <div

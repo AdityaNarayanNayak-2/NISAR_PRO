@@ -14,7 +14,7 @@ function AppLayout() {
         <div className="app-shell" style={{ minHeight: '100vh' }}>
             <main
                 className="app-dashboard-main"
-                style={{ width: '100%', height: '100vh', display: 'flex', overflow: 'hidden' }}
+                style={{ width: '100%', height: '100dvh', minHeight: 0, display: 'flex', overflow: 'hidden' }}
             >
                 <Outlet />
             </main>
