@@ -4,6 +4,7 @@
 
 - [ ] Technical presentation exported as PDF, 6–8 slides.
 - [ ] `presentation.html` opened and visually checked before PDF export.
+- [ ] Submission archive generated with `scripts/package_ingarss_submission.ps1` and its SHA-256 recorded.
 - [ ] Technical note exported as PDF, approximately 2–4 pages.
 - [ ] Clean `.ipynb` notebook that runs from a fresh hosted Colab runtime.
 - [ ] README with dependencies, commands, input/output structure, assumptions, limitations, and citations.
