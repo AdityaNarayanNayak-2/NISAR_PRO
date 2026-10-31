@@ -40,11 +40,11 @@ if (-not $AllowPendingEvidence) {
     if (-not (Test-Path -LiteralPath $provenance -PathType Leaf)) {
         $failures.Add('missing final RHEL provenance: ingarss_2026/results/rhel_provenance_final.txt')
     }
-    $metrics = if (Test-Path -LiteralPath $validation) {
-        @(Get-ChildItem -LiteralPath $validation -Filter '*_metrics.json' -File)
-    } else { @() }
-    if ($metrics.Count -lt 1) {
-        $failures.Add('no independent validation metrics found in ingarss_2026/results/validation')
+    $requiredMetrics = @('l_band_metrics.json', 's_band_metrics.json', 'ls_fused_metrics.json')
+    foreach ($metric in $requiredMetrics) {
+        if (-not (Test-Path -LiteralPath (Join-Path $validation $metric) -PathType Leaf)) {
+            $failures.Add("missing independent validation metric: ingarss_2026/results/validation/$metric")
+        }
     }
 }
 
