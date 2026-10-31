@@ -40,3 +40,25 @@ In Colab choose **Connect → Connect to local runtime** and paste the token URL
 
 Do not share a local-runtime URL with judges. A shared notebook gives other users their own hosted runtime; it does not share your RHEL machine.
 
+## Capture final RHEL provenance before submission
+
+Tailscale makes the RHEL host reachable, but it does not automatically grant
+SSH login. After the final Bihar run on RHEL, run this locally on that machine
+to record the exact Git commit, processor hash, input-granule hashes, output
+hashes, and runtime details:
+
+```bash
+cd ~/Desktop/sar_analyzer
+chmod +x ingarss_2026/scripts/capture_rhel_provenance.sh
+./ingarss_2026/scripts/capture_rhel_provenance.sh \
+  "$PWD" \
+  /home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_030_098_A_014_4005_DHDH_A_20260912T233810_20260912T233845_P05023_N_F_J_001.h5 \
+  /home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_029_098_A_014_4005_DHDH_A_20260831T233810_20260831T233845_P05023_N_F_J_001.h5 \
+  "$PWD/sar_science_processor/target/release/sar_science_processor" \
+  "$PWD/sar-gateway/results" \
+  "$PWD/ingarss_2026/results/rhel_provenance_final.txt"
+```
+
+Copy only `rhel_provenance_final.txt` back into the repository/package. Do
+not upload the multi-gigabyte `.h5` granules unless the organisers request
+them.

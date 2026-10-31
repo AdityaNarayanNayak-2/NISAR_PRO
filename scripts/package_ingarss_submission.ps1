@@ -1,5 +1,6 @@
 param(
-    [string]$OutputRoot = "$(Join-Path (Split-Path -Parent $PSScriptRoot) 'dist')"
+    [string]$OutputRoot = "$(Join-Path (Split-Path -Parent $PSScriptRoot) 'dist')",
+    [switch]$RequireEvidence
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,7 +21,6 @@ $topLevelFiles = @(
     'VALIDATION_WORKFLOW.md',
     'SUBMISSION_CHECKLIST.md',
     'EVIDENCE_AND_GAPS.md',
-    'NISAR_Bihar_Flood_Lifecycle.ipynb',
     'sar-bihar-ls-fused-aug31-sep12_flood.json'
 )
 
@@ -40,12 +40,32 @@ foreach ($directory in @('notebook_cells', 'scripts', 'results')) {
     }
 }
 
+# Keep the notebook in its source directory so a fresh Colab checkout and the
+# packaged archive use the same relative paths.
+$notebookSource = Join-Path $packageRoot 'notebooks/NISAR_Bihar_Flood_Lifecycle.ipynb'
+if (Test-Path -LiteralPath $notebookSource) {
+    New-Item -ItemType Directory -Path (Join-Path $stage 'notebooks') -Force | Out-Null
+    Copy-Item -LiteralPath $notebookSource -Destination (Join-Path $stage 'notebooks/NISAR_Bihar_Flood_Lifecycle.ipynb') -Force
+} else {
+    Write-Warning "Missing notebook: $notebookSource"
+}
+
+$provenance = Join-Path $packageRoot 'results/rhel_provenance_final.txt'
+$validation = Join-Path $packageRoot 'results/validation'
+if ($RequireEvidence -and -not (Test-Path -LiteralPath $provenance)) {
+    throw "Final evidence is incomplete: missing $provenance. Run capture_rhel_provenance.sh on RHEL first."
+}
+if ($RequireEvidence -and -not (Test-Path -LiteralPath $validation)) {
+    throw "Final evidence is incomplete: missing $validation. Generate independent validation outputs first."
+}
+
 $manifest = Join-Path $stage 'PACKAGE_MANIFEST.txt'
 @(
     "Created: $(Get-Date -Format o)",
     "Repository: $(git -C $repoRoot rev-parse --show-toplevel)",
     "Commit: $(git -C $repoRoot rev-parse HEAD)",
     "Included package: $packageRoot",
+    "RequireEvidence: $RequireEvidence",
     "Source HDF5 granules are intentionally excluded; see COLAB_GUIDE.md and README.md."
 ) | Set-Content -LiteralPath $manifest -Encoding UTF8
 
