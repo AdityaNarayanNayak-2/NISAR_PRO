@@ -18,7 +18,7 @@ export default function ProcessingView({ floodReport }) {
     ].filter(([, value]) => value != null) : [];
 
     return (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 180, damping: 20 }} style={{ flex: 1, background: '#0a0d10', padding: '24px', overflowY: 'auto', boxSizing: 'border-box' }}>
+        <motion.div className="flood-view-page" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 180, damping: 20 }} style={{ flex: 1, background: '#0a0d10', padding: '24px', overflowY: 'auto', boxSizing: 'border-box' }}>
             <div style={{ borderBottom: '1px solid #1c2430', paddingBottom: '16px' }}>
                 <div style={{ fontFamily: MONO, fontSize: '13px', fontWeight: 'bold', color: C.accent.flood, display: 'flex', gap: '8px', alignItems: 'center' }}><Cpu size={16} /> PROCESSING RECORD</div>
                 <div style={{ fontFamily: SANS, fontSize: '11px', color: C.textDim, marginTop: '4px' }}>Read-only parameters recorded by the completed Rust flood analysis.</div>

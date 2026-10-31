@@ -448,6 +448,100 @@ input:focus-visible {
   .nisar-profile-flood .nisar-coordinates-hud { left: 216px !important; }
   .nisar-profile-flood .nisar-layer-controls { right: 380px !important; }
 }
+
+/* Flood workspace utility surfaces. These rules keep the right inspector,
+   coordinates and terminal in the same floating-glass geometry as the map. */
+.nisar-profile-flood .flood-inspector-hide,
+.nisar-profile-flood .flood-inspector-open {
+  position: absolute;
+  z-index: 4;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 999px;
+  color: #c8cbd1;
+  background: rgba(255,255,255,.07);
+  box-shadow: 0 10px 24px rgba(0,0,0,.28);
+  font: 500 10px/1 "Plus Jakarta Sans", Inter, sans-serif;
+  cursor: pointer;
+}
+.nisar-profile-flood .flood-inspector-hide { top: 9px; right: 10px; }
+.nisar-profile-flood .flood-inspector-open { top: 76px; right: 20px; }
+.nisar-profile-flood .flood-inspector-hide:hover,
+.nisar-profile-flood .flood-inspector-open:hover,
+.nisar-profile-flood .flood-inspector-hide:focus-visible,
+.nisar-profile-flood .flood-inspector-open:focus-visible { color: #fff; background: rgba(255,255,255,.14); outline: none; }
+.nisar-profile-flood .nisar-coordinates-hud {
+  left: var(--flood-map-left) !important;
+  bottom: 20px !important;
+  min-height: 34px;
+  padding: 0 13px !important;
+  border-radius: 999px !important;
+  background: rgba(18,19,22,.88) !important;
+  box-shadow: 0 16px 34px rgba(0,0,0,.45);
+}
+.nisar-profile-flood .nisar-coordinates-hud.is-terminal-open { bottom: 300px !important; }
+.nisar-profile-flood .nisar-terminal-drawer {
+  left: var(--flood-map-left) !important;
+  right: var(--flood-map-right) !important;
+  bottom: 16px !important;
+  height: min(300px, calc(100dvh - 140px)) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  border-radius: 18px !important;
+  background: rgba(12,16,23,.94) !important;
+  box-shadow: 0 24px 60px rgba(0,0,0,.62);
+  overflow: hidden !important;
+}
+.nisar-profile-flood .nisar-terminal-drawer.is-closed { height: 0 !important; border-width: 0 !important; }
+.nisar-profile-flood .nisar-terminal-header { height: 42px !important; padding: 0 14px !important; background: rgba(255,255,255,.045) !important; border-bottom-color: rgba(255,255,255,.08) !important; }
+.nisar-profile-flood .nisar-terminal-header span { font-family: "Plus Jakarta Sans", Inter, sans-serif !important; color: #aeb2ba !important; letter-spacing: .02em !important; }
+.nisar-profile-flood .nisar-terminal-log { color: #aeb2ba; font-size: 10px !important; line-height: 1.6 !important; }
+.nisar-profile-flood .nisar-terminal-toggle { right: var(--flood-map-right) !important; bottom: 20px !important; border-radius: 999px !important; padding: 8px 12px !important; color: #c6c9d0 !important; background: rgba(18,19,22,.88) !important; border-color: rgba(255,255,255,.12) !important; font-family: "Plus Jakarta Sans", Inter, sans-serif !important; }
+.nisar-profile-flood .nisar-terminal-toggle:hover { border-color: rgba(255,255,255,.24) !important; color: #fff !important; }
+.nisar-profile-flood .flood-view-page {
+  color: #e7e9ed !important;
+  background: #0b0d11 !important;
+  padding: clamp(22px, 3vw, 44px) !important;
+  font-family: "Plus Jakarta Sans", Inter, sans-serif !important;
+}
+.nisar-profile-flood .flood-view-page > div:first-child { border-bottom-color: rgba(255,255,255,.10) !important; }
+.nisar-profile-flood .flood-view-page svg { color: #c4c7cd; }
+.nisar-profile-flood .flood-view-page input,
+.nisar-profile-flood .flood-view-page table,
+.nisar-profile-flood .flood-view-page > div > div { border-color: rgba(255,255,255,.09) !important; }
+.nisar-profile-flood .flood-view-page a { color: #d6d8dd !important; }
+.nisar-profile-flood .flood-view-page a:hover { color: #fff !important; }
+.flood-export-group { margin-top: 26px; }
+.flood-export-group-title { color: #8e929b; font: 600 10px/1 "Plus Jakarta Sans", Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.flood-export-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-top: 10px; }
+.flood-export-card { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 12px; min-height: 70px; padding: 12px 14px; color: #e7e9ed !important; text-decoration: none; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.035); transition: background .2s ease, border-color .2s ease, transform .2s ease; }
+.flood-export-card:hover { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.07); transform: translateY(-1px); }
+.flood-export-card > svg { color: #bfc3ca; }
+.flood-export-type { color: #8e929b; font: 600 9px/1 "JetBrains Mono", monospace; letter-spacing: .08em; }
+.flood-export-copy { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.flood-export-copy strong { color: #f0f1f3; font: 600 12px/1.2 "Plus Jakarta Sans", Inter, sans-serif; }
+.flood-export-copy small { color: #858a93; font: 400 10px/1.2 "Plus Jakarta Sans", Inter, sans-serif; }
+.flood-empty-state { display: flex; align-items: center; gap: 9px; margin-top: 24px; color: #858a93; font-size: 12px; }
+.nisar-report-modal { font-family: "Plus Jakarta Sans", Inter, sans-serif !important; }
+.nisar-report-modal .nisar-report-modal-card { max-width: 920px !important; max-height: min(900px, calc(100dvh - 40px)) !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: 22px !important; background: rgba(15,17,21,.96) !important; box-shadow: 0 30px 100px rgba(0,0,0,.72) !important; }
+.nisar-report-modal .nisar-report-modal-card > div:first-child { padding: 16px 20px !important; background: rgba(255,255,255,.045) !important; border-bottom-color: rgba(255,255,255,.08) !important; }
+.nisar-report-modal .print-modal-body { padding: clamp(18px, 3vw, 32px) !important; background: #0b0d11 !important; }
+.nisar-report-modal .print-modal-body > div,
+.nisar-report-modal .print-modal-body > div > div { border-color: rgba(255,255,255,.09) !important; border-radius: 16px !important; background: rgba(255,255,255,.035) !important; }
+.nisar-report-modal .print-modal-body table { font-family: "Plus Jakarta Sans", Inter, sans-serif !important; }
+.nisar-report-modal button { border-radius: 10px !important; font-family: "Plus Jakarta Sans", Inter, sans-serif !important; }
+
+@media (max-width: 1180px) {
+  .nisar-profile-flood .flood-inspector-open { top: 68px; right: 10px; }
+  .nisar-profile-flood .nisar-terminal-toggle { right: var(--flood-map-right) !important; }
+}
+
+@media (max-width: 900px) {
+  .nisar-profile-flood .nisar-terminal-drawer { left: 12px !important; right: 12px !important; bottom: 12px !important; }
+  .nisar-profile-flood .nisar-terminal-toggle { right: 12px !important; bottom: 12px !important; }
+  .nisar-profile-flood .nisar-coordinates-hud { left: 12px !important; bottom: 64px !important; }
+  .nisar-profile-flood .nisar-coordinates-hud.is-terminal-open { bottom: min(320px, calc(100dvh - 120px)) !important; }
+}
 @media (max-width: 700px) {
   .nisar-profile-flood .nisar-topbar { left: 8px !important; right: 8px !important; top: 8px !important; }
   .nisar-profile-flood .flood-left-rail { top: 68px; bottom: auto; height: 52px; width: auto; right: 8px; border-radius: 16px; }

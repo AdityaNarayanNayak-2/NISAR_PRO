@@ -34,11 +34,11 @@ export default function TerminalDrawer({ profile, activeView = 'map', onCancel }
     return (
         <>
             {/* ═══ TERMINAL DRAWER ═══ */}
-            <div style={{
+            <div className={`nisar-terminal-drawer ${terminalOpen ? 'is-open' : 'is-closed'}`} style={{
                 position: 'absolute',
                 bottom: profile === 'infrastructure' ? `${INFRA_LAYOUT.bottom}px` : 0,
                 left: profile === 'infrastructure' ? `${INFRA_LAYOUT.left}px` : profile === 'flood' ? `${TM.side}px` : 0,
-                right: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map')) ? 0 : `${TM.panel}px`,
+                    right: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map')) ? 0 : `${TM.panel}px`,
                 zIndex: 1000,
                 height: terminalOpen ? '240px' : '0px',
                 transition: 'height 200ms ease', overflow: 'hidden',
@@ -46,7 +46,7 @@ export default function TerminalDrawer({ profile, activeView = 'map', onCancel }
                 borderTop: '1px solid rgba(255, 255, 255, 0.06)',
                 display: 'flex', flexDirection: 'column'
             }}>
-                <div style={{ height: '36px', background: '#111111', borderBottom: '1px solid #2A2A2A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', flexShrink: 0 }}>
+                <div className="nisar-terminal-header" style={{ height: '36px', background: '#111111', borderBottom: '1px solid #2A2A2A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Terminal size={14} color="#888888" />
                         <span style={{ fontFamily: MONO, fontSize: '10px', color: '#555555' }}>PROCESSING LOG</span>
@@ -82,7 +82,7 @@ export default function TerminalDrawer({ profile, activeView = 'map', onCancel }
                         <X size={14} />
                     </button>
                 </div>
-                <div ref={terminalRef} onScroll={handleTerminalScroll} style={{ flex: 1, padding: '12px 16px', overflowY: 'auto', fontFamily: MONO, fontSize: '11px', lineHeight: 1.7 }}>
+                <div className="nisar-terminal-log" ref={terminalRef} onScroll={handleTerminalScroll} style={{ flex: 1, padding: '12px 16px', overflowY: 'auto', fontFamily: MONO, fontSize: '11px', lineHeight: 1.7 }}>
                     {currentLogs.length === 0 ? (
                         <div style={{ color: '#555555' }}>
                             {!activeJobId ? 'NO ACTIVE JOB SELECTED — START A RUN OR SELECT FROM RECENT RUNS' : 'WAITING FOR PROCESSOR OUTPUT'}
@@ -133,6 +133,7 @@ export default function TerminalDrawer({ profile, activeView = 'map', onCancel }
             {!terminalOpen && activeJobId && activeView === 'map' && (
                 <button
                     onClick={() => setTerminalOpen(true)}
+                    className="nisar-terminal-toggle"
                     style={{
                         position: 'absolute',
                         bottom: (viewingResult?.pipeline === 'flood' && viewingResult.floodReport) ? '40px' : '8px',

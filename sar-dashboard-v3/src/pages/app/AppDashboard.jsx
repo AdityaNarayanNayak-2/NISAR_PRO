@@ -259,6 +259,7 @@ function AppDashboard() {
 
     // ── Flood Workspace Multi-view States ──
     const [activeView, setActiveView] = useState(paramView || 'map');
+    const [inspectorOpen, setInspectorOpen] = useState(true);
 
     // ── Tactical Keyboard Shortcuts Hook (t: terminal, Esc: close, n: new run, r: report, 1-5: views) ──
     useKeyboardShortcuts(profile, setActiveView, setReportModalOpen);
@@ -1378,15 +1379,24 @@ setJobs(prev => ({
             )}
 
             {/* ═══ PROFILE-SPECIFIC RIGHT INSPECTOR ═══ */}
-            <div className="nisar-inspector-panel" style={{
+            {profile === 'flood' && activeView === 'map' && !inspectorOpen && (
+                <button type="button" className="flood-inspector-open" onClick={() => setInspectorOpen(true)} aria-label="Show analysis inspector">
+                    Show inspector
+                </button>
+            )}
+            <div className={`nisar-inspector-panel ${inspectorOpen ? 'is-open' : 'is-collapsed'}`} style={{
                 position: 'absolute', top: '20px', right: '20px', bottom: '20px', width: '380px', zIndex: 100,
                 background: 'rgba(18, 19, 22, 0.84)', backdropFilter: 'blur(28px) saturate(140%)', WebkitBackdropFilter: 'blur(28px) saturate(140%)',
                 border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px',
                 boxShadow: '0 24px 60px rgba(0, 0, 0, 0.75)',
-                display: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map')) ? 'none' : 'flex',
+                display: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map') || !inspectorOpen) ? 'none' : 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
             }}>
+
+                {profile === 'flood' && activeView === 'map' && (
+                    <button type="button" className="flood-inspector-hide" onClick={() => setInspectorOpen(false)} aria-label="Hide analysis inspector">Hide</button>
+                )}
 
                 {/* ── PROFILE: FLOOD MONITORING TOP TABS ── */}
                 {profile === 'flood' && (

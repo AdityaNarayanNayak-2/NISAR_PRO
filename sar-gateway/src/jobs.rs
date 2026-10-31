@@ -282,7 +282,13 @@ async fn spawn_local_job(
         tokio::fs::create_dir_all(results_dir).await.ok();
     }
 
-    let output_path = format!("results/{}.tif", job_id);
+    let output_path = if pipeline.as_deref() == Some("flood") {
+        let dir = std::path::Path::new("results").join("jobs").join(&job_id);
+        tokio::fs::create_dir_all(&dir).await.ok();
+        format!("results/jobs/{}/{}", job_id, job_id)
+    } else {
+        format!("results/{}.tif", job_id)
+    };
 
     // Input file is required — processor no longer supports synthetic mode
     let input = match input_file {
@@ -502,11 +508,12 @@ async fn spawn_local_job(
         if status.success() {
             m.status = JobStatus::Completed;
             if pipeline.as_deref() == Some("flood") {
-                m.output_path = Some(format!("/results/{}_flood.png", job_id));
-                m.flood_report_path = Some(format!("/results/{}_flood.json", job_id));
-                m.flood_geojson_path = Some(format!("/results/{}_flood.geo.json", job_id));
-                m.flood_baseline_path = Some(format!("/results/{}_flood_baseline.png", job_id));
-                m.flood_active_path = Some(format!("/results/{}_flood_active.png", job_id));
+                let prefix = format!("/results/jobs/{}/{}", job_id, job_id);
+                m.output_path = Some(format!("{}_flood.png", prefix));
+                m.flood_report_path = Some(format!("{}_flood.json", prefix));
+                m.flood_geojson_path = Some(format!("{}_flood.geo.json", prefix));
+                m.flood_baseline_path = Some(format!("{}_flood_baseline.png", prefix));
+                m.flood_active_path = Some(format!("{}_flood_active.png", prefix));
             } else if use_science && (pipeline.as_deref() == Some("gcov") || pipeline.is_none()) {
                 m.output_path = Some(format!("/results/{}.png", job_id));
             } else if use_science && pipeline.as_deref() == Some("insar") {
