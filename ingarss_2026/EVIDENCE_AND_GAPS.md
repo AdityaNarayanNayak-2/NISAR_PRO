@@ -11,6 +11,9 @@ This register separates what is present in the repository from what still needs 
 - EPSG:32645, 80 m output grid, native dimensions, selected product IDs, thresholds, and flood-region counts in JSON metadata.
 - A documented Rust streaming implementation and a benchmark harness.
 - A comparison JSON containing L-only, S-only, L+S, overlap-grid, physical-gate, and Task H fields.
+- RHEL provenance for job `sar-8b6af0bc`, including processor, source-granule,
+  and classification GeoTIFF SHA-256 values, stored at
+  `results/rhel_provenance_final.txt`.
 
 ## Live RHEL gateway observation (read-only, 2026-10-31)
 
@@ -24,6 +27,9 @@ The Tailscale gateway at `100.124.16.11:3000` responded successfully to `/jobs/h
 - Product IDs matching the LSAR Track 098 / Frame 014 pair in the package
 
 This is evidence of the current RHEL output, not yet the canonical submission result. The gateway binary commit, command line, binary hash, and granule hashes still need to be captured on RHEL.
+
+The binary and granule hashes are now captured. The exact gateway command line
+and independent validation metrics remain open.
 
 ## Must reconcile
 
