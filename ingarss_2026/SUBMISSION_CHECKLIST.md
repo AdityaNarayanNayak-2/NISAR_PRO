@@ -27,6 +27,15 @@
 
 ## Reproducibility rehearsal
 
+Run the local verifier before creating the strict final archive:
+
+```powershell
+.\scripts\verify_ingarss_submission.ps1
+```
+
+It must report `PASS`. Use `-AllowPendingEvidence` only while preparing the
+package; that mode is not acceptable for the submitted archive.
+
 Run from a fresh checkout on RHEL:
 
 ```bash
