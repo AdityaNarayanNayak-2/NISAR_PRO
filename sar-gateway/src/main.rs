@@ -157,29 +157,48 @@ async fn spa_fallback(uri: axum::http::Uri) -> axum::response::Response {
     axum::response::Html(index).into_response()
 }
 
+fn collect_flood_reports(dir: &std::path::Path, reports: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return; };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_flood_reports(&path, reports);
+        } else if path.file_name().and_then(|f| f.to_str()).is_some_and(|name| name.ends_with("_flood.json")) {
+            reports.push(path);
+        }
+    }
+}
+
+fn result_url(results_dir: &std::path::Path, path: &std::path::Path) -> String {
+    let relative = path.strip_prefix(results_dir).unwrap_or(path);
+    format!("/results/{}", relative.to_string_lossy().replace('\\', "/"))
+}
+
 async fn preload_completed_jobs(state: AppState) {
     let results_dir = std::path::Path::new("results");
     if !results_dir.exists() {
         return;
     }
-    if let Ok(entries) = std::fs::read_dir(results_dir) {
+    let mut entries = Vec::new();
+    collect_flood_reports(results_dir, &mut entries);
+    if !entries.is_empty() {
         let mut jobs_map = state.jobs.write().await;
         
-        for entry in entries.flatten() {
-            let path = entry.path();
+        for path in entries {
             if path.is_file() {
                 if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
                     if filename.ends_with("_flood.json") {
                         let job_id = filename.replace("_flood.json", "");
+                        let artifact_dir = path.parent().unwrap_or(results_dir);
                         let png_name = format!("{}_flood.png", job_id);
                         let geojson_name = format!("{}_flood.geo.json", job_id);
                         
-                        let png_path = results_dir.join(&png_name);
-                        let geojson_path = results_dir.join(&geojson_name);
+                        let png_path = artifact_dir.join(&png_name);
+                        let geojson_path = artifact_dir.join(&geojson_name);
                         let baseline_name = format!("{}_flood_baseline.png", job_id);
                         let active_name = format!("{}_flood_active.png", job_id);
-                        let baseline_path = results_dir.join(&baseline_name);
-                        let active_path = results_dir.join(&active_name);
+                        let baseline_path = artifact_dir.join(&baseline_name);
+                        let active_path = artifact_dir.join(&active_name);
                         
                         if png_path.exists() && geojson_path.exists() {
                             if let Ok(content) = std::fs::read_to_string(&path) {
@@ -233,12 +252,12 @@ async fn preload_completed_jobs(state: AppState) {
                                         status: jobs::JobStatus::Completed,
                                         logs: vec!["[SYSTEM] Preloaded completed run from server storage.".to_string()],
                                         tx,
-                                        output_path: Some(format!("/results/{}", png_name)),
+                                        output_path: Some(result_url(results_dir, &png_path)),
                                         bbox,
-                                        flood_report_path: Some(format!("/results/{}", filename)),
-                                        flood_geojson_path: Some(format!("/results/{}", geojson_name)),
-                                        flood_baseline_path: baseline_path.exists().then(|| format!("/results/{}", baseline_name)),
-                                        flood_active_path: active_path.exists().then(|| format!("/results/{}", active_name)),
+                                        flood_report_path: Some(result_url(results_dir, &path)),
+                                        flood_geojson_path: Some(result_url(results_dir, &geojson_path)),
+                                        flood_baseline_path: baseline_path.exists().then(|| result_url(results_dir, &baseline_path)),
+                                        flood_active_path: active_path.exists().then(|| result_url(results_dir, &active_path)),
                                         created_at: std::time::Instant::now(),
                                         cancel_tx: None,
                                     }));

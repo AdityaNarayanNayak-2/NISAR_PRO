@@ -12,7 +12,7 @@ export default function RegionsView({ floodGeoJson, floodGeoJsonPath, onSelectRe
     }), [floodGeoJson, query]);
 
     return (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 180, damping: 20 }} style={{ flex: 1, background: '#0a0d10', padding: '24px', overflowY: 'auto', boxSizing: 'border-box' }}>
+        <motion.div className="flood-view-page" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 180, damping: 20 }} style={{ flex: 1, background: '#0a0d10', padding: '24px', overflowY: 'auto', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', borderBottom: '1px solid #1c2430', paddingBottom: '16px' }}>
                 <div><div style={{ fontFamily: MONO, fontSize: '13px', color: C.accent.flood, fontWeight: 'bold', display: 'flex', gap: '8px', alignItems: 'center' }}><Layers size={16} /> FLOOD VECTOR FEATURES ({features.length})</div><div style={{ fontFamily: SANS, fontSize: '11px', color: C.textDim, marginTop: '4px' }}>Processor-exported GeoJSON. Each feature is a connected flood region, merged from classified raster cells, with acreage, confidence and centroid.</div></div>
                 {floodGeoJsonPath && <a href={floodGeoJsonPath} download style={{ color: C.accent.flood, fontFamily: MONO, fontSize: '11px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}><Download size={13} /> DOWNLOAD GEOJSON</a>}

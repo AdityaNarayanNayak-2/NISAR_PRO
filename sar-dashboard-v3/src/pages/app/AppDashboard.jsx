@@ -59,6 +59,8 @@ function AppDashboard() {
     const setSelectedRegion = useMapStore(state => state.setSelectedRegion);
 
     const layerOpacity = useMapStore(state => state.layerOpacity);
+    const showFloodPng = useMapStore(state => state.showFloodPng);
+    const showFloodGeoJson = useMapStore(state => state.showFloodGeoJson);
     const showPermanentWater = useMapStore(state => state.showPermanentWater);
     const showHighConf = useMapStore(state => state.showHighConf);
     const showMedConf = useMapStore(state => state.showMedConf);
@@ -257,6 +259,7 @@ function AppDashboard() {
 
     // ── Flood Workspace Multi-view States ──
     const [activeView, setActiveView] = useState(paramView || 'map');
+    const [inspectorOpen, setInspectorOpen] = useState(true);
 
     // ── Tactical Keyboard Shortcuts Hook (t: terminal, Esc: close, n: new run, r: report, 1-5: views) ──
     useKeyboardShortcuts(profile, setActiveView, setReportModalOpen);
@@ -907,7 +910,7 @@ setJobs(prev => ({
     }, [viewingResult, setFlyToCenter]);
 
     return (
-        <div className={`nisar-app-shell nisar-profile-${profile}`} style={{ width: '100%', height: '100vh', position: 'relative', backgroundColor: C.bg0, overflow: 'hidden' }}>
+        <div className={`nisar-app-shell nisar-profile-${profile}`} style={{ width: '100%', height: '100dvh', minHeight: 0, position: 'relative', backgroundColor: C.bg0, overflow: 'hidden' }}>
 
             {/* ═══ MISSION SELECT OVERLAY ═══ */}
             {!missionSelected && (
@@ -1044,7 +1047,7 @@ setJobs(prev => ({
             >
                 <TileLayer className="nisar-satellite-tiles" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                 <TileLayer className="nisar-map-labels" opacity={0.65} url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
-                {viewingResult && viewingResult.url && viewingResult.bounds && !viewingResult.floodReplayAvailable && (
+                {viewingResult && viewingResult.url && viewingResult.bounds && showFloodPng && !viewingResult.floodReplayAvailable && (
                     <ImageOverlay
                         url={viewingResult.url}
                         bounds={viewingResult.bounds}
@@ -1052,10 +1055,11 @@ setJobs(prev => ({
                     />
                 )}
                 <FloodEventReplay
+                    key={viewingResult?.url || 'flood-replay'}
                     result={viewingResult}
                     report={viewingResult?.floodReport}
                     bounds={viewingResult?.bounds}
-                    floodGeoJson={viewingResult?.floodGeoJson}
+                    showRaster={showFloodPng}
                     onPhaseChange={setReplayPhase}
                     onReplayUnavailable={() => setReplayPhase('detected')}
                 />
@@ -1183,7 +1187,7 @@ setJobs(prev => ({
                     />
                 )}
 
-{profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && showFloodVectors && (!viewingResult.floodReplayAvailable || replayPhase === 'detected') && (
+{profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodGeoJson && showFloodGeoJson && showFloodVectors && (!viewingResult.floodReplayAvailable || replayPhase === 'detected') && (
                     <GeoJSON
                         ref={geoJsonRef}
                         key={viewingResult.floodGeoJsonPath || viewingResult.url}
@@ -1375,15 +1379,24 @@ setJobs(prev => ({
             )}
 
             {/* ═══ PROFILE-SPECIFIC RIGHT INSPECTOR ═══ */}
-            <div className="nisar-inspector-panel" style={{
+            {profile === 'flood' && activeView === 'map' && !inspectorOpen && (
+                <button type="button" className="flood-inspector-open" onClick={() => setInspectorOpen(true)} aria-label="Show analysis inspector">
+                    Show inspector
+                </button>
+            )}
+            <div className={`nisar-inspector-panel ${inspectorOpen ? 'is-open' : 'is-collapsed'}`} style={{
                 position: 'absolute', top: '20px', right: '20px', bottom: '20px', width: '380px', zIndex: 100,
                 background: 'rgba(18, 19, 22, 0.84)', backdropFilter: 'blur(28px) saturate(140%)', WebkitBackdropFilter: 'blur(28px) saturate(140%)',
                 border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px',
                 boxShadow: '0 24px 60px rgba(0, 0, 0, 0.75)',
-                display: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map')) ? 'none' : 'flex',
+                display: (profile === 'infrastructure' || (profile === 'flood' && activeView !== 'map') || !inspectorOpen) ? 'none' : 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
             }}>
+
+                {profile === 'flood' && activeView === 'map' && (
+                    <button type="button" className="flood-inspector-hide" onClick={() => setInspectorOpen(false)} aria-label="Hide analysis inspector">Hide</button>
+                )}
 
                 {/* ── PROFILE: FLOOD MONITORING TOP TABS ── */}
                 {profile === 'flood' && (

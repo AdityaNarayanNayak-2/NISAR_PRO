@@ -73,6 +73,19 @@ export const useMapStore = create((set) => ({
     layerOpacity: 0.8,
     setLayerOpacity: (val) => set({ layerOpacity: typeof val === 'function' ? val : Number(val) }),
 
+    // Flood artifact visibility is separate from classification styling. The
+    // PNG is the browser preview; the GeoTIFF remains the authoritative
+    // downloadable raster because browsers do not decode GeoTIFF natively.
+    showFloodPng: true,
+    setShowFloodPng: (val) => set((state) => ({
+        showFloodPng: typeof val === 'function' ? val(state.showFloodPng) : val
+    })),
+
+    showFloodGeoJson: true,
+    setShowFloodGeoJson: (val) => set((state) => ({
+        showFloodGeoJson: typeof val === 'function' ? val(state.showFloodGeoJson) : val
+    })),
+
     showPermanentWater: true,
     setShowPermanentWater: (val) => set((state) => ({
         showPermanentWater: typeof val === 'function' ? val(state.showPermanentWater) : val

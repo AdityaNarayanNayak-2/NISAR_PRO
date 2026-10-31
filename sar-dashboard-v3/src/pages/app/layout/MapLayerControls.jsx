@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
-import { Layers, X } from 'lucide-react';
+import { Download, Layers, X } from 'lucide-react';
 import { MONO, C, TM } from '../constants';
 import { useMapStore } from '../stores/useMapStore';
+import { api } from '../../../config/api';
 
 export default function MapLayerControls({ profile = 'flood', activeView = 'map' }) {
     const viewingResult = useMapStore(state => state.viewingResult);
 
     const layerOpacity = useMapStore(state => state.layerOpacity);
     const setLayerOpacity = useMapStore(state => state.setLayerOpacity);
+    const showFloodPng = useMapStore(state => state.showFloodPng);
+    const setShowFloodPng = useMapStore(state => state.setShowFloodPng);
+    const showFloodGeoJson = useMapStore(state => state.showFloodGeoJson);
+    const setShowFloodGeoJson = useMapStore(state => state.setShowFloodGeoJson);
 
     const showPermanentWater = useMapStore(state => state.showPermanentWater);
     const setShowPermanentWater = useMapStore(state => state.setShowPermanentWater);
@@ -28,6 +33,8 @@ export default function MapLayerControls({ profile = 'flood', activeView = 'map'
     }
 
     const layers = [
+        { label: 'Raster preview (PNG)', color: '#d8dbe0', value: showFloodPng, onChange: () => setShowFloodPng(!showFloodPng) },
+        { label: 'Flood polygons (GeoJSON)', color: '#f3a35c', value: showFloodGeoJson, onChange: () => setShowFloodGeoJson(!showFloodGeoJson) },
         { label: 'Permanent Water', color: '#2166c1', value: showPermanentWater, onChange: () => setShowPermanentWater(!showPermanentWater) },
         { label: 'High Conf', color: '#00a6c7', value: showHighConf, onChange: () => setShowHighConf(!showHighConf) },
         { label: 'Med Conf', color: '#42c6d5', value: showMedConf, onChange: () => setShowMedConf(!showMedConf) },
@@ -131,6 +138,20 @@ export default function MapLayerControls({ profile = 'flood', activeView = 'map'
 
             {/* Divider */}
             <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.06)', margin: '10px 0' }} />
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px', color: C.textDim, fontSize: '9px' }}>
+                <span>GeoTIFF classification raster</span>
+                {viewingResult?.floodReportPath && (
+                    <a
+                        href={api(viewingResult.floodReportPath.replace(/\.json$/, '_class.tif'))}
+                        download
+                        title="Download authoritative GeoTIFF raster"
+                        style={{ display: 'inline-flex', color: C.textMid }}
+                    >
+                        <Download size={13} />
+                    </a>
+                )}
+            </div>
 
             {/* Classification Layer Toggles */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
