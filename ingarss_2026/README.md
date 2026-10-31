@@ -13,7 +13,7 @@ ingarss_2026/
 ├── bin/
 │   └── sar_science_processor      ← Standalone precompiled high-performance Linux binary
 ├── notebooks/
-│   └── ingarss_flood_evaluation.ipynb ← 1-click Jupyter Notebook for academic judges & evaluators
+│   └── NISAR_Bihar_Flood_Lifecycle.ipynb ← 1-click Jupyter Notebook for academic judges & evaluators
 ├── scripts/
 │   └── run_flood_pipeline.py      ← Lightweight Python runner invoking the Rust engine
 ├── results/                       ← Showcase full-scene Bihar swath artifacts
@@ -27,7 +27,7 @@ ingarss_2026/
 
 ##  Key Scientific & Engineering Highlights
 
-### 1. InGARSS 2026 Section 6: 4-Class Temporal Dynamics
+### 1. InGARSS 2026 Section 6: Temporal Dynamics
 Every pixel is classified into the strict Section 6 temporal classes:
 * **Class 0**: Stable Non-Water Land (Slate `#64748b`)
 * **Class 1**: Stable Water Body (Cyan `#00e5ff`)
@@ -50,7 +50,7 @@ Instead of a simple 2-date comparison, this submission demonstrates the complete
 
 ### Option A: Interactive Jupyter Notebook
 ```bash
-jupyter notebook notebooks/ingarss_flood_evaluation.ipynb
+jupyter notebook notebooks/NISAR_Bihar_Flood_Lifecycle.ipynb
 ```
 
 ### Option B: Standalone Python Runner

@@ -1,0 +1,44 @@
+# Evidence register and submission blockers
+
+This register separates what is present in the repository from what still needs verification before submission.
+
+## Verified in repository
+
+- L2 GCOV L-band full-scene result for 31 Aug → 12 Sep.
+- L2 GCOV S-band full-scene result for 31 Aug → 12 Sep.
+- L-band recession result for 12 Sep → 18 Oct.
+- GeoTIFF, PNG, GeoJSON, and JSON outputs for the showcase runs.
+- EPSG:32645, 80 m output grid, native dimensions, selected product IDs, thresholds, and flood-region counts in JSON metadata.
+- A documented Rust streaming implementation and a benchmark harness.
+- A comparison JSON containing L-only, S-only, L+S, overlap-grid, physical-gate, and Task H fields.
+
+## Must reconcile
+
+1. **Canonical L-band numbers:** the standalone L-band report records 1,166.21 km² gain, while the fusion comparison artifact records 1,137.14 km². Record the exact binary commit, flags, erosion setting, and source files used for the canonical table; then regenerate the comparison if necessary.
+2. **Runtime claim:** the project materials mention 43 s, 42 s, and 63 s in different places. Publish one number per configuration with hardware, command, cold/warm status, and peak RSS.
+3. **Track/frame wording:** use the identifiers from the actual granule metadata. The repository filenames indicate relative track 098, frame 014, with product/frame identifiers 4005 for L and 3700 for S.
+4. **Fusion method:** document the exact pixel-level rule, alignment offsets, nodata intersection, and whether the reported gate areas are mutually exclusive.
+
+## Submission blockers
+
+- Independent dated reference labels and a reproducible confusion-matrix script.
+- Controlled ablation: L-only, S-only, L+S without gates, and L+S with each gate enabled separately.
+- A full-scene coverage map and a statement explaining valid-swath percentage versus the bounding grid.
+- A clean Colab run of the notebook from a fresh runtime with no repository-local assumptions.
+- A final README with exact dependencies, input paths, commands, output schema, and licence/data citations.
+
+## Claims to avoid until resolved
+
+- “Zero-OOM guarantee” — say “observed peak memory under the documented benchmark conditions.”
+- “100% false alarms eliminated” — use the measured gate output and define the reference used to call a pixel a false positive.
+- “Improved accuracy” — use “different/complementary result” until independent labels show improvement.
+- “Flood caused by rainfall” — use “newly detected water” unless independent hydrometeorological evidence supports attribution.
+
+## High-value bonus experiments
+
+- Bootstrap confidence intervals for area and accuracy metrics.
+- Threshold sensitivity curves for water threshold, Otsu cap, seed, growth, erosion, and minimum component size.
+- Stratified validation by open water, agriculture, vegetation, sandbar, and urban/rough land.
+- Cross-date and cross-band co-registration residual map, not only a single global offset.
+- A compact provenance manifest containing git commit, binary hash, granule checksums, command line, and machine telemetry.
+
