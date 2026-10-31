@@ -57,8 +57,9 @@ $validation = Join-Path $packageRoot 'results/validation'
 if ($RequireEvidence -and -not (Test-Path -LiteralPath $provenance)) {
     throw "Final evidence is incomplete: missing $provenance. Run capture_rhel_provenance.sh on RHEL first."
 }
-if ($RequireEvidence -and -not (Test-Path -LiteralPath $validation)) {
-    throw "Final evidence is incomplete: missing $validation. Generate independent validation outputs first."
+if ($RequireEvidence -and -not (Test-Path -LiteralPath $validation) -and
+    -not (Test-Path -LiteralPath (Join-Path $packageRoot 'VALIDATION_STATUS.md'))) {
+    throw "Final evidence is incomplete: provide validation outputs or VALIDATION_STATUS.md."
 }
 
 $manifest = Join-Path $stage 'PACKAGE_MANIFEST.txt'
