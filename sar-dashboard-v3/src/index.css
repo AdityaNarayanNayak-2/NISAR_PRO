@@ -498,6 +498,36 @@ input:focus-visible {
 .nisar-profile-flood .nisar-terminal-log { color: #aeb2ba; font-size: 10px !important; line-height: 1.6 !important; }
 .nisar-profile-flood .nisar-terminal-toggle { right: var(--flood-map-right) !important; bottom: 20px !important; border-radius: 999px !important; padding: 8px 12px !important; color: #c6c9d0 !important; background: rgba(18,19,22,.88) !important; border-color: rgba(255,255,255,.12) !important; font-family: "Plus Jakarta Sans", Inter, sans-serif !important; }
 .nisar-profile-flood .nisar-terminal-toggle:hover { border-color: rgba(255,255,255,.24) !important; color: #fff !important; }
+/* Astra Workspace Tab Panel Container */
+.flood-workspace-view-container {
+  position: absolute;
+  top: 76px;
+  bottom: 20px;
+  right: 20px;
+  left: 356px;
+  z-index: 1005;
+  display: flex;
+  flex-direction: column;
+  background: rgba(13, 16, 20, 0.94);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  transition: left 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 1080px) {
+  .flood-workspace-view-container {
+    left: 16px !important;
+    right: 16px;
+    top: 76px;
+    bottom: 16px;
+    border-radius: 18px;
+  }
+}
+
 .nisar-profile-flood .flood-view-page {
   color: #e7e9ed !important;
   background: #0b0d11 !important;

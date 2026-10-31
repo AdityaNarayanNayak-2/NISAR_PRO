@@ -1,34 +1,12 @@
 import { create } from 'zustand';
 
-const STORAGE_KEY_VIEWING_RESULT = 'nisarpro_active_flood_result';
-
-function loadPersistedViewingResult() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY_VIEWING_RESULT);
-        if (raw) {
-            return JSON.parse(raw);
-        }
-    } catch (e) {
-        console.warn('Failed to load persisted viewingResult:', e);
+// Ensure old cached results in localStorage are purged so opening Flood never auto-loads previous runs
+try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('nisarpro_active_flood_result');
     }
-    return null;
-}
-
-function savePersistedViewingResult(result) {
-    try {
-        if (!result) {
-            localStorage.removeItem(STORAGE_KEY_VIEWING_RESULT);
-            return;
-        }
-        // Save essentials, stripping heavy inline floodGeoJson to prevent localStorage quota issues
-        const toSave = {
-            ...result,
-            floodGeoJson: null
-        };
-        localStorage.setItem(STORAGE_KEY_VIEWING_RESULT, JSON.stringify(toSave));
-    } catch (e) {
-        console.warn('Failed to save persisted viewingResult:', e);
-    }
+} catch (e) {
+    // Ignore storage quota/permission errors
 }
 
 export const useMapStore = create((set) => ({
@@ -57,12 +35,10 @@ export const useMapStore = create((set) => ({
         isDrawingAoi: typeof isDrawing === 'function' ? isDrawing(state.isDrawingAoi) : isDrawing
     })),
 
-    viewingResult: loadPersistedViewingResult(),
-    setViewingResult: (result) => set((state) => {
-        const next = typeof result === 'function' ? result(state.viewingResult) : result;
-        savePersistedViewingResult(next);
-        return { viewingResult: next };
-    }),
+    viewingResult: null,
+    setViewingResult: (result) => set((state) => ({
+        viewingResult: typeof result === 'function' ? result(state.viewingResult) : result
+    })),
 
     selectedRegion: null,
     setSelectedRegion: (region) => set((state) => ({

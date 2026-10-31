@@ -6,7 +6,7 @@ import { api } from '../../config/api';
 import { Terminal, Play, ChevronDown, CheckCircle, AlertTriangle, Loader, Search, FolderOpen, Eye, Download, ArrowLeft, MapPin, Calendar, Layers, X, Anchor, Crosshair, Waves, Palette, WifiOff, Clock, Info, Ship, FileText } from 'lucide-react';
 
 import { MONO, SANS, C, PROFILES, TM, INFRA_LAYOUT } from './constants';
-import { parseNisarFilename, normalizeJobStatus, jobErrorMessage } from './helpers';
+import { parseNisarFilename, normalizeJobStatus, jobErrorMessage, isValidLatLngBounds, extractBoundsFromResult } from './helpers';
 import { parseFloodReport } from './flood/floodReportHelpers';
 import { MapFlyTo, MapFlyToBounds, MapEventTracker, MapResizer, MapAoiDrawer, MapZoomGate } from './MapComponents';
 import L from 'leaflet';
@@ -17,6 +17,7 @@ import FloodConfigPanel from './flood/FloodConfigPanel';
 import AnalysisReportModal from './flood/AnalysisReportModal';
 import TimeSeriesView from './flood/TimeSeriesView';
 import RegionsView from './flood/RegionsView';
+import ReportsEvaluationView from './flood/ReportsEvaluationView';
 import ProcessingView from './flood/ProcessingView';
 import DataExportsView from './flood/DataExportsView';
 import SettingsView from './flood/SettingsView';
@@ -259,6 +260,7 @@ function AppDashboard() {
 
     // ── Flood Workspace Multi-view States ──
     const [activeView, setActiveView] = useState(paramView || 'map');
+    const [floodSidebarCollapsed, setFloodSidebarCollapsed] = useState(false);
     const [inspectorOpen, setInspectorOpen] = useState(true);
 
     // ── Tactical Keyboard Shortcuts Hook (t: terminal, Esc: close, n: new run, r: report, 1-5: views) ──
@@ -275,7 +277,7 @@ function AppDashboard() {
                 currentParams.set('job_id', viewingResult.id);
                 changed = true;
             }
-        } else if (currentParams.has('job_id') && !paramJobId) {
+        } else if (currentParams.has('job_id') && !jobsSyncing) {
             currentParams.delete('job_id');
             changed = true;
         }
@@ -311,10 +313,11 @@ function AppDashboard() {
         }
 
         if (changed) {
-            const newUrl = `${window.location.pathname}?${currentParams.toString()}`;
+            const qs = currentParams.toString();
+            const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
             window.history.replaceState(null, '', newUrl);
         }
-    }, [viewingResult?.id, reportModalOpen, profile, activeView, paramJobId]);
+    }, [viewingResult?.id, reportModalOpen, profile, activeView, jobsSyncing]);
 
     // Ensure GeoJSON is fetched for a persisted viewingResult if missing (deduped against the job preload)
     useEffect(() => {
@@ -388,9 +391,12 @@ function AppDashboard() {
                                 floodActivePath: targetJob.floodActivePath,
                                 floodReplayAvailable: targetJob.floodReplayAvailable,
                             });
-                            if (targetJob.bounds) {
-                                const [[south, west], [north, east]] = targetJob.bounds;
-                                setFlyToCenter([(south + north) / 2, (west + east) / 2]);
+                            const targetBounds = extractBoundsFromResult(targetJob);
+                            if (targetBounds && isValidLatLngBounds(targetBounds)) {
+                                const [[south, west], [north, east]] = targetBounds;
+                                if (Number.isFinite(south) && Number.isFinite(north) && Number.isFinite(west) && Number.isFinite(east)) {
+                                    setFlyToCenter([(south + north) / 2, (west + east) / 2]);
+                                }
                             }
                         });
                     }
@@ -403,9 +409,13 @@ function AppDashboard() {
 
     // Center map to bounds of newly active results
     useEffect(() => {
-        if (viewingResult && viewingResult.bounds) {
-            const [[south, west], [north, east]] = viewingResult.bounds;
-            setFlyToCenter([(south + north) / 2, (west + east) / 2]);
+        if (!viewingResult) return;
+        const resBounds = extractBoundsFromResult(viewingResult);
+        if (resBounds && isValidLatLngBounds(resBounds)) {
+            const [[south, west], [north, east]] = resBounds;
+            if (Number.isFinite(south) && Number.isFinite(north) && Number.isFinite(west) && Number.isFinite(east)) {
+                setFlyToCenter([(south + north) / 2, (west + east) / 2]);
+            }
         }
     }, [viewingResult, setFlyToCenter]);
 
@@ -672,7 +682,7 @@ function AppDashboard() {
             });
             const data = await res.json();
             const id = data.job_id;
-            const label = filePath.split('/').pop();
+            const label = (filePath && typeof filePath === 'string') ? filePath.split('/').pop() : 'job';
             setJobs(prev => ({ ...prev, [id]: { id, status: 'running', name: label, bounds: null, bbox: null, pipeline: activePipeline, startedAt: Date.now() } }));
             setActiveJobId(id); setTerminalOpen(true);
             const sse = new EventSource(api(`/jobs/${id}/logs`));
@@ -898,14 +908,13 @@ setJobs(prev => ({
 
     // Auto-center map when a completed result is loaded
     useEffect(() => {
-        if (viewingResult && viewingResult.bbox) {
-            setFlyToCenter([
-                (viewingResult.bbox.south + viewingResult.bbox.north) / 2,
-                (viewingResult.bbox.west + viewingResult.bbox.east) / 2
-            ]);
-        } else if (viewingResult && viewingResult.bounds) {
-            const [[south, west], [north, east]] = viewingResult.bounds;
-            setFlyToCenter([(south + north) / 2, (west + east) / 2]);
+        if (!viewingResult) return;
+        const safeBounds = extractBoundsFromResult(viewingResult);
+        if (safeBounds && isValidLatLngBounds(safeBounds)) {
+            const [[south, west], [north, east]] = safeBounds;
+            if (Number.isFinite(south) && Number.isFinite(north) && Number.isFinite(west) && Number.isFinite(east)) {
+                setFlyToCenter([(south + north) / 2, (west + east) / 2]);
+            }
         }
     }, [viewingResult, setFlyToCenter]);
 
@@ -1029,8 +1038,8 @@ setJobs(prev => ({
 
             {/* ═══ FULL-SCREEN MAP ═══ */}
             <MapContainer
-                center={[28.65, -0.53]}
-                zoom={5}
+                center={[25.5000, 86.5000]}
+                zoom={8}
                 style={{
                     display: (profile === 'flood' && activeView !== 'map') ? 'none' : 'block',
                     position: 'absolute',
@@ -1047,22 +1056,24 @@ setJobs(prev => ({
             >
                 <TileLayer className="nisar-satellite-tiles" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                 <TileLayer className="nisar-map-labels" opacity={0.65} url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
-                {viewingResult && viewingResult.url && viewingResult.bounds && showFloodPng && !viewingResult.floodReplayAvailable && (
+                {viewingResult && viewingResult.url && isValidLatLngBounds(viewingResult.bounds) && showFloodPng && !viewingResult.floodReplayAvailable && (
                     <ImageOverlay
                         url={viewingResult.url}
                         bounds={viewingResult.bounds}
                         opacity={showPermanentWater ? layerOpacity : 0}
                     />
                 )}
-                <FloodEventReplay
-                    key={viewingResult?.url || 'flood-replay'}
-                    result={viewingResult}
-                    report={viewingResult?.floodReport}
-                    bounds={viewingResult?.bounds}
-                    showRaster={showFloodPng}
-                    onPhaseChange={setReplayPhase}
-                    onReplayUnavailable={() => setReplayPhase('detected')}
-                />
+                {viewingResult && (
+                    <FloodEventReplay
+                        key={viewingResult?.url || 'flood-replay'}
+                        result={viewingResult}
+                        report={viewingResult?.floodReport}
+                        bounds={extractBoundsFromResult(viewingResult)}
+                        showRaster={showFloodPng}
+                        onPhaseChange={setReplayPhase}
+                        onReplayUnavailable={() => setReplayPhase('detected')}
+                    />
+                )}
                 <MapResizer />
                 <MapEventTracker setCoords={setMouseCoords} setMapBounds={setMapBounds} />
                 <MapZoomGate onZoomChange={setMapZoom} />
@@ -1117,6 +1128,8 @@ setJobs(prev => ({
 
                         const radius = (sev === 'CRITICAL' || absDisp >= 15) ? 2.5 : (sev === 'ALERT') ? 2.0 : 1.5;
 
+                        if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return null;
+
                         return (
                             <CircleMarker
                                 key={`ps-${idx}`}
@@ -1144,7 +1157,7 @@ setJobs(prev => ({
 
                 {/* CFAR Ship Detection Overlays */}
                 {viewingResult && viewingResult.ships && (
-                    viewingResult.ships.map((ship, idx) => (
+                    viewingResult.ships.filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon)).map((ship, idx) => (
                         <CircleMarker
                             key={`ship-${idx}`}
                             center={[ship.lat, ship.lon]}
@@ -1174,7 +1187,7 @@ setJobs(prev => ({
                     ))
                 )}
                 {/* Processing scan ring (Phase E) */}
-                {runningJobs.length > 0 && assetLat && assetLon && profile === 'infrastructure' && (
+                {runningJobs.length > 0 && Number.isFinite(parseFloat(assetLat)) && Number.isFinite(parseFloat(assetLon)) && profile === 'infrastructure' && (
                     <CircleMarker
                         center={[parseFloat(assetLat), parseFloat(assetLon)]}
                         radius={20}
@@ -1475,7 +1488,9 @@ setJobs(prev => ({
                                     if (!viewingResult || !viewingResult.floodGeoJsonPath) return;
                                     const link = document.createElement('a');
                                     link.href = api(`/${viewingResult.floodGeoJsonPath}`);
-                                    link.download = viewingResult.floodGeoJsonPath.split('/').pop() || 'flood_map.geo.json';
+                                    link.download = (viewingResult.floodGeoJsonPath && typeof viewingResult.floodGeoJsonPath === 'string')
+                                        ? viewingResult.floodGeoJsonPath.split('/').pop()
+                                        : 'flood_map.geo.json';
                                     link.click();
                                 }}
                                 onViewReport={() => setReportModalOpen(true)}
@@ -1610,6 +1625,8 @@ setJobs(prev => ({
                     <WorkspaceSidebar
                         activeView={activeView}
                         onSelectView={setActiveView}
+                        collapsed={floodSidebarCollapsed}
+                        onToggleCollapse={setFloodSidebarCollapsed}
                         onOpenReport={() => {
                             if (viewingResult?.pipeline === 'flood' && viewingResult.floodReport) {
                                 setReportModalOpen(true);
@@ -1625,17 +1642,10 @@ setJobs(prev => ({
 
             {/* ═══ WORKSPACE TAB PANELS (profile === 'flood' and not 'map') ═══ */}
             {profile === 'flood' && activeView !== 'map' && (
-                <div style={{
-                    position: 'absolute',
-                    left: `${TM.side}px`,
-                    top: '42px',
-                    right: 0,
-                    bottom: 0,
-                    background: '#0a0d10',
-                    zIndex: 10,
-                    display: 'flex',
-                    flexDirection: 'column'
-                }}>
+                <div 
+                    className="flood-workspace-view-container"
+                    style={floodSidebarCollapsed ? { left: '76px' } : undefined}
+                >
                     {activeView === 'timeseries' && <TimeSeriesView floodReport={viewingResult?.floodReport} allJobs={jobs} />}
                     {activeView === 'regions' && (
                         <RegionsView
@@ -1684,6 +1694,22 @@ setJobs(prev => ({
                                 }
                                 setActiveView('map');
                             }}
+                        />
+                    )}
+                    {activeView === 'reports' && (
+                        <ReportsEvaluationView
+                            floodReport={viewingResult?.floodReport}
+                            viewingResult={viewingResult}
+                            onOpenModal={() => setReportModalOpen(true)}
+                            initialTab="report"
+                        />
+                    )}
+                    {activeView === 'evaluation' && (
+                        <ReportsEvaluationView
+                            floodReport={viewingResult?.floodReport}
+                            viewingResult={viewingResult}
+                            onOpenModal={() => setReportModalOpen(true)}
+                            initialTab="evaluation"
                         />
                     )}
                     {activeView === 'processing' && <ProcessingView floodReport={viewingResult?.floodReport} />}

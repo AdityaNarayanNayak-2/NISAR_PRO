@@ -4,14 +4,23 @@ import { Pause, Play, RotateCcw } from 'lucide-react';
 import { api } from '../../../config/api';
 import { MONO, C } from '../constants';
 import { parseNisarDate } from './floodReportHelpers';
+import { isValidLatLngBounds } from '../helpers';
 
 const PHASES = ['baseline', 'active', 'detected'];
 
 function ReplayViewport({ bounds, phase, baselineUrl, activeUrl, maskUrl, opacity, showRaster, onAssetError }) {
     const map = useMap();
     useEffect(() => {
-        if (bounds) map.fitBounds(bounds, { padding: [24, 24], animate: false });
+        if (bounds && isValidLatLngBounds(bounds)) {
+            try {
+                map.fitBounds(bounds, { padding: [24, 24], animate: false });
+            } catch (err) {
+                console.warn('fitBounds failed:', err);
+            }
+        }
     }, [bounds, map]);
+
+    if (!bounds || !isValidLatLngBounds(bounds)) return null;
 
     return (
         <>

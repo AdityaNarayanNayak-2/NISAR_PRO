@@ -61,9 +61,24 @@ export default function TopBar({ profile, setProfile, onOpenReport, activeView =
                     </div>
                     <nav className="nisar-pill-nav" aria-label="Workspace sections">
                         {NAV_ITEMS.map(([id, label]) => (
-                            <button type="button" key={id} className={activeView === id ? 'is-active' : ''} onClick={() => id === 'reports' ? onOpenReport() : onSelectView?.(id)}>{label}</button>
+                            <button
+                                type="button"
+                                key={id}
+                                className={activeView === id ? 'is-active' : ''}
+                                onClick={() => onSelectView?.(id)}
+                            >
+                                {label}
+                            </button>
                         ))}
-                        {profile === 'flood' && <button type="button" className={activeView === 'evaluation' ? 'is-active' : ''} onClick={() => onSelectView?.('reports')}>Evaluation Hub</button>}
+                        {profile === 'flood' && (
+                            <button
+                                type="button"
+                                className={activeView === 'evaluation' ? 'is-active' : ''}
+                                onClick={() => onSelectView?.('evaluation')}
+                            >
+                                Evaluation Hub
+                            </button>
+                        )}
                     </nav>
                 </div>
             </header>

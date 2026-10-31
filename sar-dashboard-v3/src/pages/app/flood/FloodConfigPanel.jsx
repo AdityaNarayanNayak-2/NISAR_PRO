@@ -602,40 +602,6 @@ export default function FloodConfigPanel({
                     >✕ CANCEL RUN</button>
                 </div>
             )}
-
-            {/* DIVIDER */}
-            {Object.values(jobs).length > 0 && <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />}
-
-            {/* COMPLETED JOBS */}
-            {Object.values(jobs).length > 0 && (<>
-                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>COMPLETED JOBS</div>
-                {Object.values(jobs).map(job => (
-                    <div key={job.id} onClick={() => { setActiveJobId(job.id); setTerminalOpen(true); }} style={{ padding: '8px', borderBottom: `1px solid ${C.bg2}`, cursor: 'pointer' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontFamily: MONO, fontSize: '11px', color: C.textMid }}>{job.name}</span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
-                                {job.status === 'completed' && <span style={{ color: C.stable }}>●</span>}
-                                {job.status === 'running' && <span style={{ color: accent }}>●</span>}
-                                {job.status === 'failed' && <span style={{ color: C.critical }}>●</span>}
-                                {elapsed[job.id] != null && formatElapsed(elapsed[job.id])}
-                            </span>
-                        </div>
-                        {job.status === 'failed' && (
-                            <div style={{ marginTop: '6px', fontFamily: MONO, fontSize: '9px', color: C.critical, wordBreak: 'break-all', lineHeight: 1.5 }}>
-                                {job.error || 'Processing failed'}
-                            </div>
-                        )}
-                        {job.status === 'completed' && (
-                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                                <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, floodReport: job.floodReport, floodGeoJson: job.floodGeoJson, floodReportPath: job.floodReportPath, floodGeoJsonPath: job.floodGeoJsonPath, floodBaselinePath: job.floodBaselinePath, floodActivePath: job.floodActivePath, floodReplayAvailable: job.floodReplayAvailable, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
-                                    style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.stable, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>VIEW</button>
-                                <button onClick={(e) => { e.stopPropagation(); window.open(api(job.output_path), '_blank'); }}
-                                    style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>DL</button>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </>)}
         </div>
     );
 }

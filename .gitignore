@@ -11,7 +11,10 @@ node_modules/
 dist/
 
 # Processing results (generated at runtime)
-sar-gateway/results/
+results/*
+!results/.gitkeep
+sar-gateway/results/*
+!sar-gateway/results/.gitkeep
 SarScienceFrontendExample/
 # Docker Archives
 *.tar
@@ -31,6 +34,8 @@ SarScienceFrontendExample/
 Download/
 *.h5
 *.npz
+*.tif
+*.tiff
 results/*.npz
 cache_*.npz
 crash_journal.log

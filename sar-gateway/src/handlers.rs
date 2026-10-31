@@ -110,6 +110,47 @@ pub async fn cancel_job_handler(
     }
 }
 
+pub async fn delete_job_handler(
+    State(state): State<crate::AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    match crate::jobs::delete_job(state, &id).await {
+        Ok(files_deleted) => Ok(Json(json!({
+            "status": "deleted",
+            "job_id": id,
+            "files_deleted": files_deleted
+        }))),
+        Err(e) => {
+            log::error!("Delete job error: {}", e);
+            Err(StatusCode::NOT_FOUND)
+        }
+    }
+}
+
+#[derive(serde::Deserialize, Default)]
+pub struct PruneQuery {
+    pub keep: Option<usize>,
+}
+
+pub async fn prune_jobs_handler(
+    State(state): State<crate::AppState>,
+    Query(params): Query<PruneQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let keep = params.keep.unwrap_or(0);
+    match crate::jobs::prune_jobs(state, keep).await {
+        Ok(summary) => Ok(Json(json!({
+            "status": "pruned",
+            "jobs_deleted": summary.jobs_deleted,
+            "files_deleted": summary.files_deleted,
+            "freed_bytes": summary.freed_bytes
+        }))),
+        Err(e) => {
+            log::error!("Prune jobs error: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
 pub async fn stream_logs_handler(
     State(state): State<crate::AppState>,
     Path(id): Path<String>,
