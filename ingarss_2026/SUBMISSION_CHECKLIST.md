@@ -3,6 +3,7 @@
 ## Required deliverables
 
 - [ ] Technical presentation exported as PDF, 6–8 slides.
+- [ ] `presentation.html` opened and visually checked before PDF export.
 - [ ] Technical note exported as PDF, approximately 2–4 pages.
 - [ ] Clean `.ipynb` notebook that runs from a fresh hosted Colab runtime.
 - [ ] README with dependencies, commands, input/output structure, assumptions, limitations, and citations.
@@ -37,4 +38,3 @@ python3 ingarss_2026/scripts/build_provenance_manifest.py \
 ```
 
 Then open the notebook in a fresh Colab runtime, run all cells, and verify that the headline values match the published tables. Keep the manifest with the final package. Do not include multi-gigabyte source granules unless the official submission form explicitly requests them.
-
