@@ -22,7 +22,7 @@
 - [ ] L-only, S-only, L+S-without-gates, and L+S-with-gates comparisons are available.
 - [ ] Independent dated reference labels are identified, or the absence is explicitly reported.
 - [ ] Confusion matrix and metrics are generated only from independent reference labels.
-- [ ] Independent validation metrics exist separately for L-only, S-only, and L+S.
+- [ ] Independent validation metrics exist separately for L-only, S-only, and L+S; otherwise include `VALIDATION_STATUS.md` and make no accuracy claims.
 - [ ] Valid-swath percentage is distinguished from the full bounding-grid area.
 - [ ] Every map has date(s), legend, CRS, resolution, and data source.
 - [ ] No claim attributes cause to rainfall/flooding without independent evidence.

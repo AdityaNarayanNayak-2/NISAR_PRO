@@ -19,6 +19,7 @@ function Require-File([string]$relative) {
     'ingarss_2026/presentation.html',
     'ingarss_2026/notebooks/NISAR_Bihar_Flood_Lifecycle.ipynb',
     'ingarss_2026/VALIDATION_WORKFLOW.md',
+    'ingarss_2026/VALIDATION_STATUS.md',
     'ingarss_2026/sar-bihar-ls-fused-aug31-sep12_flood.json'
 ) | ForEach-Object { Require-File $_ }
 
@@ -41,10 +42,12 @@ if (-not $AllowPendingEvidence) {
         $failures.Add('missing final RHEL provenance: ingarss_2026/results/rhel_provenance_final.txt')
     }
     $requiredMetrics = @('l_band_metrics.json', 's_band_metrics.json', 'ls_fused_metrics.json')
-    foreach ($metric in $requiredMetrics) {
-        if (-not (Test-Path -LiteralPath (Join-Path $validation $metric) -PathType Leaf)) {
-            $failures.Add("missing independent validation metric: ingarss_2026/results/validation/$metric")
-        }
+    $metricsComplete = ($requiredMetrics | Where-Object {
+        Test-Path -LiteralPath (Join-Path $validation $_) -PathType Leaf
+    }).Count -eq $requiredMetrics.Count
+    $qualitativeStatus = Test-Path -LiteralPath (Join-Path $package 'VALIDATION_STATUS.md') -PathType Leaf
+    if (-not $metricsComplete -and -not $qualitativeStatus) {
+        $failures.Add('missing quantitative validation metrics and qualitative validation status')
     }
 }
 

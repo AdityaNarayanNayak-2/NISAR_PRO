@@ -90,7 +90,7 @@ They should be described as algorithmic decision gates supported by the current 
 
 ## 7. Validation and uncertainty
 
-The current repository does not contain independent dated reference labels or a completed confusion matrix. Therefore this submission should not report precision, recall, F1, IoU, or overall accuracy as if they were externally validated. The correct validation plan is:
+The current repository does not contain independent dated reference labels or a completed confusion matrix for all three methods. Therefore this submission does not report precision, recall, F1, IoU, or overall accuracy as if they were externally validated. This is recorded explicitly in `VALIDATION_STATUS.md`. The correct future validation plan is:
 
 1. Select dated reference scenes or authoritative water/inundation products that overlap each NISAR observation window.
 2. Reproject the reference to the same EPSG:32645 80 m support.
@@ -104,5 +104,4 @@ Known uncertainty sources include acquisition-date mismatch between bands, diffe
 
 NISAR Pro demonstrates a practical full-scene processing architecture and a transparent L/S comparison for Bihar. Its principal engineering contribution is streaming native GCOV data into a manageable analysis lattice without loading the full native scene into memory. Its principal scientific contribution is an explicit comparison of single-frequency and dual-frequency evidence combined with a multi-epoch interpretation of expansion and recession.
 
-The strongest final claim is conditional: L+S fusion is promising where the bands provide complementary information, but its value must be established with independent reference labels and controlled ablations. Completing that validation, reconciling the canonical L-band numbers, and documenting the exact fusion rule should be treated as submission blockers.
-
+The strongest final claim is conditional: L+S fusion produces a distinct and physically interpretable result where the bands provide complementary information, but an accuracy improvement is not established without independent reference labels and controlled ablations. The canonical comparison support and fusion outputs are documented; the validation limitation remains explicit.

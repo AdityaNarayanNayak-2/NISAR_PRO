@@ -19,6 +19,7 @@ $topLevelFiles = @(
     'presentation.html',
     'COLAB_GUIDE.md',
     'VALIDATION_WORKFLOW.md',
+    'VALIDATION_STATUS.md',
     'SUBMISSION_CHECKLIST.md',
     'EVIDENCE_AND_GAPS.md',
     'RESULTS_RECONCILIATION.md',
