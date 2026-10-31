@@ -9,6 +9,7 @@
 - [ ] Clean `.ipynb` notebook that runs from a fresh hosted Colab runtime.
 - [ ] README with dependencies, commands, input/output structure, assumptions, limitations, and citations.
 - [ ] L-only, S-only, and L+S result tables with dates, CRS, resolution, valid support, and source granules.
+- [ ] `RESULTS_RECONCILIATION.md` resolved and canonical values propagated to all deliverables.
 - [ ] Water masks, change map, newly detected water map, and area statistics in km² and acres.
 - [ ] Polarization/channel inventory and comparison against a stated baseline.
 - [ ] Provenance manifest containing commit, binary hash, granule hashes, output hashes, and runtime information.

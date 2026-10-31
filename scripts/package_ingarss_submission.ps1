@@ -21,6 +21,7 @@ $topLevelFiles = @(
     'VALIDATION_WORKFLOW.md',
     'SUBMISSION_CHECKLIST.md',
     'EVIDENCE_AND_GAPS.md',
+    'RESULTS_RECONCILIATION.md',
     'sar-bihar-ls-fused-aug31-sep12_flood.json'
 )
 
