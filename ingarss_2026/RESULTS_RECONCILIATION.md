@@ -14,6 +14,22 @@ not accuracy scores.
 | `sar-bihar-ls-fused-aug31-sep12_flood.json` | L+S fused | 1,337.15 | 723.37 | 59,083.56 km² support | — | comparison artifact |
 | RHEL job `sar-8b6af0bc` | L-only live rerun | 1,173.5552 | 943.2512 | 52.8% | 1,745 | provenance captured |
 
+## Canonical comparison choice
+
+For the scientific L-vs-S-vs-L+S comparison, use the values from
+`sar-bihar-ls-fused-aug31-sep12_flood.json`. Those three methods were computed
+on the same 4,140 × 4,275 common lattice with the same 59,083.56 km² support:
+
+| Method | Gain (km²) | Receded (km²) | Gain (acres) | Receded (acres) |
+| --- | ---: | ---: | ---: | ---: |
+| L-only | 1,137.14 | 888.84 | 280,992.4 | 219,636.1 |
+| S-only | 1,174.89 | 214.98 | 290,319.9 | 53,123.2 |
+| L+S fused | 1,337.15 | 723.37 | 330,414.9 | 178,747.2 |
+
+This is the fair three-way comparison. The standalone and live L-band values
+remain useful full-scene diagnostics, but must not be substituted into this
+table because their support and/or processing path differs.
+
 Acres are obtained with the product's recorded conversion factor:
 `1 pixel = 0.0064 km² = 1.58147 acres`.
 
