@@ -1,247 +1,302 @@
 # NISAR Pro
 
+NISAR Pro is an open-source, local-first platform for processing and explaining
+NISAR Earth-observation data. It combines a memory-efficient Rust science
+engine, a local Axum gateway, and a geospatial React dashboard so researchers
+can move from a large satellite product to inspectable maps, reports, and
+reproducible analysis.
+
+It is not only a Bihar flood demo. Bihar is one documented case study used to
+demonstrate the platform's L-band, S-band, temporal-change, and fusion
+capabilities.
+
 <div align="center">
 
 [![License](https://img.shields.io/badge/License-Apache%202.0%20%2F%20MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/Rust-1.75%2B%20Pure--Compute-orange.svg)](https://www.rust-lang.org/)
-[![Mission](https://img.shields.io/badge/NISAR-NASA%20LSAR%20%2B%20ISRO%20SSAR-green.svg)](https://nisar.jpl.nasa.gov/)
-[![Hackathon](https://img.shields.io/badge/IEEE%20InGARSS%202026-Young%20Professionals%20Hackathon-purple.svg)](https://ingarss2026.org/)
-[![Performance](https://img.shields.io/badge/Engine-Sub--45s%20Full%20Scene%20%3C150MB%20RAM-red.svg)](#performance-benchmarks)
-[![Live Demo](https://img.shields.io/badge/Web%20App-Live%20Demo-emerald.svg)](https://nisar-pro.pages.dev)
+[![Rust](https://img.shields.io/badge/Engine-Pure%20Rust-orange.svg)](https://www.rust-lang.org/)
+[![Mission](https://img.shields.io/badge/Mission-NASA--ISRO%20NISAR-green.svg)](https://nisar.jpl.nasa.gov/)
+[![Dashboard](https://img.shields.io/badge/Dashboard-Local--first-242a33.svg)](sar-dashboard-v3/)
 
-**High-Performance Pure-Rust SAR Science Processor, Dual-Frequency (L+S Band) GCOV Flood Inundation Engine & Multi-Temporal Infrastructure Monitor for the NASA–ISRO NISAR Mission.**
-
-[Live Web Demo](https://nisar-pro.pages.dev) · [IEEE InGARSS 2026 Submission](ingarss2026_submission/) · [Architecture Documentation](Docs/Architecture/) · [User Guides](Docs/UserGuide/)
+[Live dashboard](https://adityanarayannayak-2.github.io/NISAR_PRO/) ·
+[Architecture](Docs/Architecture/) ·
+[User guides](Docs/UserGuide/) ·
+[InGARSS case study](ingarss_2026/)
 
 </div>
 
 ---
 
-## Breakthrough Showcase: Dual-Frequency (L+S Band) Bihar Floodplain Mapping
+## What NISAR Pro is for
 
-NISAR Pro processes official **NASA LSAR (1.25 GHz, L-band)** and **ISRO SSAR (3.20 GHz, S-band)** Level-2 GCOV granules on a unified **UTM Zone 45N common lattice** (`4,140 × 4,275` grid, 80 m resolution, $0.0064\text{ km}^2$/pixel) covering **115,000+ km²** across 12 Bihar districts during the catastrophic 2026 Ganga–Kosi monsoon floods.
+NISAR Pro is built for engineers, remote-sensing researchers, and teams who
+need to process large NISAR products on infrastructure they control.
 
-![NISAR L+S Dual-Frequency 3-Panel Comparison](Docs/assets/bihar_ls_fusion_3panel.png)
+The platform focuses on four things:
 
-### What the Dual-Frequency Physics Solves:
+- **Efficient ingestion** of large HDF5-based NISAR products without loading an
+  entire scene into memory.
+- **Explainable SAR processing** with visible parameters, intermediate
+  telemetry, and geospatial outputs instead of opaque black-box results.
+- **Local execution and data sovereignty** so raw granules can remain on the
+  operator's workstation or internal server.
+- **A reusable platform** for GCOV surface-water analysis, L/S comparison,
+  temporal change detection, and InSAR/infrastructure workflows.
 
-| Physical Challenge | Single-Frequency Failure Mode | Dual-Frequency (L+S Fused) Solution | Impact / Quantification |
-| :--- | :--- | :--- | :--- |
-| **Braided Alluvial Sandbars** | **L-band false alarms**: Smooth dry sandbars ($h_{\text{rms}} \ll \lambda_L$) cause specular reflection ($L_{\text{HH}} < -13\text{ dB}$), misclassifying sand as water. | **S-band Bragg gating**: At $\lambda_S = 9.37\text{ cm}$, sand ripple micro-roughness scatters diffusely ($S_{\text{HH}} \ge -10.5\text{ dB}$). | **347.8 km² (54,337 px) of false water eliminated** across the Ganga braid. |
-| **Sub-Canopy Inundation** | **S-band attenuation**: High two-way crown attenuation (15–20 dB) scatters from foliage, missing floodwaters under tree canopy. | **L-band canopy penetration**: At $\lambda_L = 24.2\text{ cm}$, L-band penetrates foliage ($\Delta L_{\text{HH}} \le -3.26\text{ dB}$, $L_{\text{HV}} < -20\text{ dB}$). | **626.0 km² of hidden floodwater recovered** in riverine orchards & forests. |
-| **Wind-Riffle River Dropouts** | **Co-pol dropout**: Surface winds create 5–10 cm capillary waves that roughen water ($HH \ge -15\text{ dB}$), breaking channel continuity. | **Dual-pol cross-pol gating**: Water never depolarizes ($HV < -21.5\text{ dB}$). Cross-pol gating recovers water while rejecting bare soil. | **69.6% (132.4 km²) of river dropouts restored**, ensuring continuous navigation channels. |
-| **Sensor Consensus** | Uncalibrated sensor discrepancies. | Sub-pixel co-registration on common UTM lattice with 40-pixel swath-edge roll-off erosion. | **99.26% baseline flood agreement** between NASA LSAR and ISRO SSAR. |
+![NISAR Pro dashboard](Docs/assets/Dashboard.jpeg)
 
----
+## Platform capabilities
 
-## 4-Epoch Multi-Temporal Flood Lifecycle Analysis
+### NISAR product access and ingestion
 
-NISAR Pro tracks the complete 84-day hydrological trajectory of the 2026 Bihar monsoon over Track 098, Frame 014:
+- NASA ASF / Earthdata catalogue integration for supported NISAR products.
+- Local HDF5 product selection for offline or controlled environments.
+- Instrument and band identification from product metadata.
+- Coordinate, footprint, acquisition-date, CRS, and channel inspection.
+- Windowed and row-strip reading for products that are too large for naive
+  in-memory workflows.
 
-![Bihar 2-Phase Flood Lifecycle](Docs/assets/bihar_2phase_lifecycle.png)
+### Rust science engine
 
+The `sar_science_processor` crate contains the computational core. Current
+processing modules include:
+
+- GCOV backscatter and covariance-channel handling.
+- L-band and S-band product support where the selected product metadata
+  provides the required channels.
+- Block multilooking and calibrated linear-power to dB conversion.
+- Speckle filtering, nodata protection, swath-edge conditioning, and memory
+  guards.
+- Log-ratio change detection, adaptive thresholding, seeded region growing,
+  morphology, and connected-component filtering.
+- InSAR building blocks including coregistration, coherence, phase filtering,
+  unwrapping, deramping, and deformation-oriented outputs.
+- GeoTIFF, PNG, GeoJSON, and JSON report generation.
+
+### Local gateway
+
+The Axum gateway is the operational boundary around the processor. It provides:
+
+- Local job creation and supervision.
+- Server-Sent Events for live processing progress.
+- Local result history and artifact discovery.
+- NASA catalogue/search proxy functions.
+- Safe subprocess execution of the science processor.
+- Static serving of the built dashboard on port `3000`.
+
+### Geospatial dashboard
+
+The React/Leaflet dashboard provides a visual workspace for:
+
+- Map-first product inspection.
+- Flood and surface-water analysis.
+- Infrastructure and deformation-oriented workflows.
+- L-band, S-band, and paired-analysis configuration.
+- Raster, vector, report, and replay views.
+- Downloadable outputs and visible processing telemetry.
+
+The dashboard can be hosted as a static site while connecting to a gateway
+running on the user's own machine.
+
+## Why the engine is different
+
+Large SAR products expose a practical systems problem: a single scene can be
+several gigabytes, while a workstation may have only 8--16 GB of RAM. NISAR
+Pro avoids the naive pattern of loading the complete scene before processing.
+
+Instead, it reads bounded HDF5 regions, processes strips, and reduces the data
+to the working lattice needed by the selected analysis. This makes the memory
+cost depend primarily on the working window and processing buffers rather than
+the full raw scene size.
+
+The benchmark evidence currently recorded in this repository includes:
+
+| Workload | Recorded result |
+| --- | --- |
+| Full-scene two-date Bihar L-band processing | approximately 43 seconds on the documented RHEL workstation |
+| Full-scene working memory | below approximately 1.79 GB for the documented run |
+| Tactical synthetic/unit benchmark | separate low-memory benchmark; do not confuse it with full-scene RSS |
+| Science processor unit tests | deterministic tests covering parser, multilook, flood, InSAR, IO, and memory guards |
+
+These numbers are machine- and configuration-dependent. They are reported with
+the associated provenance rather than presented as a universal guarantee.
+
+## Architecture
+
+```text
+NISAR sources / local HDF5 files
+              |
+              v
+Product discovery, metadata, coordinates, channel inventory
+              |
+              v
+Rust science engines
+  - GCOV surface water and change
+  - L/S comparison and fusion
+  - InSAR and deformation workflows
+              |
+              v
+Axum local gateway and result store
+              |
+       +------+------+
+       |             |
+       v             v
+React dashboard   CLI / notebook / reports
 ```
-26 Jul 2026 (Monsoon Build-up) ──► 31 Aug 2026 (Pre-Flood Baseline) ──► 12 Sep 2026 (Peak Inundation) ──► 18 Oct 2026 (Flood Recession)
-  [Baseline Ganga Extent]           [Ganga-Kosi Channel Reference]        [+1,166.2 km² Flood Gain]           [-889.0 km² Post-Flood Drain]
+
+![NISAR Pro platform architecture](Docs/assets/architecture_overview.png)
+
+The architecture diagram intentionally separates the reusable platform layers
+from individual domain case studies.
+
+## Flagship case study: Bihar L/S surface-water change
+
+The InGARSS 2026 Bihar work demonstrates one complete path through the
+platform using NISAR L2 GCOV products over the Ganga alluvial plain.
+
+It compares:
+
+1. L-band-only surface-water/change mapping.
+2. S-band-only surface-water/change mapping.
+3. A documented L+S comparison on common spatial support.
+4. Multi-date water gain, stable water, water loss, and stable non-water.
+5. Channel and polarization information where the selected granules support it.
+
+![Bihar L+S comparison](Docs/assets/bihar_ls_fusion_3panel.png)
+
+The case study is deliberately documented with acquisition IDs, processing
+parameters, coverage limitations, product metadata, and provenance. It should
+be read as a scientific demonstration of the platform, not as a claim that
+every detected change is automatically a flood or that fusion is always better.
+
+## Output model
+
+Each completed local job can produce a structured result directory containing:
+
+```text
+results/jobs/<job-id>/
+  <job-id>_flood.json          # metrics, parameters, product metadata
+  <job-id>_flood.geo.json      # vectorized regions
+  <job-id>_flood_class.tif     # georeferenced classification raster
+  <job-id>_flood.png           # rendered classification map
+  <job-id>_flood_active.png    # active observation render
+  <job-id>_flood_baseline.png  # baseline observation render
+  crash_journal.log            # failure and memory-guard context
 ```
 
-- **Phase 1: Catastrophic Inundation (+1,166.21 km² / 288,178 acres)**: Driven by heavy monsoon discharges from Himalayan catchments along the Kosi, Bagmati, and Gandak rivers.
-- **Phase 2: Post-Monsoon Flood Recession (−889.04 km² / 219,636 acres)**: Rapid seasonal drainage and agricultural recovery, tracked at 80 m spatial resolution.
+The JSON report is the machine-readable source for dashboard metrics. The
+GeoTIFF and GeoJSON are intended for GIS and scientific review. PNG files are
+convenient for reports and presentations.
 
----
+## Running locally from source
 
-## Interactive Workspace & Dashboard
+### Full local stack
 
-NISAR Pro includes a production-grade, local-first web application built with **React, Vite, Leaflet, and Tailwind-free vanilla CSS**:
-
-![Flood Analysis Result Workspace](sar-dashboard-v3/public/landing/flood-analysis-result.png)
-
-### Key Features:
-- **Instant AOI Search & Granule Fetch**: Query the NASA Alaska Satellite Facility (ASF) and ISRO Bhoonidhi DAACs directly from the interactive map.
-- **Real-Time Streaming Pipeline Monitor**: Server-Sent Events (SSE) stream terminal telemetry, progress bars, and log messages with zero page reloads.
-- **TiTiler Dynamic Cloud-Optimized GeoTIFF (COG) Serving**: Stream high-resolution false-color SAR composite tiles and classified raster masks at 60 FPS.
-- **Polygon Vectorization & Telemetry Export**: Download publication-grade GeoJSON inundation boundaries, dual-unit acreage tables (km² & acres), and executive summary reports.
-- **InSAR Infrastructure Deformation**: Track millimeter-scale subsidence and displacement over dams, bridges, and levees using NISAR GUNW unwrapped phase products.
-
-![Full Workspace Overview](sar-dashboard-v3/public/landing/flood-workspace-full.png)
-
----
-
-## Performance Benchmarks: Pure Rust vs. Python/GDAL
-
-NISAR Pro's `sar_science_processor` is engineered from scratch in pure Rust to eliminate the memory overhead, single-thread bottlenecks, and OOM crashes typical of legacy geospatial pipelines:
-
-| Processing Stage | Traditional Python / GDAL / SNAP | NISAR Pro (Pure Rust SIMD) | Speedup / Memory Advantage |
-| :--- | :---: | :---: | :---: |
-| **Ingestion & 8×8 Multilooking (4.3 GB HDF5)** | 185.4 s (requires 8–12 GB RAM) | **16.7 s (< 150 MB RAM)** | **11.1× faster · 98% less memory** |
-| **Full-Scene 7-Stage Flood Detection** | 462.0 s (frequent Python swap OOM) | **42.1 s (< 180 MB peak RAM)** | **10.9× faster · Zero OOM crashes** |
-| **Dual-Frequency L+S Common Lattice Fusion** | 320.0 s (complex GDAL warps) | **15.3 s (direct lattice alignment)** | **20.9× faster** |
-| **Swath-Edge Artifact Clean-up (40-px)** | Custom slow morphological loops | **SIMD-optimized border erosion** | **Instantaneous (< 0.2 s)** |
-| **Memory Footprint on 33k × 34k Grids** | 8.5 GB – 16 GB | **< 180 MB (Row-Strip Hyperslabs)** | **Runs smoothly on laptops with 8 GB RAM** |
-
-> *Benchmarks executed on standard x86_64 Linux (Fedora 41, AMD Ryzen 7 / Intel Core i7, NVMe SSD). Memory measured via `/proc/[pid]/status` Peak RSS.*
-
----
-
-## System Architecture
-
-NISAR Pro follows a clean, decoupled three-tier architecture:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                             REACT DASHBOARD                                 │
-│          Leaflet Map Canvas · GeoJSON Vectorization · SSE Log Stream        │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ HTTP / Server-Sent Events (port 3000)
-┌──────────────────────────────────────▼──────────────────────────────────────┐
-│                             AXUM GATEWAY (RUST)                             │
-│       Job Supervisor · TiTiler Proxy · ASF NASA Client · Output Cache       │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ CLI Execution / IPC
-┌──────────────────────────────────────▼──────────────────────────────────────┐
-│                    SAR SCIENCE PROCESSOR ENGINE (PURE RUST)                 │
-│  Windowed HDF5 I/O · 8x8 Multilook · Adaptive Otsu · Region Growing · COG   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-![System Architecture Overview](Docs/assets/architecture_overview.png)
-
-### The 7-Stage Flood Detection Pipeline (`flood_detect.rs`)
-1. **Windowed Row-Strip Ingestion**: Reads 1024-row hyperslabs directly from HDF5 datasets without loading full 4.3 GB scenes into memory.
-2. **8×8 Spatial Multilooking**: Downsamples 10 m native pixels to 80 m calibrated linear power ($\gamma^0 / \sigma^0$) while suppressing speckle.
-3. **Swath-Edge Erosion (40 Pixels)**: Cleanses RTC transition feathering and nodata edge roll-offs to prevent false shoreline detection.
-4. **Calibrated Log-Ratio Change Image**: Computes $\Delta \sigma^0 = 10 \log_{10}(\sigma^0_{\text{active}} / \sigma^0_{\text{baseline}})$.
-5. **Parallelized Otsu Adaptive Thresholding**: Determines optimal bi-modal separation thresholds on the change distribution.
-6. **Two-Threshold Seeded Region Growing**: Seeds at $-5.0\text{ dB}$ and grows to $-2.5\text{ dB}$ with 8-connected neighborhood clustering.
-7. **Multi-Scale Morphological Filtering**: Applies $3\times 3$ opening/closing and 8-pixel connected component filtering to produce crisp water boundaries.
-
----
-
-## Quick Start Guide
-
-### 1. Standalone CLI Run (Compute Engine Only)
-
-Process any NISAR GCOV pair directly from your terminal in under 45 seconds:
+Requirements: Rust toolchain, Node.js 20+, and a supported operating system.
 
 ```bash
-# Build the optimized release binary
+# Build the science engine
 cd sar_science_processor
 cargo build --release
 
-# Run full-scene flood detection with 40-pixel swath-edge erosion
-./target/release/sar_science_processor --mode flood \
-  --input /path/to/NISAR_active_GCOV.h5 \
-  --slave /path/to/NISAR_baseline_GCOV.h5 \
-  --crop-preset full \
-  --swath-edge-erosion 40 \
-  --radar-band l \
-  --output ./results/bihar_flood_analysis
-```
-
-### 2. Dual-Frequency (L+S Band) Fusion Script
-
-Execute physical decision rules, sandbar false-positive rejection, and polarimetric analysis:
-
-```bash
-python3 scripts/run_ls_fusion_and_pol_assessment.py
-```
-
-Outputs generated:
-- `results/sar-bihar-ls-fused-aug31-sep12_flood.json` (Dual-unit telemetry for Full Scene & 20×20 km AOI)
-- `results/sar-bihar-ls-fused-aug31-sep12_class.tif` (Fused 5-Class 80 m GeoTIFF)
-- `results/bihar_ls_fusion_3panel_comparison.png` (High-resolution 3-panel publication figure)
-
-### 3. Full Local Stack (Web Dashboard + Gateway + Engine)
-
-Run the complete interactive platform on your local machine:
-
-```bash
-# Terminal 1: Build the Rust Compute Engine
-cd sar_science_processor
-cargo build --release
-
-# Terminal 2: Start the Axum Gateway
+# Start the local gateway
 cd ../sar-gateway
 LOCAL_MODE=true RUST_LOG=info cargo run
 
-# Terminal 3: Launch the React Dashboard
+# In another terminal, start the dashboard during development
 cd ../sar-dashboard-v3
-npm install
+npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser.
+For a built dashboard served by the gateway, build the frontend first and use
+the packaged/local launcher described below.
 
----
+### Windows and Linux release packages
 
-## Repository Structure
+The release pipeline produces platform packages that do not require users to
+install Rust, Cargo, Node.js, or Python.
 
-```
-sar_analyzer/
-├── sar_science_processor/        Pure-Rust compute engine (GCOV flood, GUNW InSAR, 8x8 multilook)
-│   ├── src/
-│   │   ├── flood_detect.rs       7-stage flood detection & region growing
-│   │   ├── nisar_parser.rs       Streaming HDF5 reader & coordinate extraction
-│   │   ├── multilook.rs          SIMD block-multilooking
-│   │   └── windowed.rs           Zero-copy row-strip reader
-│   └── Cargo.toml
-├── sar-gateway/                  Async Axum HTTP/SSE gateway, job supervisor & DAAC clients
-├── sar-dashboard-v3/             React 19 + Leaflet + Vite interactive web application
-├── ingarss2026_submission/       Official IEEE InGARSS 2026 submission artifacts & notebooks
-│   ├── NISAR_Bihar_Flood_Lifecycle.ipynb
-│   └── results/
-├── scripts/                      Scientific verification & fusion automation scripts
-│   ├── run_ls_fusion_and_pol_assessment.py
-│   └── nisar_probe.py
-├── results/                      Generated GeoTIFFs, telemetry JSONs, and PNG figures
-├── Docs/                         Comprehensive user & architecture documentation
-│   ├── Architecture/             System internals, pipeline diagrams, API specifications
-│   └── UserGuide/                Step-by-step setup, Windows runbook, InSAR verification
-└── benchmarks/                   Automated 12-benchmark performance validation suite
+Windows:
+
+```text
+Extract NISAR-Pro-1.0.0-windows-x64.zip
+Double-click NISAR-Pro-1.0.0.exe
 ```
 
----
+Linux x86_64:
 
-## IEEE InGARSS 2026 Evaluation Checklist
+```bash
+tar -xzf NISAR-Pro-1.0.0-linux-x86_64.tar.gz
+cd NISAR-Pro-1.0.0-linux-x86_64
+./nisar-pro
+```
 
-- [x] **Task A (Multi-Temporal Inundation)**: Full 4-epoch lifecycle analysis (Jul 26, Aug 31, Sep 12, Oct 18).
-- [x] **Task B (Damage Mapping)**: Identification of submerged agricultural lands across 12 Bihar districts.
-- [x] **Task C (L+S Dual-Frequency Fusion)**: Sandbar rejection ($347.8\text{ km}^2$) + sub-canopy flood recovery ($626.0\text{ km}^2$).
-- [x] **Task D (InSAR Deformation)**: Millimeter-scale phase analysis pipeline for critical levees and barrages.
-- [x] **Task F (Comparative Frequency Assessment)**: Comprehensive physics-based comparison matrix between L-band, S-band, and Fused outputs.
-- [x] **Task H (Polarization Assessment)**: Dual-pol cross-pol gating ($69.6\%$ wind-riffle recovery) and double-bounce vegetation isolation.
-- [x] **Reproducibility**: End-to-end executable Jupyter Notebook (`NISAR_Bihar_Flood_Lifecycle.ipynb`) with pre-computed cells and inline figures.
+The packaged application starts the gateway, opens `http://localhost:3000`,
+and keeps raw NISAR files on the local machine. Original `.h5` granules are
+not included in releases.
 
----
+## Repository layout
 
-## Documentation Hub
+```text
+sar_science_processor/   Rust science engine
+sar-gateway/             Axum gateway, job orchestration, catalogue clients
+sar-dashboard-v3/        React, Vite, Leaflet dashboard
+installer/               Windows launcher and Linux launcher/installer
+Docs/                    Architecture, user, API, and operational guides
+scripts/                 Scientific utilities and verification helpers
+results/                 Local/generated result workspace
+ingarss_2026/            InGARSS case-study package and evidence
+```
 
-Deep-dive documentation is available in [`Docs/`](Docs/README.md) and rendered live in the web application at `/docs`:
+## Reproducibility and scientific boundaries
 
-- **User Guides**: [Getting Started](Docs/UserGuide/getting-started.md) · [Local Run Runbook](Docs/UserGuide/windows-local-run.md) · [API Reference](Docs/UserGuide/api-reference.md) · [InSAR Verification](Docs/UserGuide/insar-verification-log.md)
-- **Architecture**: [7-Stage Flood Pipeline](Docs/Architecture/flood_detection_pipeline.md) · [Engine Internals](Docs/Architecture/sar_processor_internals.md) · [Gateway Orchestration](Docs/Architecture/gateway_orchestration.md) · [System Diagrams](Docs/Architecture/architecture-diagrams.md)
+NISAR Pro records the selected product IDs, dates, channels, CRS, resolution,
+thresholds, and output paths in reports where available. The processing
+documentation distinguishes:
 
----
+- measured outputs from interpretation;
+- common-support comparisons from standalone runs;
+- full-scene results from reference-box inspection;
+- quantitative validation from qualitative assessment.
 
-## Citation & Acknowledgments
+When independent reference labels are unavailable, the project does not invent
+accuracy scores. The likely effects of temporal mismatch, viewing geometry,
+vegetation, rough soil, wind-roughened water, mixed pixels, and nodata are
+reported as uncertainty instead.
 
-If you find this work useful for your research or the IEEE InGARSS 2026 Hackathon, please cite:
+## Documentation
+
+- [Architecture documentation](Docs/Architecture/)
+- [Flood detection pipeline](Docs/Architecture/flood_detection_pipeline.md)
+- [Gateway orchestration](Docs/Architecture/gateway_orchestration.md)
+- [Frontend architecture](Docs/Architecture/frontend-dashboard-architecture.md)
+- [Windows local run guide](Docs/UserGuide/windows-local-run.md)
+- [Release packaging guide](Docs/UserGuide/release-packaging.md)
+- [API reference](Docs/UserGuide/api-reference.md)
+- [InGARSS 2026 submission package](ingarss_2026/)
+
+## Roadmap
+
+- Broader NISAR product coverage and validated metadata adapters.
+- More complete polarimetric feature inventories by acquisition mode.
+- Quantitative reference-label validation workflows.
+- Native Linux package formats (`.deb` and `.rpm`) after the portable package
+  is stable.
+- Additional local and hosted collaboration workflows without moving raw
+  granules off the operator's machine.
+
+## Citation
 
 ```bibtex
 @software{nisar_pro_2026,
   author = {Nayak, Aditya Narayan},
-  title = {NISAR Pro: High-Performance Pure-Rust SAR Science Processor & Dual-Frequency L+S Flood Inundation Engine},
+  title = {NISAR Pro: Open-source local-first processing and analysis for NISAR Earth-observation products},
   year = {2026},
   publisher = {GitHub},
-  journal = {IEEE InGARSS 2026 Young Professionals Hackathon},
-  url = {https://github.com/Aditya-Narayan-Nayak/nisar_pro}
+  url = {https://github.com/AdityaNarayanNayak-2/NISAR_PRO}
 }
 ```
 
-*Data provided by the NASA-ISRO SAR (NISAR) mission via NASA Alaska Satellite Facility (ASF) and ISRO National Remote Sensing Centre (NRSC) Bhoonidhi portal.*
-
----
-
 ## License
 
-Distributed under the **Apache-2.0** or **MIT** License. See [LICENSE](LICENSE) for details.
+Distributed under the Apache-2.0 or MIT License. See [LICENSE](LICENSE).

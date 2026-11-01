@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1080" viewBox="0 0 1800 1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#090b10"/><stop offset="1" stop-color="#151922"/></linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b202a"/><stop offset="1" stop-color="#11151d"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity=".45"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c9d0dc"/></marker>
+    <style>
+      .title { fill:#f6f7f9; font:700 34px Inter,Segoe UI,sans-serif; letter-spacing:3px; }
+      .subtitle { fill:#9ba6b7; font:400 16px Inter,Segoe UI,sans-serif; letter-spacing:1px; }
+      .layer { fill:#c5a56a; font:700 14px Inter,Segoe UI,sans-serif; letter-spacing:2px; }
+      .panel-title { fill:#f4f6f8; font:700 19px Inter,Segoe UI,sans-serif; letter-spacing:.5px; }
+      .panel-copy { fill:#aeb8c7; font:400 14px Inter,Segoe UI,sans-serif; }
+      .small { fill:#7e8a9b; font:400 12px Inter,Segoe UI,sans-serif; }
+      .tag { fill:#e7c985; font:600 12px JetBrains Mono,Consolas,monospace; letter-spacing:.4px; }
+      .box { fill:url(#panel); stroke:#3b4555; stroke-width:1.5; rx:16; filter:url(#shadow); }
+      .line { stroke:#c9d0dc; stroke-width:2; fill:none; marker-end:url(#arrow); opacity:.8; }
+      .accent { stroke:#d6b36b; stroke-width:3; fill:none; opacity:.9; marker-end:url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1800" height="1080" fill="url(#bg)"/>
+  <rect x="28" y="28" width="1744" height="1024" rx="22" fill="none" stroke="#313a49" stroke-width="2"/>
+  <text x="70" y="86" class="title">NISAR PRO</text>
+  <text x="70" y="120" class="subtitle">Open-source NISAR processing, Earth-observation analytics, and local-first scientific delivery</text>
+  <text x="70" y="153" class="tag">NASA LSAR · ISRO SSAR · GCOV · GUNW · RSLC / GSLC · RUST COMPUTE</text>
+
+  <text x="70" y="215" class="layer">01  DATA SOURCES &amp; PRODUCT ACCESS</text>
+  <rect x="70" y="245" width="300" height="120" class="box"/><text x="96" y="283" class="panel-title">NASA ASF / Earthdata</text><text x="96" y="312" class="panel-copy">NISAR LSAR products</text><text x="96" y="335" class="panel-copy">GCOV · GUNW · RSLC · GSLC</text>
+  <rect x="410" y="245" width="300" height="120" class="box"/><text x="436" y="283" class="panel-title">NRSC Bhoonidhi</text><text x="436" y="312" class="panel-copy">NISAR SSAR products</text><text x="436" y="335" class="panel-copy">S-band and catalogue metadata</text>
+  <rect x="750" y="245" width="300" height="120" class="box"/><text x="776" y="283" class="panel-title">Local product files</text><text x="776" y="312" class="panel-copy">HDF5 / GCOV / GUNW inputs</text><text x="776" y="335" class="panel-copy">Data stays on the operator machine</text>
+  <rect x="1090" y="245" width="640" height="120" class="box"/><text x="1120" y="283" class="panel-title">Product discovery &amp; metadata layer</text><text x="1120" y="312" class="panel-copy">Scene search · instrument detection · coordinate parsing · channel inventory</text><text x="1120" y="335" class="panel-copy">Acquisition dates · footprint · CRS · resolution · polarization availability</text>
+  <path d="M370 305 H1090" class="line"/><path d="M710 305 H1090" class="line"/><path d="M1050 305 H1090" class="line"/>
+
+  <text x="70" y="435" class="layer">02  RUST SCIENCE ENGINES</text>
+  <rect x="70" y="465" width="480" height="220" class="box"/><text x="100" y="505" class="panel-title">GCOV surface-water engine</text><text x="100" y="538" class="panel-copy">Windowed HDF5 hyperslabs</text><text x="100" y="562" class="panel-copy">Multilooking and calibrated dB conversion</text><text x="100" y="586" class="panel-copy">Otsu change thresholding and region growing</text><text x="100" y="610" class="panel-copy">L-band · S-band · L+S fusion · polarimetric gates</text><text x="100" y="646" class="tag">flood_detect.rs · nisar_parser.rs · windowed.rs</text>
+  <rect x="610" y="465" width="480" height="220" class="box"/><text x="640" y="505" class="panel-title">InSAR / deformation engine</text><text x="640" y="538" class="panel-copy">Coregistration and complex-signal processing</text><text x="640" y="562" class="panel-copy">Interferogram formation and coherence</text><text x="640" y="586" class="panel-copy">Phase filtering, unwrapping, and deramping</text><text x="640" y="610" class="panel-copy">LOS displacement and infrastructure health metrics</text><text x="640" y="646" class="tag">coregister.rs · insar.rs · unwrap.rs · topo_phase.rs</text>
+  <rect x="1150" y="465" width="580" height="220" class="box"/><text x="1180" y="505" class="panel-title">Shared processing foundations</text><text x="1180" y="538" class="panel-copy">Memory guards and crash journal</text><text x="1180" y="562" class="panel-copy">Parallel array operations and typed errors</text><text x="1180" y="586" class="panel-copy">GeoTIFF, PNG, GeoJSON, and JSON report export</text><text x="1180" y="610" class="panel-copy">Full-scene streaming without loading complete granules into RAM</text><text x="1180" y="646" class="tag">io.rs · crash_journal.rs · multilook.rs · sha256.rs</text>
+  <path d="M220 365 V420 H310 V465" class="line"/><path d="M560 365 V420 H850 V465" class="line"/><path d="M1410 365 V465" class="line"/>
+
+  <text x="70" y="755" class="layer">03  LOCAL OPERATIONS &amp; DELIVERY</text>
+  <rect x="70" y="785" width="480" height="170" class="box"/><text x="100" y="825" class="panel-title">Axum local gateway</text><text x="100" y="858" class="panel-copy">Job orchestration · SSE progress · local mode</text><text x="100" y="882" class="panel-copy">ASF search proxy · artifact management · result history</text><text x="100" y="906" class="panel-copy">Runs beside the processor on the user’s machine</text>
+  <rect x="610" y="785" width="480" height="170" class="box"/><text x="640" y="825" class="panel-title">Portable local runtime</text><text x="640" y="858" class="panel-copy">Windows one-click launcher</text><text x="640" y="882" class="panel-copy">Linux x86_64 archive and installer</text><text x="640" y="906" class="panel-copy">No Rust, Node.js, or Kubernetes required for users</text>
+  <rect x="1150" y="785" width="580" height="170" class="box"/><text x="1180" y="825" class="panel-title">Research and product interfaces</text><text x="1180" y="858" class="panel-copy">React / Leaflet geospatial dashboard</text><text x="1180" y="882" class="panel-copy">CLI workflows · notebooks · reproducible reports</text><text x="1180" y="906" class="panel-copy">Hosted dashboard connected to a local gateway</text>
+  <path d="M310 685 V785" class="line"/><path d="M850 685 V785" class="line"/><path d="M1440 685 V785" class="line"/>
+  <path d="M550 870 H610" class="accent"/><path d="M1090 870 H1150" class="accent"/>
+  <text x="70" y="1010" class="small">NISAR PRO · LOCAL-FIRST EARTH OBSERVATION · MEMORY-EFFICIENT RUST PROCESSING · EXPLAINABLE OUTPUTS</text>
+  <text x="1420" y="1010" class="tag">PLATFORM ARCHITECTURE · 2026</text>
+</svg>
