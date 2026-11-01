@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export default function WorkspaceSidebar({ children }) {
-    const [collapsed, setCollapsed] = useState(false);
+export default function WorkspaceSidebar({ children, collapsed: propCollapsed, onToggleCollapse }) {
+    const [internalCollapsed, setInternalCollapsed] = useState(false);
+    const collapsed = propCollapsed !== undefined ? propCollapsed : internalCollapsed;
+
+    const setCollapsed = (val) => {
+        if (onToggleCollapse) {
+            onToggleCollapse(val);
+        } else {
+            setInternalCollapsed(val);
+        }
+    };
 
     if (collapsed) {
         return (

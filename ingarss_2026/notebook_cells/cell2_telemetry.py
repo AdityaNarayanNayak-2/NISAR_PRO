@@ -7,11 +7,11 @@ from IPython.display import display, Markdown
 # 1. Load the full-scene NISAR Bihar analysis JSON
 json_candidates = [
     Path("sar-bihar-aug31-sep12-full_flood.json"),
+    Path("results/flood_expansion_aug31_sep12/sar-bihar-aug31-sep12-full_flood.json"),
     Path("./results/sar-bihar-aug31-sep12-full_flood.json"),
     Path("../results/sar-bihar-aug31-sep12-full_flood.json"),
     Path("../../results/sar-bihar-aug31-sep12-full_flood.json"),
-    Path("../results/flood_expansion_aug31_sep12/sar-bihar-aug31-sep12-full_flood.json"),
-    Path("../../ingarss_2026/results/flood_expansion_aug31_sep12/sar-bihar-aug31-sep12-full_flood.json"),
+    Path("../ingarss_2026/results/flood_expansion_aug31_sep12/sar-bihar-aug31-sep12-full_flood.json"),
 ]
 json_path = next((p for p in json_candidates if p.exists()), json_candidates[0])
 

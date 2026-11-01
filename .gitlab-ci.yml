@@ -1,221 +1,96 @@
+# NISAR Pro release bridge
+#
+# GitLab is the source of truth. Only a push to main runs this pipeline.
+# Development on dev remains private until it is merged into main.
+#
+# GitLab builds the Linux package and creates the GitLab release. It also
+# mirrors main to GitHub, where the Windows runner builds the Windows ZIP and
+# publishes the hosted dashboard.
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"'
+
 stages:
+  - sync
   - build
-  - test
-  - deploy
+  - release
 
 variables:
-  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  GIT_DEPTH: "0"
+  RELEASE_VERSION: "1.0.0"
+  GITHUB_REPOSITORY: "AdityaNarayanNayak-2/NISAR_PRO"
 
-# ═══════════════════════════════════════
-# Cache Templates
-# ═══════════════════════════════════════
-
-.rust_cache: &rust_cache
-  cache:
-    key: ${CI_COMMIT_REF_SLUG}-rust
-    paths:
-      - .cargo/
-      - sar_processor/target/
-      - sar_operator_v2/target/
-      - sar-gateway/target/
-      - sar_science_processor/target/
-
-.node_cache: &node_cache
-  cache:
-    key: ${CI_COMMIT_REF_SLUG}-node
-    paths:
-      - sar-dashboard-v3/node_modules/
-
-# ═══════════════════════════════════════
-# Build Stage
-# ═══════════════════════════════════════
-
-build_processor:
-  stage: build
-  image: rust:latest
-  <<: *rust_cache
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar_processor/**/*
-  script:
-    - cd sar_processor && cargo build --release
-  artifacts:
-    paths:
-      - sar_processor/target/release/sar_processor
-    expire_in: 1 week
-
-build_gateway:
-  stage: build
-  image: rust:latest
-  <<: *rust_cache
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar-gateway/**/*
-  script:
-    - cd sar-gateway && cargo build --release
-  artifacts:
-    paths:
-      - sar-gateway/target/release/sar-gateway
-    expire_in: 1 week
-
-build_operator:
-  stage: build
-  image: rust:latest
-  <<: *rust_cache
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar_operator_v2/**/*
-  script:
-    - cd sar_operator_v2 && cargo build --release
-  artifacts:
-    paths:
-      - sar_operator_v2/target/release/sar_operator_v2
-    expire_in: 1 week
-
-build_science_processor:
-  stage: build
-  image: rust:latest
-  <<: *rust_cache
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar_science_processor/**/*
-        - .gitlab-ci.yml
-  script:
-    - cd sar_science_processor && cargo build --release --all-targets
-
-build_dashboard:
-  stage: build
-  image: node:20
-  <<: *node_cache
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar-dashboard-v3/**/*
-  script:
-    - cd sar-dashboard-v3
-    - npm ci --prefer-offline
-    - npm run build
-  artifacts:
-    paths:
-      - sar-dashboard-v3/dist/
-    expire_in: 1 week
-
-# ═══════════════════════════════════════
-# Test Stage
-# ═══════════════════════════════════════
-
-test_processor:
-  stage: test
-  image: rust:latest
-  <<: *rust_cache
-  needs: [build_processor]
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar_processor/**/*
-  script:
-    - cd sar_processor && cargo test
-
-test_gateway:
-  stage: test
-  image: rust:latest
-  <<: *rust_cache
-  needs: [build_gateway]
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar-gateway/**/*
-  script:
-    - cd sar-gateway && cargo test
-
-test_operator:
-  stage: test
-  image: rust:latest
-  <<: *rust_cache
-  needs: [build_operator]
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar_operator_v2/**/*
-  script:
-    - cd sar_operator_v2 && cargo test
-
-test_science_processor:
-  stage: test
-  image: rust:latest
-  <<: *rust_cache
-  needs: [build_science_processor]
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar_science_processor/**/*
-        - scripts/**/*
-        - .gitlab-ci.yml
-  script:
-    # 56 unit tests: windowed reader, fill values, filter masks, sha256
-    # vectors, memory-guard fail-closed — no granule needed (synthetic only)
-    - cd sar_science_processor && cargo test --release
-
-lint_dashboard:
-  stage: test
-  image: node:20
-  <<: *node_cache
-  needs: [build_dashboard]
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - sar-dashboard-v3/**/*
-  script:
-    - cd sar-dashboard-v3
-    - npm ci --prefer-offline
-    - npm run lint
-  allow_failure: true
-
-# ═══════════════════════════════════════
-# Deploy Stage
-# ═══════════════════════════════════════
-
-# GitLab Pages — Free static hosting for the dashboard
-# Accessible at: https://aditya-narayan-nayak.gitlab.io/nisar_pro/
-pages:
-  stage: deploy
-  image: node:20
-  <<: *node_cache
-  needs: [build_dashboard]
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  script:
-    - cd sar-dashboard-v3
-    - npm ci --prefer-offline
-    - GITLAB_PAGES=true npm run build
-    # GitLab Pages requires output in a top-level "public" directory
-    - mv dist ../public
-    # SPA fallback: serve index.html for all routes
-    - cp ../public/index.html ../public/404.html
-  artifacts:
-    paths:
-      - public
-
-# GitHub Mirror Sync — pushes code to the public GitHub repo
-# GitHub Actions (deploy-dashboard.yml) then deploys to GitHub Pages
 sync_to_github:
-  stage: deploy
+  stage: sync
   image:
     name: alpine/git:latest
     entrypoint: [""]
   variables:
-    GIT_DEPTH: "0"
     GIT_STRATEGY: clone
-    GITHUB_REPOSITORY: "AdityaNarayanNayak-2/NISAR_PRO"
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - test -n "$GITHUB_PAT" || (echo "GITHUB_PAT is not configured" >&2; exit 1)
+    - test -n "$GITHUB_PAT" || (echo "GITHUB_PAT is not configured in GitLab CI/CD variables" >&2; exit 1)
     - git fetch --unshallow 2>/dev/null || true
     - git remote remove github 2>/dev/null || true
     - git remote add github "https://x-access-token:${GITHUB_PAT}@github.com/${GITHUB_REPOSITORY}.git"
-    - git push github HEAD:main --force
+    # GitLab main is authoritative. Do not erase divergent GitHub history.
+    - git push github HEAD:main
+
+build_linux_release:
+  stage: build
+  image: rust:latest
+  needs: []
+  script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends nodejs npm ca-certificates curl build-essential pkg-config
+    - cargo build --manifest-path sar_science_processor/Cargo.toml --release --bin sar_science_processor
+    - cargo build --manifest-path sar-gateway/Cargo.toml --release --bin sar-gateway
+    - cd sar-dashboard-v3
+    - npm ci
+    - npm run build
+    - cd ..
+    - chmod +x installer/nisar-pro installer/install.sh
+    - mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/target/release"
+    - mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar_science_processor/target/release"
+    - mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-dashboard-v3/dist"
+    - mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/results"
+    - cp installer/nisar-pro "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/nisar-pro"
+    - cp sar-gateway/target/release/sar-gateway "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/target/release/"
+    - cp sar_science_processor/target/release/sar_science_processor "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar_science_processor/target/release/"
+    - cp -R sar-dashboard-v3/dist/. "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-dashboard-v3/dist/"
+    - printf 'NISAR Pro %s\n\nRun ./nisar-pro to start the local gateway and dashboard.\nResults are stored in sar-gateway/results.\nOriginal NISAR granules are not included.\n' "$RELEASE_VERSION" > "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/README.txt"
+    - tar -czf "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" -C release "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64"
+    - export PACKAGE_BASE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/nisar-pro/${RELEASE_VERSION}"
+    - export ARCHIVE_URL="${PACKAGE_BASE_URL}/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz"
+    - curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" "$ARCHIVE_URL"
+    - sed "s|__NISAR_PRO_ARCHIVE_URL__|${ARCHIVE_URL}|" installer/install.sh > "release/install.sh"
+    - chmod +x "release/install.sh"
+    - curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file release/install.sh "${PACKAGE_BASE_URL}/install.sh"
+  artifacts:
+    name: "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64"
+    paths:
+      - NISAR-Pro-1.0.0-linux-x86_64.tar.gz
+      - release/install.sh
+    expire_in: never
+
+publish_gitlab_release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: build_linux_release
+      artifacts: true
+  script:
+    - echo "Publishing NISAR Pro v${RELEASE_VERSION} Linux release"
+  release:
+    name: "NISAR Pro v$RELEASE_VERSION"
+    tag_name: "v$RELEASE_VERSION"
+    ref: "$CI_COMMIT_SHA"
+    description: "NISAR Pro $RELEASE_VERSION Linux release. Windows package is published by the mirrored GitHub workflow."
+    assets:
+      links:
+        - name: "Linux x86_64 package"
+          url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/nisar-pro/$RELEASE_VERSION/NISAR-Pro-$RELEASE_VERSION-linux-x86_64.tar.gz"
+          link_type: package
+        - name: "Linux installer"
+          url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/nisar-pro/$RELEASE_VERSION/install.sh"
+          link_type: other

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NISAR Pro — InGARSS 2026</title>
+  <style>
+    :root { --bg:#080a0e; --panel:#11151c; --line:rgba(255,255,255,.12); --muted:#98a2b3; --ink:#f4f6f8; --cyan:#65d6d1; --amber:#f2b66d; --red:#ef6670; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; background:#020304; color:var(--ink); font-family:Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { display:grid; place-items:center; overflow:hidden; }
+    .deck { width:min(100vw, 177.777vh); height:min(100vh, 56.25vw); position:relative; overflow:hidden; background:radial-gradient(circle at 78% 20%, #17242a 0, #080b10 37%, #040507 78%); }
+    .slide { position:absolute; inset:0; padding:5.3% 6.2%; display:grid; align-content:center; opacity:0; transform:translateX(22px); pointer-events:none; transition:opacity .35s ease, transform .35s ease; }
+    .slide.active { opacity:1; transform:none; pointer-events:auto; }
+    .eyebrow { color:var(--cyan); font:600 clamp(10px,1.1vw,18px)/1.2 'JetBrains Mono',monospace; letter-spacing:.12em; text-transform:uppercase; }
+    h1,h2,h3,p { margin:0; } h1 { max-width:900px; font-size:clamp(34px,5.6vw,100px); line-height:.98; letter-spacing:-.065em; font-weight:420; } h2 { max-width:950px; font-size:clamp(29px,4vw,72px); line-height:1; letter-spacing:-.055em; font-weight:430; } h3 { font-size:clamp(16px,1.7vw,30px); font-weight:520; letter-spacing:-.03em; }
+    .dek { margin-top:22px; max-width:690px; color:#c4cbd4; font-size:clamp(15px,1.45vw,26px); line-height:1.45; }
+    .hero-grid { display:grid; grid-template-columns:1.05fr .95fr; gap:4vw; align-items:center; }
+    .hero-image { width:100%; border:1px solid var(--line); border-radius:18px; box-shadow:0 22px 70px rgba(0,0,0,.55); background:#0d1116; }
+    .meta { margin-top:35px; display:flex; gap:24px; flex-wrap:wrap; color:var(--muted); font:12px 'JetBrains Mono',monospace; }
+    .meta strong { color:var(--ink); font-weight:500; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:30px; }
+    .card { min-height:120px; padding:20px; background:rgba(255,255,255,.045); border:1px solid var(--line); border-radius:15px; }
+    .card .label { color:var(--muted); font:11px 'JetBrains Mono',monospace; text-transform:uppercase; letter-spacing:.08em; }
+    .value { margin-top:14px; font-size:clamp(25px,3vw,54px); line-height:1; letter-spacing:-.05em; font-weight:320; }
+    .sub { margin-top:9px; color:var(--muted); font-size:clamp(11px,1vw,17px); line-height:1.4; }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:center; }
+    .image-panel { border:1px solid var(--line); border-radius:16px; overflow:hidden; background:#0d1116; }
+    .image-panel img { display:block; width:100%; height:auto; }
+    .stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:22px; }
+    .stat { padding:15px 17px; border-left:2px solid var(--cyan); background:rgba(255,255,255,.035); }
+    .stat:nth-child(2) { border-left-color:var(--amber); } .stat:nth-child(3) { border-left-color:var(--red); }
+    .stat b { display:block; font-size:clamp(23px,2.7vw,48px); font-weight:320; letter-spacing:-.05em; }
+    .stat span { color:var(--muted); font:11px 'JetBrains Mono',monospace; }
+    table { width:100%; border-collapse:collapse; margin-top:24px; font-size:clamp(12px,1.1vw,20px); } th,td { padding:13px 15px; border-bottom:1px solid var(--line); text-align:left; } th { color:var(--muted); font:11px 'JetBrains Mono',monospace; text-transform:uppercase; letter-spacing:.08em; } td strong { font-weight:500; }
+    .timeline { display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin-top:36px; border-top:1px solid var(--line); }
+    .epoch { position:relative; padding:23px 18px 0 0; } .epoch:before { content:""; position:absolute; top:-5px; left:0; width:9px; height:9px; border-radius:50%; background:var(--cyan); box-shadow:0 0 0 5px rgba(101,214,209,.12); } .epoch:nth-child(3):before { background:var(--red); box-shadow:0 0 0 5px rgba(239,102,112,.12); } .epoch:nth-child(4):before { background:var(--amber); box-shadow:0 0 0 5px rgba(242,182,109,.12); }
+    .date { font:12px 'JetBrains Mono',monospace; color:var(--muted); } .epoch h3 { margin-top:12px; } .epoch p { margin-top:9px; color:#aeb7c2; font-size:13px; line-height:1.45; }
+    .callout { margin-top:25px; padding:17px 20px; border:1px solid rgba(101,214,209,.35); border-radius:13px; background:rgba(101,214,209,.07); color:#d8f2ef; font-size:clamp(13px,1.25vw,22px); line-height:1.4; }
+    .warning { border-color:rgba(242,182,109,.45); background:rgba(242,182,109,.07); color:#f4ddbf; }
+    .footer { position:absolute; left:6.2%; right:6.2%; bottom:3.3%; display:flex; justify-content:space-between; color:#687383; font:10px 'JetBrains Mono',monospace; letter-spacing:.05em; }
+    .controls { position:absolute; right:5.8%; bottom:2.5%; display:flex; gap:6px; z-index:10; } button { width:34px; height:30px; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.06); color:var(--ink); cursor:pointer; } button:hover,button:focus-visible { background:rgba(255,255,255,.14); outline:2px solid var(--cyan); outline-offset:2px; }
+    .progress { position:absolute; top:0; left:0; height:3px; background:var(--cyan); transition:width .35s ease; }
+    @media (max-width:800px) { .hero-grid,.two-col { grid-template-columns:1fr; } .hero-image { max-height:34vh; object-fit:contain; } .grid { grid-template-columns:1fr 1fr; } .timeline { gap:8px; } .epoch p { font-size:10px; } .slide { padding:6% 5%; } }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="NISAR Pro InGARSS 2026 presentation">
+    <div class="progress" id="progress"></div>
+
+    <section class="slide active">
+      <div class="hero-grid">
+        <div><div class="eyebrow">NISAR Pro / InGARSS 2026</div><h1>Mapping water change across a 1.157 billion pixel scene.</h1><p class="dek">A full-scene, dual-frequency workflow for the Bihar Ganga alluvial plain using NISAR L2 GCOV—built to make the L-band versus S-band question measurable.</p><div class="meta"><span>25.5000°N / 86.5000°E</span><span>EPSG:32645</span><span>80 m analysis lattice</span></div></div>
+        <img class="hero-image" src="bihar_ls_fusion_3panel_comparison.png" alt="L-band, S-band, and fused water mapping comparison">
+      </div>
+      <div class="footer"><span>Dynamic and seasonal surface-water mapping</span><span>01 / 08</span></div>
+    </section>
+
+    <section class="slide"><div class="eyebrow">01 / Study area and scale</div><h2>The challenge is not a 20 km box.</h2><p class="dek">The box identifies the target region. The analysis products cover the selected NISAR scene footprint, including rotated-swath nodata and mixed floodplain surfaces.</p><div class="grid"><div class="card"><div class="label">Native scene / date</div><div class="value">1.157B</div><div class="sub">33,696 × 34,344 native 10 m pixels</div></div><div class="card"><div class="label">Analysis lattice</div><div class="value">4,212 × 4,293</div><div class="sub">8×8 streamed multilook at 80 m</div></div><div class="card"><div class="label">Reference box</div><div class="value">20×20</div><div class="sub">km discovery box only</div></div></div><div class="callout">The output reports both full-grid area and valid-swath coverage so a rotated scene is not mistaken for a completely observed rectangle.</div><div class="footer"><span>Scene discovery ≠ processing boundary</span><span>02 / 08</span></div></section>
+
+    <section class="slide"><div class="eyebrow">02 / Engine and physical signal</div><h2>Stream the scene. Preserve the physics.</h2><div class="two-col"><div><div class="card"><h3>Native GCOV → 80 m lattice</h3><p class="sub">Row-bounded HDF5 hyperslabs are read directly, block-averaged on the fly, converted to dB, and passed to the change detector without materialising the native scene.</p></div><div class="card" style="margin-top:14px"><h3>Δγ⁰<sub>dB</sub> reveals change</h3><p class="sub">Active minus baseline backscatter: negative excursions indicate a move toward specular water; positive excursions can indicate recession or exposed rough sediment.</p></div></div><div class="grid" style="grid-template-columns:1fr 1fr;margin-top:0"><div class="card"><div class="label">L-band</div><div class="value">1.239</div><div class="sub">GHz · λ≈24.2 cm</div></div><div class="card"><div class="label">S-band</div><div class="value">3.200</div><div class="sub">GHz · λ≈9.37 cm</div></div></div></div><div class="callout warning">Observed benchmark numbers are published with hardware, command, binary, and memory provenance. They are not universal performance guarantees.</div><div class="footer"><span>Rust streaming / Otsu / hysteresis region growing</span><span>03 / 08</span></div></section>
+
+    <section class="slide"><div class="eyebrow">03 / Single-frequency baselines</div><h2>Two sensors. Two views of the same transition.</h2><table><thead><tr><th>Configuration</th><th>Stable water</th><th>New water gain</th><th>Receded water</th></tr></thead><tbody><tr><td><strong>L-only</strong></td><td>3,314.83 km²</td><td>1,137.14 km²</td><td>888.84 km²</td></tr><tr><td><strong>S-only</strong></td><td>2,546.37 km²</td><td>1,174.89 km²</td><td>214.98 km²</td></tr><tr><td><strong>L+S comparison</strong></td><td>2,652.29 km²</td><td>1,337.15 km²</td><td>723.37 km²</td></tr></tbody></table><div class="stat-row"><div class="stat"><b>80 m</b><span>common analysis support</span></div><div class="stat"><b>12 days</b><span>31 Aug → 12 Sep</span></div><div class="stat"><b>EPSG:32645</b><span>projected output grid</span></div></div><div class="callout warning">These are mapped areas, not accuracy scores. The final comparison must reconcile the standalone L-band rerun before publication.</div><div class="footer"><span>Canonical comparison artifact / provisional table</span><span>04 / 08</span></div></section>
+
+    <section class="slide"><div class="eyebrow">04 / Dual-frequency comparison</div><div class="two-col"><div><h2>Fusion is a hypothesis to test—not a magic label.</h2><p class="dek">The comparison artifact aligns the bands on an 80 m overlap lattice and records the physical gates used to produce the fused map.</p><div class="grid" style="grid-template-columns:1fr 1fr"><div class="card"><div class="label">Fused gain</div><div class="value">1,337.15</div><div class="sub">km² / 330,415 acres</div></div><div class="card"><div class="label">Consensus box</div><div class="value">99.48%</div><div class="sub">internal L/S agreement statistic</div></div></div></div><div class="image-panel"><img src="bihar_full_scene_3panel.png" alt="Full-scene Bihar L-band temporal map panels"></div></div><div class="callout">The scientifically honest question is where fusion improves agreement with an independent reference, where it changes the map, and where it performs worse.</div><div class="footer"><span>Physical gates / common overlap / documented limitations</span><span>05 / 08</span></div></section>
+
+    <section class="slide"><div class="eyebrow">05 / Four-epoch lifecycle</div><h2>Separate perennial channel water from seasonal persistence.</h2><div class="timeline"><div class="epoch"><div class="date">26 JUL 2026</div><h3>Pre-monsoon</h3><p>Dry reference and channel baseline.</p></div><div class="epoch"><div class="date">31 AUG 2026</div><h3>Saturated baseline</h3><p>Late-monsoon water already present.</p></div><div class="epoch"><div class="date">12 SEP 2026</div><h3>Peak expansion</h3><p>Newly detected water across the floodplain.</p></div><div class="epoch"><div class="date">18 OCT 2026</div><h3>Recession</h3><p>Drainage and exposed alluvial surfaces.</p></div></div><div class="image-panel" style="margin-top:30px"><img src="bihar_2phase_flood_lifecycle.png" alt="Two-phase Bihar flood lifecycle chart"></div><div class="footer"><span>Expansion → peak → recession</span><span>06 / 08</span></div></section>
+
+    <section class="slide"><div class="eyebrow">06 / Validation and uncertainty</div><h2>What we know—and what we still have to prove.</h2><div class="two-col"><div><div class="card"><h3>Independent reference path</h3><p class="sub">Sentinel-2 L2A, 18 Oct 2026, 12.38% scene cloud cover. B03/B08 NDWI with SCL cloud/shadow masking over the official discovery box.</p></div><div class="card" style="margin-top:14px"><h3>Metrics to report</h3><p class="sub">Confusion matrix, precision, recall, F1, IoU, area error, and valid-pixel count—computed separately for L, S, and L+S.</p></div></div><div class="card warning"><h3>Not yet a score</h3><p class="sub">No accuracy number is shown until the independent reference raster is generated and the same support, nodata rule, and sampling design are used for every method.</p></div></div><div class="callout warning">Uncertainty sources: optical cloud and label quality, temporal mismatch, vegetation, wind riffles, sandbars, mixed pixels, swath-edge nodata, and different band footprints.</div><div class="footer"><span>Evidence before confidence</span><span>07 / 08</span></div></section>
+
+    <section class="slide"><div class="eyebrow">07 / Conclusion</div><h2>Make full-scene radar analysis usable on ordinary hardware.</h2><p class="dek">NISAR Pro combines an auditable Rust streaming engine, sensor-aware change detection, a dual-frequency comparison, and a judge-runnable notebook. The final contribution is not a bigger number—it is a workflow whose assumptions, limitations, and outputs can be inspected.</p><div class="stat-row"><div class="stat"><b>1.157B</b><span>native pixels per date</span></div><div class="stat"><b>L / S / L+S</b><span>three comparable configurations</span></div><div class="stat"><b>4 epochs</b><span>expansion and recession story</span></div></div><div class="callout">Next experiment: same dated reference, same valid support, same samples—then decide whether L+S adds measurable value.</div><div class="meta"><span>Technical note</span><span>Notebook</span><span>Provenance manifest</span><span>Validation workflow</span></div><div class="footer"><span>NISAR Pro / Bihar Ganga alluvial plain</span><span>08 / 08</span></div></section>
+
+    <div class="controls"><button id="prev" aria-label="Previous slide">←</button><button id="next" aria-label="Next slide">→</button></div>
+  </main>
+  <script>
+    const slides = [...document.querySelectorAll('.slide')];
+    let index = 0;
+    const progress = document.getElementById('progress');
+    function render() { slides.forEach((slide, i) => slide.classList.toggle('active', i === index)); progress.style.width = `${((index + 1) / slides.length) * 100}%`; }
+    function move(delta) { index = (index + delta + slides.length) % slides.length; render(); }
+    document.getElementById('prev').addEventListener('click', () => move(-1));
+    document.getElementById('next').addEventListener('click', () => move(1));
+    document.addEventListener('keydown', event => { if (['ArrowRight', 'PageDown', ' '].includes(event.key)) { event.preventDefault(); move(1); } if (['ArrowLeft', 'PageUp'].includes(event.key)) { event.preventDefault(); move(-1); } });
+    render();
+  </script>
+</body>
+</html>

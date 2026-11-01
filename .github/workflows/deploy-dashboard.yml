@@ -1,35 +1,27 @@
-# ══════════════════════════════════════════════════════════════
-# Deploy Dashboard to GitHub Pages (Free Hosting)
-# ══════════════════════════════════════════════════════════════
-# Builds the Vite React dashboard and deploys it to:
-#   https://adityanarayannayak-2.github.io/NISAR_PRO/
-#
-# The dashboard is a static SPA that connects to the user's
-# local SAR Gateway (localhost:3000) for processing. No backend
-# hosting is needed — users run the Rust services on their machines.
-# ══════════════════════════════════════════════════════════════
-
-name: Deploy Dashboard to GitHub Pages
+name: Build NISAR Pro Windows Release
 
 on:
   push:
     branches: [main]
     paths:
       - 'sar-dashboard-v3/**'
+      - 'sar-gateway/**'
+      - 'sar_science_processor/**'
+      - 'installer/**'
       - '.github/workflows/deploy-dashboard.yml'
-  workflow_dispatch:   # Allow manual trigger from GitHub UI
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: nisar-pro-release
+  cancel-in-progress: false
 
 jobs:
-  build:
+  build-dashboard:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -42,32 +34,100 @@ jobs:
           cache: npm
           cache-dependency-path: sar-dashboard-v3/package-lock.json
 
-      - name: Install dependencies
-        working-directory: sar-dashboard-v3
-        run: npm ci
-
-      - name: Build for GitHub Pages
+      - name: Build dashboard
         working-directory: sar-dashboard-v3
         env:
           GITHUB_PAGES: "true"
-        run: npm run build
+        run: |
+          npm ci
+          npm run build
+          cp dist/index.html dist/404.html
 
-      # SPA fallback: GitHub Pages serves 404.html for unknown routes
-      - name: Create SPA fallback
-        run: cp sar-dashboard-v3/dist/index.html sar-dashboard-v3/dist/404.html
+      - name: Upload dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-dist
+          path: sar-dashboard-v3/dist
 
-      - name: Upload Pages artifact
+      - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: sar-dashboard-v3/dist
 
-  deploy:
-    needs: build
+  deploy-dashboard:
+    needs: build-dashboard
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy dashboard to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  build-windows-package:
+    needs: build-dashboard
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download dashboard artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-dist
+          path: sar-dashboard-v3/dist
+
+      - name: Build science processor
+        working-directory: sar_science_processor
+        run: cargo build --release --bin sar_science_processor
+
+      - name: Build gateway
+        working-directory: sar-gateway
+        run: cargo build --release --bin sar-gateway
+
+      - name: Build one-click launcher
+        run: |
+          rustc -O -C panic=abort installer/launcher.rs -o NISAR-Pro-1.0.0.exe
+
+      - name: Assemble release folder
+        shell: pwsh
+        run: |
+          $release = "NISAR-Pro-1.0.0"
+          New-Item -ItemType Directory -Force "$release/sar-gateway/target/release" | Out-Null
+          New-Item -ItemType Directory -Force "$release/sar_science_processor/target/release" | Out-Null
+          New-Item -ItemType Directory -Force "$release/sar-dashboard-v3/dist" | Out-Null
+          New-Item -ItemType Directory -Force "$release/sar-gateway/results" | Out-Null
+          Copy-Item "NISAR-Pro-1.0.0.exe" "$release/"
+          Copy-Item "sar-gateway/target/release/sar-gateway.exe" "$release/sar-gateway/target/release/"
+          Copy-Item "sar_science_processor/target/release/sar_science_processor.exe" "$release/sar_science_processor/target/release/"
+          Copy-Item "sar-dashboard-v3/dist/*" "$release/sar-dashboard-v3/dist/" -Recurse
+          @"
+          NISAR Pro 1.0.0
+
+          Double-click NISAR-Pro-1.0.0.exe to start the local gateway and open the dashboard.
+          The application runs locally at http://localhost:3000.
+
+          Put your NISAR .h5 granules anywhere on this computer and select them from the dashboard.
+          Processing results are stored in sar-gateway/results.
+
+          The original NISAR granules are not included in this release.
+          "@ | Set-Content "$release/README.txt"
+          Compress-Archive -Path "$release" -DestinationPath "NISAR-Pro-1.0.0-windows-x64.zip"
+
+      - name: Upload Windows package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NISAR-Pro-1.0.0-windows-x64
+          path: NISAR-Pro-1.0.0-windows-x64.zip
+
+      - name: Publish GitHub release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          target_commitish: main
+          name: NISAR Pro v1.0.0
+          files: NISAR-Pro-1.0.0-windows-x64.zip
+          generate_release_notes: true
+          make_latest: true

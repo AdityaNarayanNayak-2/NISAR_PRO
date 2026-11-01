@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useMap, useMapEvents, Rectangle } from 'react-leaflet';
 import L from 'leaflet';
+import { isValidLatLngBounds } from './helpers';
 
 export function MapFlyTo({ center }) {
     const map = useMap();
@@ -8,6 +9,7 @@ export function MapFlyTo({ center }) {
         if (!center) return;
         try {
             if (Array.isArray(center)) {
+                if (!Number.isFinite(center[0]) || !Number.isFinite(center[1])) return;
                 if (center.length >= 3 && typeof center[2] === 'number') {
                     map.flyTo([center[0], center[1]], center[2], { duration: 1.5 });
                 } else if (center.length >= 2) {
@@ -17,11 +19,15 @@ export function MapFlyTo({ center }) {
                 }
             } else if (typeof center === 'object') {
                 if (center.bounds) {
-                    map.flyToBounds(center.bounds, { padding: [50, 50], duration: 1.5, maxZoom: 15 });
-                } else if (center.center) {
-                    const z = center.zoom || 14;
-                    map.flyTo(center.center, z, { duration: 1.5 });
-                } else if (center.lat != null && (center.lon != null || center.lng != null)) {
+                    if (isValidLatLngBounds(center.bounds)) {
+                        map.flyToBounds(center.bounds, { padding: [50, 50], duration: 1.5, maxZoom: 15 });
+                    }
+                } else if (center.center && Array.isArray(center.center)) {
+                    if (Number.isFinite(center.center[0]) && Number.isFinite(center.center[1])) {
+                        const z = center.zoom || 14;
+                        map.flyTo(center.center, z, { duration: 1.5 });
+                    }
+                } else if (Number.isFinite(center.lat) && Number.isFinite(center.lon ?? center.lng)) {
                     const lat = center.lat;
                     const lon = center.lon != null ? center.lon : center.lng;
                     const z = center.zoom || 14;
@@ -49,7 +55,7 @@ export function MapZoomGate({ onZoomChange }) {
 export function MapFlyToBounds({ bounds }) {
     const map = useMap();
     useEffect(() => {
-        if (bounds) {
+        if (bounds && isValidLatLngBounds(bounds)) {
             try {
                 map.flyToBounds(bounds, { padding: [60, 60], duration: 1.5, maxZoom: 9 });
             } catch (err) {

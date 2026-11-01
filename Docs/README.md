@@ -14,6 +14,7 @@ Step-by-step instructions on setting up, running, and verifying the platform.
 | Document | Description | Target Audience |
 | :--- | :--- | :--- |
 | 🪟 [Getting Started](./UserGuide/getting-started.md) | Prerequisites, clone, running the dashboard and gateway, and environment variables. | Developers |
+| ⚡ [Command Cheatsheet & Data Guide](./UserGuide/command-cheatsheet-and-data-guide.md) | Copy-paste CLI & API cheatsheet, granule naming deconstruction, and Bihar 50 GB stack catalog. | Analysts / Engineers |
 | 💻 [Windows Local Run](./UserGuide/windows-local-run.md) | The recommended PowerShell workflow: build once, gateway on port 3000, dashboard on 5173. | Developers / Operators |
 | 🛰️ [Friendly User Guide](./UserGuide/userguide.md) | Companion manual: install, GCOV vs GUNW cheat sheet, monitoring a dam, the math made simple, troubleshooting, keyboard shortcuts. | Everyone |
 | 🧪 [Verification & Testing Guide](./UserGuide/verification-guide.md) | Phase-by-phase service startup checks and health verification routines. | QA / DevOps |

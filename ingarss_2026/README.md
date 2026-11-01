@@ -1,67 +1,77 @@
-# InGARSS 2026 — Phase 1 Hackathon Submission Package
-## NISAR Flood Inundation & Damage Mapping Platform (`NISAR Pro`)
+# NISAR Pro — InGARSS 2026 Phase 1 package
 
-Welcome to the official InGARSS 2026 Phase-1 submission package for **NISAR Flood Inundation & Multi-Temporal Damage Mapping**.
+This directory contains the reproducible analysis package for dynamic
+surface-water mapping over the Bihar Ganga alluvial plain using NISAR L2 GCOV.
+The central comparison is L-band only, S-band only, and a documented L+S
+overlap-lattice experiment. The 20 km × 20 km box is used for discovery and
+orientation; the supplied NISAR products are analysed over the selected scene
+footprint.
 
----
+## Package contents
 
-##  Package Directory Layout
-
-```
-ingarss_2026/
-├── README.md                      ← Executive briefing & evaluation guide (You are here)
-├── bin/
-│   └── sar_science_processor      ← Standalone precompiled high-performance Linux binary
-├── notebooks/
-│   └── ingarss_flood_evaluation.ipynb ← 1-click Jupyter Notebook for academic judges & evaluators
-├── scripts/
-│   └── run_flood_pipeline.py      ← Lightweight Python runner invoking the Rust engine
-├── results/                       ← Showcase full-scene Bihar swath artifacts
-│   ├── flood_expansion_aug31_sep12/  ← Phase 1: Flood Inundation / Water Gain (1,173 km²)
-│   ├── flood_recession_sep12_oct18/  ← Phase 2: Flood Recession / Water Loss (2,652 km²)
-│   └── dual_frequency_aug31/         ← Phase 3: L-Band vs S-Band Dual-Frequency Co-Registration
-└── docs/                          ← Mathematical derivations, Otsu proofs, and benchmarks
+```text
+notebooks/NISAR_Bihar_Flood_Lifecycle.ipynb  Colab-ready showcase notebook
+notebook_cells/                               Notebook source cells
+results/flood_expansion_aug31_sep12/          L-band Aug 31 → Sep 12 outputs
+results/flood_recession_sep12_oct18/          L-band Sep 12 → Oct 18 outputs
+results/sband_flood_aug31_sep12/              S-band comparison outputs
+sar-bihar-ls-fused-aug31-sep12_flood.json     L/S/L+S comparison artifact
+scripts/                                      Validation and provenance tools
+TECHNICAL_NOTE.md                             Draft technical note
+presentation.html                             Eight-slide technical presentation
 ```
 
----
+## What is currently demonstrated
 
-##  Key Scientific & Engineering Highlights
+- Full-scene L-band processing on an 80 m grid from NISAR L2 GCOV.
+- A date-to-date change map with stable land, persistent water, water gain,
+  and water-loss classes.
+- Separate L-band and S-band results plus an L+S comparison on a common
+  overlap lattice.
+- Streaming hyperslab ingestion and block averaging in the Rust processor.
+- A four-epoch narrative: 26 Jul, 31 Aug, 12 Sep, and 18 Oct 2026.
+- Explicit limitations for swath-edge nodata, temporal mismatch, vegetation,
+  wind-roughened water, sandbars, and unavailable independent labels.
 
-### 1. InGARSS 2026 Section 6: 4-Class Temporal Dynamics
-Every pixel is classified into the strict Section 6 temporal classes:
-* **Class 0**: Stable Non-Water Land (Slate `#64748b`)
-* **Class 1**: Stable Water Body (Cyan `#00e5ff`)
-* **Classes 2–4**: Water Gain / New Inundation (Crimson `#ef4444`, Coral `#f97316`, Orange `#fb923c`)
-* **Class 5**: Water Loss / Receded Water (Warm Amber `#f59e0b`)
+The packaged standalone L-band expansion artifact reports **1,166.21 km²** of
+water gain and **889.96 km²** of receded water over **49.6% valid swath
+coverage**. A live RHEL rerun currently reports a different total, so the
+canonical value is intentionally marked pending until the exact processor,
+granule, and parameter provenance is captured. Do not present internal L/S
+agreement values as accuracy scores.
 
-### 2. Multi-Temporal 4-Epoch Hydrological Lifecycle
-Instead of a simple 2-date comparison, this submission demonstrates the complete lifecycle of the Bihar Ganga flood:
-* **Expansion Phase (Aug 31 $\to$ Sep 12)**: Captures $1,173.61\text{ km}^2$ ($290,006\text{ acres}$) of new flood inundation across agricultural plains.
-* **Recession Phase (Sep 12 $\to$ Oct 18)**: Captures $2,652.28\text{ km}^2$ ($655,391\text{ acres}$) of receded floodwaters retreating back to the riverbed.
-* **Permanent Channel Consensus**: Identifies the true permanent Ganga river channel, eliminating wet-baseline bias.
+## Run the notebook
 
-### 3. The 1.157 Billion Pixel Breakthrough
-* **Zero Out-of-Memory (OOM) Guarantee**: Ingests full $33,696 \times 34,344$ NISAR GCOV swaths in 1,024-row horizontal hyperslabs directly from HDF5 chunks (`ChunkedF32Reader`).
-* **Performance Benchmark**: Streams and downsamples **2.31 billion raw observations in 63 seconds with 1.79 GB peak RAM** on standard hardware.
+### Hosted Google Colab — judge-safe mode
 
----
+Open `notebooks/NISAR_Bihar_Flood_Lifecycle.ipynb` in Colab and run all cells.
+The bootstrap cell clones the repository and loads the packaged JSON/PNG
+artifacts. It does not require multi-gigabyte HDF5 files.
 
-##  Quick Start for Evaluators
+See [COLAB_GUIDE.md](COLAB_GUIDE.md) for hosted and local-runtime modes.
 
-### Option A: Interactive Jupyter Notebook
-```bash
-jupyter notebook notebooks/ingarss_flood_evaluation.ipynb
-```
+### Full-scene local run
 
-### Option B: Standalone Python Runner
-```bash
-python scripts/run_flood_pipeline.py --mode evaluate
-```
+The full-scene Rust run requires the original NISAR `.h5` granules and the
+RHEL build environment. Do not attempt it in a standard hosted Colab runtime
+unless the granules are deliberately mounted and enough storage and memory
+are available. Use the gateway/processor runbook in the parent repository and
+record the exact command and output paths.
 
-### Option C: Direct Engine Execution
-```bash
-./bin/sar_science_processor --mode flood --crop-preset full \
-  --input /path/to/active.h5 \
-  --slave /path/to/baseline.h5 \
-  --output ./results/my_flood_run
-```
+## Validation status
+
+`VALIDATION_WORKFLOW.md` defines the independent-reference procedure and
+`scripts/validate_water_mask.py` computes confusion-matrix metrics without
+inventing scores. `scripts/build_sentinel2_reference.py` can generate a dated
+Sentinel-2 NDWI reference aid for the 18 Oct recession epoch. The package is
+not submission-complete until those metrics, or an explicit documented
+unavailability statement, are included alongside the final provenance.
+
+## Reproducibility
+
+Before final packaging on RHEL, run
+`scripts/capture_rhel_provenance.sh` to record the Git commit, processor hash,
+input-granule hashes, output hashes, and runtime. Then copy the small text
+manifest into `results/rhel_provenance_final.txt`. Source HDF5 granules are
+intentionally excluded from the submission archive unless organisers request
+them.

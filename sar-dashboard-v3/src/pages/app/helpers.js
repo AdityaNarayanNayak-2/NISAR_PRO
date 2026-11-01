@@ -2,7 +2,7 @@ import { C } from './constants';
 
 // ── Parse NISAR Filename ──
 export function parseNisarFilename(filepath) {
-    if (!filepath) return null;
+    if (!filepath || typeof filepath !== 'string') return null;
     const fname = filepath.split('/').pop();
     const parts = fname.split('_');
     if (parts.length < 10 || !parts[0].startsWith('NISAR')) return null;
@@ -87,3 +87,31 @@ export function jobErrorMessage(status) {
     }
     return null;
 }
+
+// Validate Leaflet-compatible LatLngBounds [[south, west], [north, east]]
+export function isValidLatLngBounds(b) {
+    if (!b || !Array.isArray(b) || b.length !== 2) return false;
+    const [sw, ne] = b;
+    if (!Array.isArray(sw) || !Array.isArray(ne) || sw.length < 2 || ne.length < 2) return false;
+    return Number.isFinite(sw[0]) && Number.isFinite(sw[1]) && Number.isFinite(ne[0]) && Number.isFinite(ne[1]);
+}
+
+// Safely extract valid [[south, west], [north, east]] bounds from job/result objects with intelligent fallbacks
+export function extractBoundsFromResult(res) {
+    if (!res) return null;
+    if (isValidLatLngBounds(res.bounds)) return res.bounds;
+    
+    // Check bbox object { south, west, north, east }
+    const bb = res.bbox || res.floodReport?.georef_bbox || res.floodReport?.crop?.bbox || res.floodReport?.product?.bbox;
+    if (bb && Number.isFinite(bb.south) && Number.isFinite(bb.west) && Number.isFinite(bb.north) && Number.isFinite(bb.east)) {
+        return [[bb.south, bb.west], [bb.north, bb.east]];
+    }
+
+    // Default Bihar Ganga target scene bounds if result is for Bihar flood
+    if (res.pipeline === 'flood' || (res.id && String(res.id).includes('bihar'))) {
+        return [[25.4098, 86.3946], [25.5902, 86.6054]];
+    }
+
+    return null;
+}
+

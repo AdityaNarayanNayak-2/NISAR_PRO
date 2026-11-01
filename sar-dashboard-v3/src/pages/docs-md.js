@@ -6,6 +6,7 @@
 
 import userguideMd from '../../../Docs/UserGuide/userguide.md?raw'
 import gettingStartedMd from '../../../Docs/UserGuide/getting-started.md?raw'
+import commandCheatsheetMd from '../../../Docs/UserGuide/command-cheatsheet-and-data-guide.md?raw'
 import windowsLocalRunMd from '../../../Docs/UserGuide/windows-local-run.md?raw'
 import verificationGuideMd from '../../../Docs/UserGuide/verification-guide.md?raw'
 import insarVerificationLogMd from '../../../Docs/UserGuide/insar-verification-log.md?raw'
@@ -49,6 +50,7 @@ export const docGroups = [
         items: [
             { id: 'friendly', label: 'Friendly User Guide', file: 'Docs/UserGuide/userguide.md', md: userguideMd },
             { id: 'getting-started', label: 'Getting Started', file: 'Docs/UserGuide/getting-started.md', md: gettingStartedMd },
+            { id: 'cheatsheet', label: 'Command Cheatsheet & Data Guide', file: 'Docs/UserGuide/command-cheatsheet-and-data-guide.md', md: commandCheatsheetMd },
             { id: 'windows-run', label: 'Windows Local Run', file: 'Docs/UserGuide/windows-local-run.md', md: windowsLocalRunMd },
         ],
     },

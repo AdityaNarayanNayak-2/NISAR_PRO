@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { MONO, SANS, C } from '../constants';
 import { formatBytes, formatElapsed } from '../helpers';
-import { api } from '../../../config/api';
 import { useGatewayStore } from '../stores/useGatewayStore';
 import { useJobStore } from '../stores/useJobStore';
 import { useMapStore } from '../stores/useMapStore';
@@ -49,16 +48,12 @@ export default function FloodConfigPanel({
 
     // Stores
     const gatewayOnline = useGatewayStore(state => state.gatewayOnline);
-    const jobs = useJobStore(state => state.jobs);
     const elapsed = useJobStore(state => state.elapsed);
-    const setActiveJobId = useJobStore(state => state.setActiveJobId);
-    const setTerminalOpen = useJobStore(state => state.setTerminalOpen);
 
     const drawnAoi = useMapStore(state => state.drawnAoi);
     const setDrawnAoi = useMapStore(state => state.setDrawnAoi);
     const isDrawingAoi = useMapStore(state => state.isDrawingAoi);
     const setIsDrawingAoi = useMapStore(state => state.setIsDrawingAoi);
-    const setViewingResult = useMapStore(state => state.setViewingResult);
     const setFlyToCenter = useMapStore(state => state.setFlyToCenter);
 
     const inputStyle = {
@@ -75,11 +70,20 @@ export default function FloodConfigPanel({
         picker.click();
     };
 
+    const sanitizePath = (val) => {
+        if (!val) return '';
+        const trimmed = val.trim();
+        if (trimmed.startsWith('home/') || trimmed.startsWith('tmp/') || trimmed.startsWith('var/') || trimmed.startsWith('usr/') || trimmed.startsWith('opt/')) {
+            return '/' + trimmed;
+        }
+        return trimmed;
+    };
+
     const fileField = (label, value, setPath, placeholder, optional = false) => (
         <label className={optional ? 'flood-input-optional' : undefined}>
             <span>{label}</span>
             <div className="local-file-field">
-                <input type="text" value={value || ''} onChange={e => setPath(e.target.value)} placeholder={placeholder} style={inputStyle} />
+                <input type="text" value={value || ''} onChange={e => setPath(sanitizePath(e.target.value))} placeholder={placeholder} style={inputStyle} />
                 <button type="button" onClick={() => chooseLocalFile(setPath)} aria-label={`Choose ${label.toLowerCase()} file`}>Choose file</button>
             </div>
         </label>
@@ -148,6 +152,50 @@ export default function FloodConfigPanel({
 
             <section className="flood-input-card" aria-labelledby="acquisition-pair-title">
                 <div className="flood-input-card-heading"><div><span className="flood-input-step">01</span><h3 id="acquisition-pair-title">Acquisition pair</h3></div><span className="flood-input-card-note">Active + baseline</span></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '12px' }}>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setLocalFilePath('/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_030_098_A_014_4005_DHDH_A_20260912T233810_20260912T233845_P05023_N_F_J_001.h5');
+                            setSlaveFilePath('/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_029_098_A_014_4005_DHDH_A_20260831T233810_20260831T233845_P05023_N_F_J_001.h5');
+                            setRadarBand('l');
+                            setCropPreset('full');
+                        }}
+                        style={{ padding: '6px 4px', background: C.bg2, border: `1px solid ${C.bg3}`, borderRadius: '4px', color: C.text, fontFamily: SANS, fontSize: '10px', cursor: 'pointer', textAlign: 'center' }}
+                        title="Load Bihar L-Band Master Stack (Sep 12 Active vs Aug 31 Baseline)"
+                    >
+                        <strong>Bihar L-Band</strong>
+                        <span style={{ display: 'block', fontSize: '9px', color: C.textDim }}>Aug 31 vs Sep 12</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setLocalFilePath('/home/aditya/Desktop/nisar_data/NISAR_S2_UR_GCOV_030_098_A_014_3700_DHNA_A_20260912T233809_20260912T233846_P00500_N_F_I_001.h5');
+                            setSlaveFilePath('/home/aditya/Desktop/nisar_data/NISAR_S2_UR_GCOV_029_098_A_014_3700_DHNA_A_20260831T233810_20260831T233846_P00500_M_F_I_001.h5');
+                            setRadarBand('s');
+                            setCropPreset('full');
+                        }}
+                        style={{ padding: '6px 4px', background: C.bg2, border: `1px solid ${C.bg3}`, borderRadius: '4px', color: C.text, fontFamily: SANS, fontSize: '10px', cursor: 'pointer', textAlign: 'center' }}
+                        title="Load ISRO S-Band Master Stack (Sep 12 Active vs Aug 31 Baseline)"
+                    >
+                        <strong>ISRO S-Band</strong>
+                        <span style={{ display: 'block', fontSize: '9px', color: C.textDim }}>Aug 31 vs Sep 12</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setLocalFilePath('/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_033_098_A_014_4005_DHDH_A_20261018T233811_20261018T233845_P05023_N_F_J_001.h5');
+                            setSlaveFilePath('/home/aditya/Desktop/nisar_data/NISAR_L2_PR_GCOV_030_098_A_014_4005_DHDH_A_20260912T233810_20260912T233845_P05023_N_F_J_001.h5');
+                            setRadarBand('l');
+                            setCropPreset('full');
+                        }}
+                        style={{ padding: '6px 4px', background: C.bg2, border: `1px solid ${C.bg3}`, borderRadius: '4px', color: C.text, fontFamily: SANS, fontSize: '10px', cursor: 'pointer', textAlign: 'center' }}
+                        title="Load Bihar Recession Stack (Oct 18 Active vs Sep 12 Baseline)"
+                    >
+                        <strong>Bihar Recession</strong>
+                        <span style={{ display: 'block', fontSize: '9px', color: C.textDim }}>Sep 12 vs Oct 18</span>
+                    </button>
+                </div>
                 {fileField('Active observation', localFilePath, setLocalFilePath, 'Choose active GCOV .h5')}
                 {fileField('Baseline reference', slaveFilePath, setSlaveFilePath, 'Choose baseline GCOV .h5')}
                 {fileField('Optional coherence helper', gunwFilePath, setGunwFilePath, 'Choose GUNW .h5 (optional)', true)}
@@ -549,40 +597,6 @@ export default function FloodConfigPanel({
                     >✕ CANCEL RUN</button>
                 </div>
             )}
-
-            {/* DIVIDER */}
-            {Object.values(jobs).length > 0 && <div style={{ height: '1px', background: C.bg3, margin: '16px 0' }} />}
-
-            {/* COMPLETED JOBS */}
-            {Object.values(jobs).length > 0 && (<>
-                <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>COMPLETED JOBS</div>
-                {Object.values(jobs).map(job => (
-                    <div key={job.id} onClick={() => { setActiveJobId(job.id); setTerminalOpen(true); }} style={{ padding: '8px', borderBottom: `1px solid ${C.bg2}`, cursor: 'pointer' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontFamily: MONO, fontSize: '11px', color: C.textMid }}>{job.name}</span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: MONO, fontSize: '10px', color: C.textDim }}>
-                                {job.status === 'completed' && <span style={{ color: C.stable }}>●</span>}
-                                {job.status === 'running' && <span style={{ color: accent }}>●</span>}
-                                {job.status === 'failed' && <span style={{ color: C.critical }}>●</span>}
-                                {elapsed[job.id] != null && formatElapsed(elapsed[job.id])}
-                            </span>
-                        </div>
-                        {job.status === 'failed' && (
-                            <div style={{ marginTop: '6px', fontFamily: MONO, fontSize: '9px', color: C.critical, wordBreak: 'break-all', lineHeight: 1.5 }}>
-                                {job.error || 'Processing failed'}
-                            </div>
-                        )}
-                        {job.status === 'completed' && (
-                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                                <button onClick={(e) => { e.stopPropagation(); setViewingResult({ url: api(job.output_path), bounds: job.bounds, insarReport: job.insarReport, ships: job.ships, floodReport: job.floodReport, floodGeoJson: job.floodGeoJson, floodReportPath: job.floodReportPath, floodGeoJsonPath: job.floodGeoJsonPath, floodBaselinePath: job.floodBaselinePath, floodActivePath: job.floodActivePath, floodReplayAvailable: job.floodReplayAvailable, pipeline: job.pipeline, elapsed: elapsed[job.id], bbox: job.bbox }); }}
-                                    style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.stable, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>VIEW</button>
-                                <button onClick={(e) => { e.stopPropagation(); window.open(api(job.output_path), '_blank'); }}
-                                    style={{ flex: 1, padding: '4px 8px', background: 'transparent', border: `1px solid ${C.bg3}`, color: C.textMid, fontFamily: MONO, fontSize: '10px', cursor: 'pointer', borderRadius: '2px' }}>DL</button>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </>)}
         </div>
     );
 }

@@ -302,6 +302,25 @@ async fn spawn_local_job(
         }
     };
 
+    fn normalize_path_str(raw: &str) -> String {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        if std::path::Path::new(trimmed).exists() {
+            return trimmed.to_string();
+        }
+        let with_slash = format!("/{}", trimmed.trim_start_matches('/'));
+        if std::path::Path::new(&with_slash).exists() {
+            info!("Auto-correcting missing leading slash: {} -> {}", trimmed, with_slash);
+            return with_slash;
+        }
+        trimmed.to_string()
+    }
+
+    let input = normalize_path_str(&input);
+    let slave_file = slave_file.map(|s| normalize_path_str(&s));
+
     // ═══════════════════════════════════════════════════════════════════
     // BINARY DISPATCH: SAR Science Processor vs Standard Processor
     // ═══════════════════════════════════════════════════════════════════
@@ -711,6 +730,46 @@ async fn spawn_k8s_job(
     }
 }
 
+pub fn delete_job_files(job_id: &str) -> (usize, u64) {
+    let mut files_deleted = 0;
+    let mut freed_bytes = 0;
+    let results_dir = std::path::Path::new("results");
+
+    // 1. Check nested directory `results/jobs/{job_id}`
+    let job_dir = results_dir.join("jobs").join(job_id);
+    if job_dir.exists() && job_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&job_dir) {
+            for entry in entries.flatten() {
+                if let Ok(meta) = entry.metadata() {
+                    freed_bytes += meta.len();
+                    files_deleted += 1;
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&job_dir);
+    }
+
+    // 2. Check flat files starting with `{job_id}` in `results/`
+    if let Ok(entries) = std::fs::read_dir(results_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(name) = path.file_name().and_then(|f| f.to_str()) {
+                    if name.starts_with(job_id) {
+                        if let Ok(meta) = path.metadata() {
+                            freed_bytes += meta.len();
+                            files_deleted += 1;
+                        }
+                        let _ = std::fs::remove_file(&path);
+                    }
+                }
+            }
+        }
+    }
+
+    (files_deleted, freed_bytes)
+}
+
 pub async fn cancel_job(state: crate::AppState, job_id: String) -> Result<(), String> {
     let jobs = state.jobs.read().await;
     if let Some(metadata_lock) = jobs.get(&job_id) {
@@ -726,29 +785,95 @@ pub async fn cancel_job(state: crate::AppState, job_id: String) -> Result<(), St
     }
 }
 
-pub fn start_cleanup_task(state: crate::AppState) {
-    tokio::spawn(async move {
-        let one_hour = std::time::Duration::from_secs(3600);
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
-            let mut to_remove = Vec::new();
-            {
-                let jobs = state.jobs.read().await;
-                for (id, meta_lock) in jobs.iter() {
-                    let meta = meta_lock.read().await;
-                    if meta.flood_report_path.is_none()
-                        && matches!(meta.status, JobStatus::Completed | JobStatus::Failed(_)) 
-                        && meta.created_at.elapsed() > one_hour 
-                    {
-                        to_remove.push(id.clone());
+pub async fn delete_job(state: crate::AppState, job_id: &str) -> Result<usize, String> {
+    // 1. Cancel if still executing
+    let _ = cancel_job(state.clone(), job_id.to_string()).await;
+
+    // 2. Remove physical artifacts on disk
+    let (deleted_files, _freed_bytes) = delete_job_files(job_id);
+
+    // 3. Remove in-memory job handle
+    let mut jobs = state.jobs.write().await;
+    if jobs.remove(job_id).is_some() || deleted_files > 0 {
+        Ok(deleted_files)
+    } else {
+        Err(format!("Job {} not found", job_id))
+    }
+}
+
+#[derive(Debug, Default, serde::Serialize)]
+pub struct PruneSummary {
+    pub jobs_deleted: usize,
+    pub files_deleted: usize,
+    pub freed_bytes: u64,
+}
+
+pub async fn prune_jobs(state: crate::AppState, keep_count: usize) -> Result<PruneSummary, String> {
+    let mut summary = PruneSummary::default();
+
+    // Collect job IDs sorted by creation time (newest first)
+    let sorted_jobs = {
+        let jobs = state.jobs.read().await;
+        let mut list = Vec::new();
+        for (id, meta_lock) in jobs.iter() {
+            let meta = meta_lock.read().await;
+            list.push((meta.created_at, id.clone()));
+        }
+        list.sort_by(|a, b| b.0.cmp(&a.0));
+        list
+    };
+
+    let jobs_to_remove: Vec<(std::time::Instant, String)> = if keep_count == 0 {
+        sorted_jobs
+    } else if keep_count < sorted_jobs.len() {
+        sorted_jobs[keep_count..].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    let mut jobs_map = state.jobs.write().await;
+    for (_, id) in jobs_to_remove {
+        jobs_map.remove(&id);
+        let (files, bytes) = delete_job_files(&id);
+        summary.jobs_deleted += 1;
+        summary.files_deleted += files;
+        summary.freed_bytes += bytes;
+    }
+
+    // Sweep orphaned cache files and logs in results/
+    let results_dir = std::path::Path::new("results");
+    if let Ok(entries) = std::fs::read_dir(results_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(name) = path.file_name().and_then(|f| f.to_str()) {
+                    if name == ".gitkeep" || name == "README.md" {
+                        continue;
+                    }
+                    if name.ends_with(".npz") || name == "crash_journal.log" || keep_count == 0 {
+                        if let Ok(meta) = path.metadata() {
+                            summary.freed_bytes += meta.len();
+                            summary.files_deleted += 1;
+                        }
+                        let _ = std::fs::remove_file(&path);
                     }
                 }
             }
-            if !to_remove.is_empty() {
-                let mut jobs = state.jobs.write().await;
-                for id in to_remove {
-                    jobs.remove(&id);
-                }
+        }
+    }
+
+    Ok(summary)
+}
+
+pub fn start_cleanup_task(state: crate::AppState) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(600)).await;
+            
+            // Auto-retention: Keep at most 10 recent flood jobs, prune older runs
+            let jobs_count = { state.jobs.read().await.len() };
+            if jobs_count > 10 {
+                let _ = prune_jobs(state.clone(), 10).await;
             }
         }
     });

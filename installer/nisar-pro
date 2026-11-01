@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GATEWAY_DIR="$ROOT_DIR/sar-gateway"
+GATEWAY="$GATEWAY_DIR/target/release/sar-gateway"
+LOG_DIR="$GATEWAY_DIR/logs"
+
+mkdir -p "$LOG_DIR" "$GATEWAY_DIR/results"
+
+if [[ ! -x "$GATEWAY" ]]; then
+  echo "NISAR Pro gateway was not found: $GATEWAY" >&2
+  exit 1
+fi
+
+export LOCAL_MODE=true
+export RUST_LOG="${RUST_LOG:-info}"
+
+cd "$GATEWAY_DIR"
+"$GATEWAY" >"$LOG_DIR/gateway.log" 2>&1 &
+GATEWAY_PID=$!
+
+cleanup() {
+  if kill -0 "$GATEWAY_PID" 2>/dev/null; then
+    kill "$GATEWAY_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+for _ in $(seq 1 90); do
+  if curl -fsS --max-time 1 http://127.0.0.1:3000/jobs/health-ping >/dev/null 2>&1 || \
+     curl -fsS --max-time 1 http://127.0.0.1:3000/ >/dev/null 2>&1; then
+    if command -v xdg-open >/dev/null 2>&1; then
+      xdg-open http://localhost:3000/ >/dev/null 2>&1 || true
+    elif command -v sensible-browser >/dev/null 2>&1; then
+      sensible-browser http://localhost:3000/ >/dev/null 2>&1 || true
+    fi
+    echo "NISAR Pro is running at http://localhost:3000"
+    echo "Press Ctrl+C to stop the local gateway."
+    wait "$GATEWAY_PID"
+    exit $?
+  fi
+  if ! kill -0 "$GATEWAY_PID" 2>/dev/null; then
+    echo "NISAR Pro gateway exited. Check $LOG_DIR/gateway.log" >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+echo "NISAR Pro gateway did not become ready within 90 seconds." >&2
+echo "Check $LOG_DIR/gateway.log" >&2
+exit 1
