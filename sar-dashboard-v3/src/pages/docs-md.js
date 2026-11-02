@@ -25,23 +25,14 @@ import gunwDataFlowMd from '../../../Docs/Architecture/gunw_data_flow.md?raw'
 import sarDashboardInternalsMd from '../../../Docs/Architecture/sar_dashboard_internals.md?raw'
 
 import architectureOverview from '../../../Docs/assets/architecture_overview.png'
-import userWorkflow from '../../../Docs/assets/user_workflow.png'
-import floodRunCompleted from '../../../Docs/assets/flood_run_completed.webp'
-import finalFloodMapView from '../../../Docs/assets/final_flood_map_view.png'
 
 // Relative image paths as written inside the markdown files.
 export const assetMap = {
     '../assets/architecture_overview.png': architectureOverview,
     'architecture_overview.png': architectureOverview,
-    '../assets/user_workflow.png': userWorkflow,
-    'user_workflow.png': userWorkflow,
-    '../assets/flood_run_completed.webp': floodRunCompleted,
-    'flood_run_completed.webp': floodRunCompleted,
-    '../assets/final_flood_map_view.png': finalFloodMapView,
-    'final_flood_map_view.png': finalFloodMapView,
 }
 
-export const homeAssets = { architectureOverview, userWorkflow }
+export const homeAssets = { architectureOverview }
 
 export const docGroups = [
     {
