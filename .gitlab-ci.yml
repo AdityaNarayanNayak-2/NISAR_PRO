@@ -40,32 +40,33 @@ build_linux_release:
   stage: build
   image: rust:latest
   needs: []
-  script:
-    - apt-get update
-    - apt-get install -y --no-install-recommends nodejs npm ca-certificates curl build-essential pkg-config
-    - cargo build --manifest-path sar_science_processor/Cargo.toml --release --bin sar_science_processor
-    - cargo build --manifest-path sar-gateway/Cargo.toml --release --bin sar-gateway
-    - cd sar-dashboard-v3
-    - npm ci
-    - npm run build
-    - cd ..
-    - chmod +x installer/nisar-pro installer/install.sh
-    - mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/target/release"
-    - mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar_science_processor/target/release"
-    - mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-dashboard-v3/dist"
-    - mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/results"
-    - cp installer/nisar-pro "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/nisar-pro"
-    - cp sar-gateway/target/release/sar-gateway "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/target/release/"
-    - cp sar_science_processor/target/release/sar_science_processor "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar_science_processor/target/release/"
-    - cp -R sar-dashboard-v3/dist/. "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-dashboard-v3/dist/"
-    - printf 'NISAR Pro %s\n\nRun ./nisar-pro to start the local gateway and dashboard.\nResults are stored in sar-gateway/results.\nOriginal NISAR granules are not included.\n' "$RELEASE_VERSION" > "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/README.txt"
-    - tar -czf "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" -C release "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64"
-    - export PACKAGE_BASE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/nisar-pro/${RELEASE_VERSION}"
-    - export ARCHIVE_URL="${PACKAGE_BASE_URL}/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz"
-    - curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" "$ARCHIVE_URL"
-    - sed "s|__NISAR_PRO_ARCHIVE_URL__|${ARCHIVE_URL}|" installer/install.sh > "release/install.sh"
-    - chmod +x "release/install.sh"
-    - curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file release/install.sh "${PACKAGE_BASE_URL}/install.sh"
+  script: |
+    set -e
+    apt-get update
+    apt-get install -y --no-install-recommends nodejs npm ca-certificates curl build-essential pkg-config
+    cargo build --manifest-path sar_science_processor/Cargo.toml --release --bin sar_science_processor
+    cargo build --manifest-path sar-gateway/Cargo.toml --release --bin sar-gateway
+    cd sar-dashboard-v3
+    npm ci
+    npm run build
+    cd ..
+    chmod +x installer/nisar-pro installer/install.sh
+    mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/target/release"
+    mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar_science_processor/target/release"
+    mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-dashboard-v3/dist"
+    mkdir -p "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/results"
+    cp installer/nisar-pro "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/nisar-pro"
+    cp sar-gateway/target/release/sar-gateway "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-gateway/target/release/"
+    cp sar_science_processor/target/release/sar_science_processor "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar_science_processor/target/release/"
+    cp -R sar-dashboard-v3/dist/. "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/sar-dashboard-v3/dist/"
+    printf 'NISAR Pro %s\n\nRun ./nisar-pro to start the local gateway and dashboard.\nResults are stored in sar-gateway/results.\nOriginal NISAR granules are not included.\n' "$RELEASE_VERSION" > "release/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64/README.txt"
+    tar -czf "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" -C release "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64"
+    export PACKAGE_BASE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/nisar-pro/${RELEASE_VERSION}"
+    export ARCHIVE_URL="${PACKAGE_BASE_URL}/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz"
+    curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" "$ARCHIVE_URL"
+    sed "s|__NISAR_PRO_ARCHIVE_URL__|${ARCHIVE_URL}|" installer/install.sh > "release/install.sh"
+    chmod +x "release/install.sh"
+    curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file release/install.sh "${PACKAGE_BASE_URL}/install.sh"
   artifacts:
     name: "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64"
     paths:
