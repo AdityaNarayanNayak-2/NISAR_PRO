@@ -13,14 +13,15 @@ capabilities.
 <div align="center">
 
 [![License](https://img.shields.io/badge/License-Apache%202.0%20%2F%20MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/Engine-Pure%20Rust-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Engine-Pure%20Rust%201.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![Mission](https://img.shields.io/badge/Mission-NASA--ISRO%20NISAR-green.svg)](https://nisar.jpl.nasa.gov/)
-[![Dashboard](https://img.shields.io/badge/Dashboard-Local--first-242a33.svg)](sar-dashboard-v3/)
+[![Hackathon](https://img.shields.io/badge/IEEE%20InGARSS%202026-Young%20Professionals%20Hackathon-purple.svg)](https://ingarss2026.org/)
+[![Live Demo](https://img.shields.io/badge/Web%20App-Live%20Demo-emerald.svg)](https://main.nisar-pro.pages.dev/)
 
-[Live dashboard](https://adityanarayannayak-2.github.io/NISAR_PRO/) ·
+[Live Dashboard](https://main.nisar-pro.pages.dev/) ·
 [Architecture](Docs/Architecture/) ·
-[User guides](Docs/UserGuide/) ·
-[InGARSS case study](ingarss_2026/)
+[User Guides](Docs/UserGuide/) ·
+[IEEE InGARSS 2026 Package](ingarss_2026/)
 
 </div>
 
@@ -87,104 +88,68 @@ The Axum gateway is the operational boundary around the processor. It provides:
 
 The React/Leaflet dashboard provides a visual workspace for:
 
-- Map-first product inspection.
-- Flood and surface-water analysis.
-- Infrastructure and deformation-oriented workflows.
-- L-band, S-band, and paired-analysis configuration.
-- Raster, vector, report, and replay views.
-- Downloadable outputs and visible processing telemetry.
+- Side-by-side or layered inspection of flood rasters and vector masks.
+- Scene footprints, baseline vs. event comparison, and timeline scrubbers.
+- Inundation summaries, persistence metrics, and area accounting.
+- Interactive threshold adjustments with immediate preview where supported.
+- InSAR deformation inspection with point-level coherence and displacement.
+- JSON report inspection and artifact downloads.
 
-The dashboard can be hosted as a static site while connecting to a gateway
-running on the user's own machine.
+### InGARSS 2026 case study: Bihar flood lifecycle
 
-## Why the engine is different
+The repository preserves the documented 2026 Bihar monsoon flood case study
+developed for the IEEE InGARSS 2026 Young Professionals Hackathon:
 
-Large SAR products expose a practical systems problem: a single scene can be
-several gigabytes, while a workstation may have only 8--16 GB of RAM. NISAR
-Pro avoids the naive pattern of loading the complete scene before processing.
+- Full-scene dual-epoch L-band flood mapping (2026-08-31 to 2026-09-12).
+- S-band comparison for the same acquisition window.
+- Common-support L+S comparison and cross-frequency agreement.
+- Post-monsoon recession observation through 2026-10-18.
+- Independent validation workflow against public high-resolution references.
+- Offline and reproducible deliverables in `ingarss_2026/`.
 
-Instead, it reads bounded HDF5 regions, processes strips, and reduces the data
-to the working lattice needed by the selected analysis. This makes the memory
-cost depend primarily on the working window and processing buffers rather than
-the full raw scene size.
+![NISAR Bihar flood analysis](Docs/assets/zommed.jpeg)
 
-The benchmark evidence currently recorded in this repository includes:
-
-| Workload | Recorded result |
-| --- | --- |
-| Full-scene two-date Bihar L-band processing | approximately 43 seconds on the documented RHEL workstation |
-| Full-scene working memory | below approximately 1.79 GB for the documented run |
-| Tactical synthetic/unit benchmark | separate low-memory benchmark; do not confuse it with full-scene RSS |
-| Science processor unit tests | deterministic tests covering parser, multilook, flood, InSAR, IO, and memory guards |
-
-These numbers are machine- and configuration-dependent. They are reported with
-the associated provenance rather than presented as a universal guarantee.
-
-## Architecture
+## Architecture overview
 
 ```text
-NISAR sources / local HDF5 files
-              |
-              v
-Product discovery, metadata, coordinates, channel inventory
-              |
-              v
-Rust science engines
-  - GCOV surface water and change
-  - L/S comparison and fusion
-  - InSAR and deformation workflows
-              |
-              v
-Axum local gateway and result store
-              |
-       +------+------+
-       |             |
-       v             v
-React dashboard   CLI / notebook / reports
+               ┌──────────────────────────────────────────────────┐
+               │              Web Browser / Dashboard             │
+               │         React 19 · Leaflet · Vite · UI           │
+               └─────────────────────────┬────────────────────────┘
+                                         │ HTTP / SSE (Port 3000)
+                                         ▼
+               ┌──────────────────────────────────────────────────┐
+               │                 Local SAR Gateway                │
+               │          Rust Axum · Supervisor · Proxies        │
+               └──────────────┬───────────────────┬───────────────┘
+                              │                   │
+               Spawns CLI jobs│                   │ Proxies search
+                              ▼                   ▼
+    ┌───────────────────────────────┐   ┌──────────────────────────┐
+    │     sar_science_processor     │   │ NASA ASF / CMR Search    │
+    │  Pure Rust · SIMD · HDF5/GCOV │   │ Remote granule discovery │
+    └──────────────┬────────────────┘   └──────────────────────────┘
+                   │
+                   ▼
+    ┌───────────────────────────────┐
+    │       Output Artifacts        │
+    │ GeoTIFF · GeoJSON · JSON · PNG│
+    └───────────────────────────────┘
 ```
 
-![NISAR Pro platform architecture](Docs/assets/architecture_overview.png)
+See [Docs/Architecture/](Docs/Architecture/) for deep-dive pipeline descriptions,
+data flows, and telemetry formats.
 
-The architecture diagram intentionally separates the reusable platform layers
-from individual domain case studies.
+## Demonstration media
 
-## Flagship case study: Bihar L/S surface-water change
+The project includes illustrative visual and video assets:
 
-The InGARSS 2026 Bihar work demonstrates one complete path through the
-platform using NISAR L2 GCOV products over the Ganga alluvial plain.
+- [Platform dashboard overview](Docs/assets/Dashboard.jpeg)
+- [System architecture diagram](Docs/assets/architecture_overview.svg)
+- [Demonstration walkthrough video](Docs/assets/nisar-s-band-demo.mp4)
+- [Example analysis output](Docs/assets/output.jpeg)
 
-It compares:
-
-1. L-band-only surface-water/change mapping.
-2. S-band-only surface-water/change mapping.
-3. A documented L+S comparison on common spatial support.
-4. Multi-date water gain, stable water, water loss, and stable non-water.
-5. Channel and polarization information where the selected granules support it.
-
-![Bihar L+S comparison](Docs/assets/bihar_ls_fusion_3panel.png)
-
-The case study is deliberately documented with acquisition IDs, processing
-parameters, coverage limitations, product metadata, and provenance. It should
-be read as a scientific demonstration of the platform, not as a claim that
-every detected change is automatically a flood or that fusion is always better.
-
-## Output model
-
-Each completed local job can produce a structured result directory containing:
-
-```text
-results/jobs/<job-id>/
-  <job-id>_flood.json          # metrics, parameters, product metadata
-  <job-id>_flood.geo.json      # vectorized regions
-  <job-id>_flood_class.tif     # georeferenced classification raster
-  <job-id>_flood.png           # rendered classification map
-  <job-id>_flood_active.png    # active observation render
-  <job-id>_flood_baseline.png  # baseline observation render
-  crash_journal.log            # failure and memory-guard context
-```
-
-The JSON report is the machine-readable source for dashboard metrics. The
-GeoTIFF and GeoJSON are intended for GIS and scientific review. PNG files are
+These assets demonstrate the workflow without requiring large data downloads
 convenient for reports and presentations.
 
 ## Running locally from source
@@ -238,14 +203,29 @@ not included in releases.
 ## Repository layout
 
 ```text
-sar_science_processor/   Rust science engine
-sar-gateway/             Axum gateway, job orchestration, catalogue clients
-sar-dashboard-v3/        React, Vite, Leaflet dashboard
-installer/               Windows launcher and Linux launcher/installer
-Docs/                    Architecture, user, API, and operational guides
-scripts/                 Scientific utilities and verification helpers
-results/                 Local/generated result workspace
-ingarss_2026/            InGARSS case-study package and evidence
+sar_analyzer/
+├── sar_science_processor/        Pure-Rust compute engine (GCOV flood, GUNW InSAR, 8x8 multilook)
+│   ├── src/
+│   │   ├── flood_detect.rs       7-stage flood detection & region growing
+│   │   ├── nisar_parser.rs       Streaming HDF5 reader & coordinate extraction
+│   │   ├── multilook.rs          SIMD block-multilooking
+│   │   └── windowed.rs           Zero-copy row-strip reader
+│   └── Cargo.toml
+├── sar-gateway/                  Async Axum HTTP/SSE gateway, job supervisor & DAAC clients
+├── sar-dashboard-v3/             React 19 + Leaflet + Vite interactive web application
+├── installer/                    Windows launcher and Linux launcher/installer
+├── ingarss_2026/                 Official IEEE InGARSS 2026 submission artifacts & notebooks
+│   ├── notebooks/                Jupyter notebooks (NISAR_Bihar_Flood_Lifecycle.ipynb)
+│   ├── results/                  Full-scene GeoTIFF, PNG, and GeoJSON outputs
+│   └── provenance_manifest.json  SHA-256 integrity and execution provenance
+├── scripts/                      Scientific verification & fusion automation scripts
+│   ├── run_ls_fusion_and_pol_assessment.py
+│   └── nisar_probe.py
+├── results/                      Generated GeoTIFFs, telemetry JSONs, and PNG figures
+├── Docs/                         Comprehensive user & architecture documentation
+│   ├── Architecture/             System internals, pipeline diagrams, API specifications
+│   └── UserGuide/                Step-by-step setup, Windows runbook, InSAR verification
+└── benchmarks/                   Automated 12-benchmark performance validation suite
 ```
 
 ## Reproducibility and scientific boundaries

@@ -3,6 +3,7 @@ pub mod esa_client;
 pub mod nasa_client;
 pub mod handlers;
 pub mod jobs;
+pub mod rate_limit;
 
 use axum::{
     routing::{get, post},
@@ -22,6 +23,8 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct AppState {
     pub jobs: Arc<RwLock<HashMap<String, Arc<RwLock<jobs::JobMetadata>>>>>,
+    pub processor_semaphore: Arc<tokio::sync::Semaphore>,
+    pub rate_limiter: Arc<rate_limit::RateLimiter>,
 }
 
 #[tokio::main]
@@ -29,8 +32,20 @@ async fn main() {
     dotenv().ok();
     env_logger::init();
 
+    let max_concurrent_jobs: usize = std::env::var("MAX_CONCURRENT_JOBS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1);
+
+    info!("🛡️  Processor concurrency limiter: max {} heavy job(s) simultaneously", max_concurrent_jobs);
+
+    let rate_limiter = Arc::new(rate_limit::RateLimiter::new());
+    rate_limiter.clone().start_cleanup_task();
+
     let state = AppState {
         jobs: Arc::new(RwLock::new(HashMap::new())),
+        processor_semaphore: Arc::new(tokio::sync::Semaphore::new(max_concurrent_jobs)),
+        rate_limiter,
     };
 
     crate::jobs::start_cleanup_task(state.clone());
@@ -51,6 +66,7 @@ async fn main() {
         .route("/asf/download-stream", get(handlers::download_stream_handler))
         .route("/asf/auth-status", get(handlers::auth_status_handler))
         .nest_service("/results", ServeDir::new("results"))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .with_state(state);
 

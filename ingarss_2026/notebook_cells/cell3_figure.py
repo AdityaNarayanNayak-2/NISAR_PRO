@@ -5,27 +5,42 @@ from pathlib import Path
 
 def resolve_img_path(json_rel_path, fallback_names):
     """Resolves image path whether stored in current folder, ./results/, or repo root."""
+    raw_name = Path(json_rel_path).name
     candidates = [
         Path(json_rel_path),
-        Path(Path(json_rel_path).name),
-        Path("results") / Path(json_rel_path).name,
-        Path("../results") / Path(json_rel_path).name,
-        Path("../../results") / Path(json_rel_path).name,
-        Path("../results/flood_expansion_aug31_sep12") / Path(json_rel_path).name,
-        Path("../../ingarss_2026/results/flood_expansion_aug31_sep12") / Path(json_rel_path).name,
+        Path(raw_name),
+        Path("results") / raw_name,
+        Path("results/flood_expansion_aug31_sep12") / raw_name,
+        Path("../results") / raw_name,
+        Path("../results/flood_expansion_aug31_sep12") / raw_name,
+        Path("../../results") / raw_name,
+        Path("../../results/flood_expansion_aug31_sep12") / raw_name,
+        Path("../../ingarss_2026/results/flood_expansion_aug31_sep12") / raw_name,
     ]
     for n in fallback_names:
         candidates.extend([
             Path(n),
             Path("results") / n,
+            Path("results/flood_expansion_aug31_sep12") / n,
             Path("../results") / n,
-            Path("../../results") / n,
             Path("../results/flood_expansion_aug31_sep12") / n,
+            Path("../../results") / n,
+            Path("../../results/flood_expansion_aug31_sep12") / n,
             Path("../../ingarss_2026/results/flood_expansion_aug31_sep12") / n,
         ])
     for c in candidates:
         if c.exists():
             return c
+
+    # Robust fallback: recursively find any matching file by name
+    search_names = [raw_name] + [n for n in fallback_names if n != raw_name]
+    for n in search_names:
+        for base in [Path("."), Path(".."), Path("../..")]:
+            if base.exists():
+                found = list(base.glob(f"**/{n}"))
+                if found:
+                    return found[0]
+
     raise FileNotFoundError(f"Could not find image among: {[str(c) for c in candidates]}")
 
 baseline_img_path = resolve_img_path(

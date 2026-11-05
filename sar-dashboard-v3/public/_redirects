@@ -1,1 +1,7 @@
+/jobs/* https://engaged-mystery-trucks-crawford.trycloudflare.com/jobs/:splat 200
+/results/* https://engaged-mystery-trucks-crawford.trycloudflare.com/results/:splat 200
+/search/* https://engaged-mystery-trucks-crawford.trycloudflare.com/search/:splat 200
+/context https://engaged-mystery-trucks-crawford.trycloudflare.com/context 200
+/upload https://engaged-mystery-trucks-crawford.trycloudflare.com/upload 200
+/asf/* https://engaged-mystery-trucks-crawford.trycloudflare.com/asf/:splat 200
 /* /index.html 200

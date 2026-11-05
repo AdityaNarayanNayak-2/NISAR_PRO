@@ -2,7 +2,8 @@ import nbformat as nbf
 from pathlib import Path
 
 def build_ingarss_notebook():
-    cell_dir = Path("ingarss_2026/notebook_cells")
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    cell_dir = repo_root / "ingarss_2026" / "notebook_cells"
     
     with open(cell_dir / "cell1_physics.md", "r", encoding="utf-8") as f:
         cell1_text = f.read()
@@ -35,16 +36,12 @@ def build_ingarss_notebook():
         nbf.v4.new_code_cell(cell6_text),
     ]
 
-    targets = [
-        Path("ingarss2026_submission/NISAR_Bihar_Flood_Lifecycle.ipynb"),
-        Path("ingarss_2026/notebooks/NISAR_Bihar_Flood_Lifecycle.ipynb"),
-    ]
-
-    for target in targets:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with open(target, "w", encoding="utf-8") as f:
-            nbf.write(nb, f)
-        print(f"Successfully generated notebook: {target}")
+    target = repo_root / "ingarss_2026" / "notebooks" / "NISAR_Bihar_Flood_Lifecycle.ipynb"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as f:
+        nbf.write(nb, f)
+    print(f"Successfully generated notebook: {target}")
 
 if __name__ == "__main__":
     build_ingarss_notebook()
+

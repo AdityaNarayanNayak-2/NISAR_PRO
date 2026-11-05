@@ -53,6 +53,8 @@ crash_journal.log
 .wrangler/
 # Local launcher runtime logs
 logs/
+gateway_tunnel.log
+tunnel_url.txt
 
 # Benchmarks
 benchmarks/

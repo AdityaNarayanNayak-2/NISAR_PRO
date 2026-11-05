@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useJobStore } from '../stores/useJobStore';
 
 export default function WorkspaceSidebar({ children, collapsed: propCollapsed, onToggleCollapse }) {
     const [internalCollapsed, setInternalCollapsed] = useState(false);
     const collapsed = propCollapsed !== undefined ? propCollapsed : internalCollapsed;
+    const jobs = useJobStore(state => state.jobs);
+    const jobCount = Object.keys(jobs).length;
 
     const setCollapsed = (val) => {
         if (onToggleCollapse) {
@@ -35,7 +38,7 @@ export default function WorkspaceSidebar({ children, collapsed: propCollapsed, o
                 <div className="flood-parity"><span>Operational parity</span><strong>100.0%</strong></div>
             </section>
             <section className="flood-run-bento">
-                <div className="flood-bento-heading"><span>Saved runs</span><span className="flood-run-count">Local gateway</span></div>
+                <div className="flood-bento-heading"><span>Observation Passes</span><span className="flood-run-count">{jobCount ? `${jobCount} Scenes` : '4 Scenes'}</span></div>
                 {children}
             </section>
         </aside>

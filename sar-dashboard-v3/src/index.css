@@ -274,11 +274,43 @@ input:focus-visible {
 .flood-status-grid strong { display: block; margin-top: 5px; color: #f4f5f7; font-size: 12px; font-weight: 500; }
 .flood-parity { display: flex; align-items: end; justify-content: space-between; margin-top: 14px; padding-top: 13px; border-top: 1px solid rgba(255,255,255,.08); }
 .flood-parity strong { color: #fff; font-size: 28px; line-height: .9; font-weight: 300; letter-spacing: -.05em; }
-.flood-run-bento .flood-run-history { width: 100% !important; margin-top: 12px; border: 0 !important; border-radius: 12px !important; background: transparent !important; box-shadow: none !important; }
+.flood-run-bento .flood-run-history { width: 100% !important; margin-top: 10px; border: 0 !important; border-radius: 12px !important; background: transparent !important; box-shadow: none !important; }
 .flood-run-history > div:first-child { display: none !important; }
-.flood-run-history > div:nth-child(2) { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 220px !important; overflow: auto; }
-.flood-run-card { min-height: 72px; padding: 11px !important; border: 1px solid rgba(255,255,255,.06) !important; border-radius: 13px; background: rgba(255,255,255,.035) !important; border-left: 1px solid rgba(255,255,255,.06) !important; }
-.flood-run-card:hover { background: rgba(255,255,255,.08) !important; border-color: rgba(255,255,255,.16) !important; }
+.flood-run-history > div:nth-child(2) {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    max-height: 380px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-right: 2px !important;
+}
+.flood-run-history > div:nth-child(2)::-webkit-scrollbar {
+    width: 4px;
+}
+.flood-run-history > div:nth-child(2)::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 2px;
+}
+.flood-run-history > div:nth-child(2)::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+.flood-run-history > div:nth-child(2)::-webkit-scrollbar-thumb:hover {
+    background: rgba(66, 198, 213, 0.4);
+}
+.flood-run-card {
+    min-height: auto !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.flood-run-card:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(66, 198, 213, 0.35) !important;
+}
 
 .nisar-inspector-panel { top: 20px !important; right: 20px !important; bottom: 20px !important; width: 380px !important; border: 1px solid rgba(255,255,255,.08) !important; border-radius: 24px !important; background: rgba(18,19,22,.84) !important; backdrop-filter: blur(28px) saturate(140%) !important; -webkit-backdrop-filter: blur(28px) saturate(140%) !important; box-shadow: 0 24px 60px rgba(0,0,0,.75) !important; }
 .nisar-inspector-panel .scientist-mode-tab { font: 500 12px/1 'Plus Jakarta Sans', Inter, sans-serif !important; letter-spacing: -.01em !important; color: #8e929b !important; border: 0 !important; border-radius: 999px !important; margin: 8px 4px !important; }
