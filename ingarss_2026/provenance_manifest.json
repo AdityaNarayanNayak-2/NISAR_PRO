@@ -1,8 +1,8 @@
 {
   "manifest_version": 1,
-  "created_utc": "2026-11-10T09:27:47.711675+00:00",
+  "created_utc": "2026-11-10T10:28:04.088151+00:00",
   "git": {
-    "commit": "bf8d3199fd5efa92edb79e91f6b9a05bdf66cdff",
+    "commit": "3dd8b76b13fa73b684521fbe425cbee0508236e3",
     "branch": "dev"
   },
   "runtime": {
@@ -19,18 +19,18 @@
     },
     {
       "path": "ingarss_2026/README.md",
-      "bytes": 13421,
-      "sha256": "6f93ed64e46131d4c18f3efac4b385f264c322d0bc0396522a43cf4e41e284c1"
+      "bytes": 13516,
+      "sha256": "dd04d2441752efb54772c7adf8e6a5a874afdee9efe003e15cd2ddbb78d5677a"
     },
     {
       "path": "ingarss_2026/TECHNICAL_NOTE.md",
-      "bytes": 25476,
-      "sha256": "437399511f38512ee8f8c844f049a46b77316caeb82a3d608412a30fc4019766"
+      "bytes": 25570,
+      "sha256": "aa98a78237f41ca804872d22cbbaadf2ec734d27c1e66c2554ba16115bdc81d8"
     },
     {
       "path": "ingarss_2026/TECHNICAL_NOTE.pdf",
-      "bytes": 2585999,
-      "sha256": "275b8e5fa9579f5bc050b9914cda4145919cdf8a6baa338772bede665e6235bc"
+      "bytes": 2586202,
+      "sha256": "f94a2edbd8e1c0ff451d1a58fcb622b02c9cb364dd02412dbd3423d2facdd8d2"
     },
     {
       "path": "ingarss_2026/VALIDATION.md",

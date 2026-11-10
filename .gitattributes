@@ -1,0 +1,3 @@
+
+# Keep the submission package byte-exact on every OS (provenance_manifest.json holds SHA-256 hashes)
+ingarss_2026/** -text

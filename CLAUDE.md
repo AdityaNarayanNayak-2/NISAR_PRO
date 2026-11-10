@@ -137,7 +137,7 @@ npm run build
 - **Theme**: Dynamic & Seasonal Surface-Water Mapping over India Using NISAR L- and S-Band SAR (NISAR L2 GCOV).
 - **Target Deadline**: 10th November 2026, 11:59 PM IST via Google Form.
 - **Lead Author**: Aditya Narayan Nayak (NISAR Pro Systems & SAR Analytics, Kundura, Odisha, India).
-- **Study Scene**: Bihar Ganga Alluvial Plain (Track 98, Frame 14, Center: 25.5°N, 86.5°E, full valid scene 59,083.56 km²).
+- **Study Scene**: Bihar Ganga Alluvial Plain (Track 98, Frame 14, Center: 25.5°N, 86.5°E, common L/S comparison grid 59,083.56 km²).
 - **Epochs**:
   - 2026-07-26 (L-band), 2026-08-31 and 2026-09-12 (L-band + S-band, seconds apart), 2026-10-18 (L-band)
 
@@ -153,7 +153,7 @@ npm run build
 
 | Category / Observable | Value (km²) | Value (Acres) | Notes |
 |---|---|---|---|
-| **Full Swath Valid Area** | **59,083.56 km²** | 14,599,867 ac | Exact full scene footprint |
+| **Common L/S Comparison Grid** | **59,083.56 km²** | 14,599,867 ac | Valid in L and S on both dates; not the full L-band scene footprint |
 | **L-band Inundation (Aug 31 → Sep 12)** | **1,137.14 km²** | 280,993 ac | Single-frequency L |
 | **S-band Inundation (Aug 31 → Sep 12)** | **1,174.89 km²** | 290,322 ac | Single-frequency S |
 | **Fused L+S Inundation** | **1,337.15 km²** | 330,417 ac | $+200.01\text{ km}^2$ vs L, $+162.26\text{ km}^2$ vs S |

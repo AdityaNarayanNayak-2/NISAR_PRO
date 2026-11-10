@@ -12,8 +12,8 @@ when we look at the land from the sky, most of the time we see only cloud. Synth
 present a memory-bounded Rust tool (NISAR Pro) that maps surface-water change from NISAR Level-2
 Geocoded Polarimetric Covariance (GCOV) data without exhausting workstation memory. In this work we asked
 one simple question: if we combine NISAR L-band and S-band, do we get a better water map than using only
-one band? We ran it on the full track 98, frame 14 scene, not just a small box (59,083.56 km², 14,599,867
-acres). Between 31 August and 12 September 2026, L-band found 1,137.14 km² (280,993 acres) of new water,
+one band? We ran it on the full track 98, frame 14 scene, not just a small box, and compared the three maps
+on the common L/S grid, where both bands are valid on both dates (59,083.56 km², 14,599,867 acres). Between 31 August and 12 September 2026, L-band found 1,137.14 km² (280,993 acres) of new water,
 S-band found 1,174.89 km² (290,322 acres) and L+S found 1,337.15 km² (330,417 acres). Then we checked all
 three against Sentinel-2 optical images taken about five hours after the 12 September pass, wherever there
 was no cloud. The F1 score was 0.859 for L-band, 0.891 for S-band and 0.891 for L+S. So combining the

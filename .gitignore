@@ -62,3 +62,6 @@ benchmarks/
 
 # Generated walkthrough figures (rebuild with ingarss_2026/scripts/make_walkthrough.py)
 Docs/walkthrough_build/
+
+# The submission package must ship its class rasters (listed in provenance_manifest.json)
+!ingarss_2026/results/**/*.tif

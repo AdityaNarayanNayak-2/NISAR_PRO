@@ -2,8 +2,9 @@
 
 Water mapping and water change over the Ganga plain in Bihar, India, from NISAR L2 GCOV radar data.
 We compare three methods on the same area and dates: L-band only, S-band only, and L-band and
-S-band combined (L+S). The whole NISAR scene is analysed (track 98, frame 14: 59,083.56 km²,
-14,599,867 acres), not only the 20 km × 20 km reference box.
+S-band combined (L+S). The whole NISAR scene is analysed (track 98, frame 14), not only the 20 km × 20 km
+reference box. The three maps are compared on the common L/S grid, where both bands are valid on both
+dates: 59,083.56 km² (14,599,867 acres).
 
 Team: RunLayer Labs. Author: Aditya Narayan Nayak, NISAR Pro Systems & SAR Analytics, Kundura, Odisha, India.
 Engine source code: https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro (folder `sar_science_processor/`).
