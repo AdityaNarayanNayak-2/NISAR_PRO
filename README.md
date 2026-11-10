@@ -181,12 +181,15 @@ the packaged/local launcher described below.
 The release pipeline produces platform packages that do not require users to
 install Rust, Cargo, Node.js, or Python.
 
-Windows:
+Windows (all files on the [v1.0.0 release page](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/tag/v1.0.0)):
 
-```text
-Extract NISAR-Pro-1.0.0-windows-x64.zip
-Double-click NISAR-Pro-1.0.0.exe
-```
+- Installer: [NISAR-Pro-Setup-1.0.0.exe](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe).
+  Run it, then start "NISAR Pro" from the Start Menu. No admin rights needed.
+- Without installing: [NISAR-Pro-1.0.0-windows-x64-portable.zip](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-windows-x64-portable.zip).
+  Extract it and double-click `NISAR Pro.exe`.
+
+Windows may show "Windows protected your PC" because the installer is not code-signed.
+Click "More info", then "Run anyway".
 
 Linux x86_64:
 
