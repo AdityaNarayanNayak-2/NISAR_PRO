@@ -86,9 +86,9 @@ jobs:
         working-directory: sar-gateway
         run: cargo build --release --bin sar-gateway
 
-      - name: Build one-click launcher
+      - name: Build Windows launcher
         run: |
-          rustc -O -C panic=abort installer/launcher.rs -o NISAR-Pro-1.0.0.exe
+          rustc -O -C panic=abort --edition 2021 installer/launcher.rs -o "NISAR Pro.exe"
 
       - name: Assemble release folder
         shell: pwsh
@@ -98,28 +98,40 @@ jobs:
           New-Item -ItemType Directory -Force "$release/sar_science_processor/target/release" | Out-Null
           New-Item -ItemType Directory -Force "$release/sar-dashboard-v3/dist" | Out-Null
           New-Item -ItemType Directory -Force "$release/sar-gateway/results" | Out-Null
-          Copy-Item "NISAR-Pro-1.0.0.exe" "$release/"
+          Copy-Item "NISAR Pro.exe" "$release/"
+          Copy-Item "installer/windows/nisar-pro.ico" "$release/"
           Copy-Item "sar-gateway/target/release/sar-gateway.exe" "$release/sar-gateway/target/release/"
           Copy-Item "sar_science_processor/target/release/sar_science_processor.exe" "$release/sar_science_processor/target/release/"
           Copy-Item "sar-dashboard-v3/dist/*" "$release/sar-dashboard-v3/dist/" -Recurse
           @"
           NISAR Pro 1.0.0
 
-          Double-click NISAR-Pro-1.0.0.exe to start the local gateway and open the dashboard.
-          The application runs locally at http://localhost:3000.
+          Double-click "NISAR Pro.exe". It starts the local server and opens the dashboard
+          at http://localhost:3000. To close it, run "NISAR Pro.exe --stop"
+          (the installer adds a "Stop NISAR Pro" Start Menu entry for this).
 
-          Put your NISAR .h5 granules anywhere on this computer and select them from the dashboard.
-          Processing results are stored in sar-gateway/results.
+          Put your NISAR .h5 granules anywhere on this computer and select them in the dashboard.
+          Results are saved in sar-gateway\results. Logs are in %LOCALAPPDATA%\NISAR Pro\logs.
 
-          The original NISAR granules are not included in this release.
+          NISAR granules are not included.
           "@ | Set-Content "$release/README.txt"
-          Compress-Archive -Path "$release" -DestinationPath "NISAR-Pro-1.0.0-windows-x64.zip"
+          Compress-Archive -Path "$release" -DestinationPath "NISAR-Pro-1.0.0-windows-x64-portable.zip"
 
-      - name: Upload Windows package artifact
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DSourceDir=$PWD\NISAR-Pro-1.0.0" "/O$PWD" "installer\windows\NISAR-Pro.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: NISAR-Pro-1.0.0-windows-x64
-          path: NISAR-Pro-1.0.0-windows-x64.zip
+          path: |
+            NISAR-Pro-Setup-1.0.0.exe
+            NISAR-Pro-1.0.0-windows-x64-portable.zip
 
       - name: Publish GitHub release
         if: github.ref == 'refs/heads/main'
@@ -128,6 +140,8 @@ jobs:
           tag_name: v1.0.0
           target_commitish: main
           name: NISAR Pro v1.0.0
-          files: NISAR-Pro-1.0.0-windows-x64.zip
+          files: |
+            NISAR-Pro-Setup-1.0.0.exe
+            NISAR-Pro-1.0.0-windows-x64-portable.zip
           generate_release_notes: true
           make_latest: true

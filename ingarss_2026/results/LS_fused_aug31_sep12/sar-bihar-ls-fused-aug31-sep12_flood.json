@@ -1,0 +1,218 @@
+{
+  "title": "NISAR L-band, S-band and L+S surface-water change, Bihar, 31 Aug to 12 Sep 2026",
+  "note": "Class names: stable water, new water (high/medium), water loss. Rule names describe intent, not verified surface types. Area = pixels x 0.0064 km2.",
+  "dates": {
+    "baseline": "2026-08-31",
+    "active": "2026-09-12",
+    "interval_days": 12
+  },
+  "spatial_grid": {
+    "crs": "EPSG:32645",
+    "pixel_spacing_m": [
+      80.0,
+      -80.0
+    ],
+    "pixel_area_km2": 0.0064,
+    "pixel_area_acres": 1.58147,
+    "common_lattice_overlap_shape": [
+      4140,
+      4275
+    ],
+    "row_offset_l_to_s": 36,
+    "col_offset_l_to_s": 9,
+    "swath_edge_erosion_pixels": 40
+  },
+  "full_scene_comparison": {
+    "l_band_only": {
+      "stable_water_px": 517942,
+      "stable_water_km2": 3314.83,
+      "stable_water_acres": 819109.7,
+      "new_inundation_high_px": 110060,
+      "new_inundation_high_km2": 704.38,
+      "new_inundation_high_acres": 174056.6,
+      "new_inundation_med_px": 67618,
+      "new_inundation_med_km2": 432.76,
+      "new_inundation_med_acres": 106935.8,
+      "total_flood_px": 177678,
+      "total_flood_km2": 1137.14,
+      "total_flood_acres": 280992.4,
+      "receded_water_px": 138881,
+      "receded_water_km2": 888.84,
+      "receded_water_acres": 219636.1,
+      "stable_non_water_px": 8397305,
+      "stable_non_water_km2": 53742.75,
+      "stable_non_water_acres": 13280085.9,
+      "total_valid_km2": 59083.56
+    },
+    "s_band_only": {
+      "stable_water_px": 397871,
+      "stable_water_km2": 2546.37,
+      "stable_water_acres": 629221.1,
+      "new_inundation_high_px": 117098,
+      "new_inundation_high_km2": 749.43,
+      "new_inundation_high_acres": 185187.0,
+      "new_inundation_med_px": 66478,
+      "new_inundation_med_km2": 425.46,
+      "new_inundation_med_acres": 105133.0,
+      "total_flood_px": 183576,
+      "total_flood_km2": 1174.89,
+      "total_flood_acres": 290319.9,
+      "receded_water_px": 33591,
+      "receded_water_km2": 214.98,
+      "receded_water_acres": 53123.2,
+      "stable_non_water_px": 8616768,
+      "stable_non_water_km2": 55147.32,
+      "stable_non_water_acres": 13627160.1,
+      "total_valid_km2": 59083.56
+    },
+    "ls_fused": {
+      "stable_water_px": 414420,
+      "stable_water_km2": 2652.29,
+      "stable_water_acres": 655392.8,
+      "new_inundation_high_px": 147595,
+      "new_inundation_high_km2": 944.61,
+      "new_inundation_high_acres": 233417.1,
+      "new_inundation_med_px": 61334,
+      "new_inundation_med_km2": 392.54,
+      "new_inundation_med_acres": 96997.9,
+      "total_flood_px": 208929,
+      "total_flood_km2": 1337.15,
+      "total_flood_acres": 330414.9,
+      "receded_water_px": 113026,
+      "receded_water_km2": 723.37,
+      "receded_water_acres": 178747.2,
+      "stable_non_water_px": 8495431,
+      "stable_non_water_km2": 54370.76,
+      "stable_non_water_acres": 13435269.3,
+      "total_valid_km2": 59083.56
+    },
+    "rule_diagnostics": {
+      "sandbar_test_pixels": {
+        "description": "L HH < -13 dB and S HH >= -10.5 dB on either date, anywhere in the support",
+        "pixels": 236039,
+        "km2": 1510.65,
+        "acres": 373288.6,
+        "of_which_l_band_water_or_gain_km2": 347.76
+      },
+      "stable_water_hh_ge_minus15_hv_lt_minus21_5": {
+        "description": "Fused stable water with L HH >= -15 dB and L HV < -21.5 dB on 12 Sep",
+        "pixels": 20691,
+        "km2": 132.42,
+        "acres": 32722.2
+      },
+      "canopy_rule_outside_s_gain": {
+        "description": "Pixels meeting the canopy rule outside S-band gain, before the S-band gate",
+        "pixels": 97805,
+        "km2": 625.95,
+        "acres": 154675.7
+      }
+    }
+  },
+  "reference_discovery_box_20x20km": {
+    "bounds_lonlat": [
+      86.3946,
+      25.4098,
+      86.6054,
+      25.5902
+    ],
+    "grid_row_indices": [
+      917,
+      1166
+    ],
+    "grid_col_indices": [
+      2419,
+      2685
+    ],
+    "l_band_only": {
+      "stable_water_px": 17345,
+      "stable_water_km2": 111.01,
+      "stable_water_acres": 27430.6,
+      "new_inundation_high_px": 937,
+      "new_inundation_high_km2": 6.0,
+      "new_inundation_high_acres": 1481.8,
+      "new_inundation_med_px": 1763,
+      "new_inundation_med_km2": 11.28,
+      "new_inundation_med_acres": 2788.1,
+      "total_flood_px": 2700,
+      "total_flood_km2": 17.28,
+      "total_flood_acres": 4270.0,
+      "receded_water_px": 8,
+      "receded_water_km2": 0.05,
+      "receded_water_acres": 12.7,
+      "stable_non_water_px": 46181,
+      "stable_non_water_km2": 295.56,
+      "stable_non_water_acres": 73033.9,
+      "total_valid_km2": 423.9
+    },
+    "s_band_only": {
+      "stable_water_px": 15440,
+      "stable_water_km2": 98.82,
+      "stable_water_acres": 24417.9,
+      "new_inundation_high_px": 1340,
+      "new_inundation_high_km2": 8.58,
+      "new_inundation_high_acres": 2119.2,
+      "new_inundation_med_px": 1346,
+      "new_inundation_med_km2": 8.61,
+      "new_inundation_med_acres": 2128.7,
+      "total_flood_px": 2686,
+      "total_flood_km2": 17.19,
+      "total_flood_acres": 4247.8,
+      "receded_water_px": 1,
+      "receded_water_km2": 0.01,
+      "receded_water_acres": 1.6,
+      "stable_non_water_px": 48107,
+      "stable_non_water_km2": 307.88,
+      "stable_non_water_acres": 76079.8,
+      "total_valid_km2": 423.9
+    },
+    "ls_fused": {
+      "stable_water_px": 15846,
+      "stable_water_km2": 101.41,
+      "stable_water_acres": 25060.0,
+      "new_inundation_high_px": 2274,
+      "new_inundation_high_km2": 14.55,
+      "new_inundation_high_acres": 3596.3,
+      "new_inundation_med_px": 1809,
+      "new_inundation_med_km2": 11.58,
+      "new_inundation_med_acres": 2860.9,
+      "total_flood_px": 4083,
+      "total_flood_km2": 26.13,
+      "total_flood_acres": 6457.1,
+      "receded_water_px": 3,
+      "receded_water_km2": 0.02,
+      "receded_water_acres": 4.7,
+      "stable_non_water_px": 46302,
+      "stable_non_water_km2": 296.33,
+      "stable_non_water_acres": 73225.2,
+      "total_valid_km2": 423.9
+    }
+  },
+  "task_h_polarization_assessment": {
+    "gcov_covariance_terms_inventory": {
+      "LSAR_DHDH": [
+        "HHHH",
+        "HVHV"
+      ],
+      "SSAR_DHNA": [
+        "HHHH",
+        "HVHV",
+        "HHHV"
+      ]
+    },
+    "feature_sets_water_detection": {
+      "copol_baseline_hhhh": {
+        "rule": "HH < -14.0 dB",
+        "detected_water_km2": 4735.3
+      },
+      "copol_and_crosspol": {
+        "rule": "HH < -13.0 dB and HV < -21.5 dB",
+        "detected_water_km2": 4723.7
+      },
+      "span_hh_plus_2hv": {
+        "rule": "HHHH + 2 * HVHV < -13.5 dB",
+        "detected_water_km2": 4037.82
+      }
+    },
+    "note": "L-band, 12 Sep. Each set uses its own threshold, so areas show the effect of the feature choice, not accuracy."
+  }
+}

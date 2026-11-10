@@ -112,6 +112,8 @@ All commands below run using the compiled, optimized release binary located at:
 ### Command 3: L-Band Flood Recession & Water Loss (Sep 12 vs Oct 18)
 *Quantifies water drainage and agricultural land recovery as floodwaters receded.*
 
+> The packaged canonical result (2,650.27 km²) used the default `--swath-edge-erosion 3`. With 40 as shown here the loss is 2,551.94 km².
+
 ```bash
 ./sar_science_processor/target/release/sar_science_processor \
   --mode flood \
@@ -156,7 +158,7 @@ All commands below run using the compiled, optimized release binary located at:
 *Fuses 80m L-band and S-band lattices and generates the 3-panel publication comparison.*
 
 ```bash
-python3 scripts/run_ls_fusion_and_pol_assessment.py
+python3 ingarss_2026/scripts/run_ls_fusion_and_pol_assessment.py
 ```
 
 ### Command 7: Microsecond Benchmark Suite

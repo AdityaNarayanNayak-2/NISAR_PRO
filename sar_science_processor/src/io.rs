@@ -787,6 +787,56 @@ pub fn save_sar_geotiff(
     Ok(())
 }
 
+/// Exact description of a product grid in projected UTM coordinates.
+///
+/// `x_ul`/`y_ul` are the outer upper-left corner of pixel (0, 0), not its
+/// centre. `dx`/`dy` are positive pixel sizes in metres.
+#[derive(Debug, Clone, Copy)]
+pub struct UtmGrid {
+    pub epsg: u16,
+    pub zone: i32,
+    pub northern: bool,
+    pub x_ul: f64,
+    pub y_ul: f64,
+    pub dx: f64,
+    pub dy: f64,
+}
+
+impl UtmGrid {
+    /// WGS84 [lon, lat] of a fractional pixel-edge position.
+    pub fn lon_lat(&self, col: f64, row: f64) -> [f64; 2] {
+        let (lat, lon) = crate::nisar_parser::utm_to_latlon(
+            self.x_ul + col * self.dx,
+            self.y_ul - row * self.dy,
+            self.zone,
+            self.northern,
+        );
+        [lon, lat]
+    }
+}
+
+/// Save a 2D u8 array as a GeoTIFF on its native projected UTM grid.
+///
+/// Use this for full-scene products: a UTM grid is rotated relative to
+/// latitude/longitude, so describing it with a lat/lon box misplaces pixels.
+pub fn save_geotiff_u8_utm(
+    data: ArrayView2<u8>,
+    output_filename: &str,
+    grid: &UtmGrid,
+) -> Result<()> {
+    info!(
+        "Writing 8-bit GeoTIFF: {}×{} → {} [EPSG:{} origin {:.1},{:.1} spacing {:.1}×{:.1} m]",
+        data.ncols(), data.nrows(), output_filename, grid.epsg, grid.x_ul, grid.y_ul, grid.dx, grid.dy
+    );
+    write_geotiff_u8(
+        data,
+        output_filename,
+        [grid.dx, grid.dy, 0.0],
+        [0.0, 0.0, 0.0, grid.x_ul, grid.y_ul, 0.0],
+        [1, 1, 0, 3, 1024, 0, 1, 1, 1025, 0, 1, 1, 3072, 0, 1, grid.epsg],
+    )
+}
+
 /// Save a 2D u8 array as a georeferenced EPSG:4326 GeoTIFF.
 ///
 /// Unlike save_sar_geotiff, this function does not apply any log-stretching,
@@ -801,16 +851,35 @@ pub fn save_geotiff_u8(
     output_filename: &str,
     bbox: Option<[f64; 4]>,
 ) -> Result<()> {
-    use std::io::Write;
-
-    let rows = data.nrows() as u32;
-    let cols = data.ncols() as u32;
+    let rows = data.nrows();
+    let cols = data.ncols();
     let [west, south, east, north] = bbox.unwrap_or([-180.0, -90.0, 180.0, 90.0]);
 
     info!(
         "Writing 8-bit GeoTIFF: {}×{} → {} [EPSG:4326 bbox: {:.4},{:.4},{:.4},{:.4}]",
         cols, rows, output_filename, west, south, east, north
     );
+
+    write_geotiff_u8(
+        data,
+        output_filename,
+        [(east - west) / cols as f64, (north - south) / rows as f64, 0.0],
+        [0.0, 0.0, 0.0, west, north, 0.0],
+        [1, 1, 0, 3, 1024, 0, 1, 2, 1025, 0, 1, 1, 2048, 0, 1, 4326],
+    )
+}
+
+fn write_geotiff_u8(
+    data: ArrayView2<u8>,
+    output_filename: &str,
+    pixel_scale: [f64; 3],
+    tiepoint: [f64; 6],
+    geokeys: [u16; 16],
+) -> Result<()> {
+    use std::io::Write;
+
+    let rows = data.nrows() as u32;
+    let cols = data.ncols() as u32;
 
     let pixels: Vec<u8> = data.iter().copied().collect();
 
@@ -901,24 +970,14 @@ pub fn save_geotiff_u8(
         buf.extend_from_slice(&(tile_bytes as u32).to_le_bytes());
     }
 
-    let scale_x = (east - west) / cols as f64;
-    let scale_y = (north - south) / rows as f64;
-    let pixel_scale: [f64; 3] = [scale_x, scale_y, 0.0];
     for &v in &pixel_scale {
         buf.extend_from_slice(&v.to_le_bytes());
     }
 
-    let tiepoint: [f64; 6] = [0.0, 0.0, 0.0, west, north, 0.0];
     for &v in &tiepoint {
         buf.extend_from_slice(&v.to_le_bytes());
     }
 
-    let geokeys: [u16; 16] = [
-        1, 1, 0, 3,
-        1024, 0, 1, 1,
-        1025, 0, 1, 1,
-        2048, 0, 1, 4326,
-    ];
     for &v in &geokeys {
         buf.extend_from_slice(&v.to_le_bytes());
     }
@@ -1403,6 +1462,25 @@ pub fn save_flood_geojson(
     bbox: [f64; 4], // [west, south, east, north]
     output_path: &str,
 ) -> Result<()> {
+    write_flood_geojson(flood_map, bbox, None, output_path)
+}
+
+/// Same as [`save_flood_geojson`], with vertices projected from the true UTM grid.
+pub fn save_flood_geojson_utm(
+    flood_map: ArrayView2<u8>,
+    bbox: [f64; 4],
+    grid: &UtmGrid,
+    output_path: &str,
+) -> Result<()> {
+    write_flood_geojson(flood_map, bbox, Some(grid), output_path)
+}
+
+fn write_flood_geojson(
+    flood_map: ArrayView2<u8>,
+    bbox: [f64; 4],
+    grid: Option<&UtmGrid>,
+    output_path: &str,
+) -> Result<()> {
     let rows = flood_map.nrows();
     let cols = flood_map.ncols();
 
@@ -1415,7 +1493,16 @@ pub fn save_flood_geojson(
     let mid_lat_rad = ((north + south) * 0.5).to_radians();
     let dy_m = pixel_lat_step.abs() * 111_132.954;
     let dx_m = pixel_lon_step.abs() * 111_319.491 * mid_lat_rad.cos();
-    let pixel_area_acres = (dx_m * dy_m) / 4046.856;
+    let pixel_area_acres = match grid {
+        Some(g) => (g.dx * g.dy) / 4046.856,
+        None => (dx_m * dy_m) / 4046.856,
+    };
+    let to_lon_lat = |col: f64, row: f64| -> [f64; 2] {
+        match grid {
+            Some(g) => g.lon_lat(col, row),
+            None => [west + col * pixel_lon_step, north - row * pixel_lat_step],
+        }
+    };
 
     const NEIGHBORS: [(isize, isize); 8] = [
         (-1, -1), (-1, 0), (-1, 1),
@@ -1483,16 +1570,14 @@ pub fn save_flood_geojson(
                     i += 1;
                     end_c = pixels[i].1;
                 }
-                let p_north = north - (row as f64 * pixel_lat_step);
-                let p_south = north - ((row + 1) as f64 * pixel_lat_step);
-                let p_west = west + (start_c as f64 * pixel_lon_step);
-                let p_east = west + ((end_c + 1) as f64 * pixel_lon_step);
+                let (top, bottom) = (row as f64, (row + 1) as f64);
+                let (left, right) = (start_c as f64, (end_c + 1) as f64);
                 polygons.push(vec![vec![
-                    [p_west, p_south],
-                    [p_east, p_south],
-                    [p_east, p_north],
-                    [p_west, p_north],
-                    [p_west, p_south],
+                    to_lon_lat(left, bottom),
+                    to_lon_lat(right, bottom),
+                    to_lon_lat(right, top),
+                    to_lon_lat(left, top),
+                    to_lon_lat(left, bottom),
                 ]]);
                 i += 1;
             }
@@ -1511,8 +1596,10 @@ pub fn save_flood_geojson(
             };
 
             let total_px = pixels.len();
-            let centroid_lat = north - (((min_r + max_r + 1) as f64 * 0.5) * pixel_lat_step);
-            let centroid_lon = west + (((min_c + max_c + 1) as f64 * 0.5) * pixel_lon_step);
+            let [centroid_lon, centroid_lat] = to_lon_lat(
+                (min_c + max_c + 1) as f64 * 0.5,
+                (min_r + max_r + 1) as f64 * 0.5,
+            );
             let area_acres = (total_px as f64 * pixel_area_acres * 100.0).round() / 100.0;
             let region_label = format!("FL-REG-{:03}", region_id);
 
@@ -1614,6 +1701,36 @@ mod tests {
         let bytes = std::fs::read(path).unwrap();
         assert_eq!(&bytes[0..2], b"II");
         assert_eq!(u16::from_le_bytes([bytes[2], bytes[3]]), 42);
+    }
+
+    #[test]
+    fn test_utm_geotiff_declares_projected_crs_and_true_origin() {
+        let grid = UtmGrid {
+            epsg: 32645, zone: 45, northern: true,
+            x_ul: 244800.0, y_ul: 2906640.0, dx: 80.0, dy: 80.0,
+        };
+        let data = ndarray::Array2::<u8>::ones((4, 4));
+        let path = tmp_path("nisar_test_utm.tif");
+        save_geotiff_u8_utm(data.view(), &path, &grid).unwrap();
+        let bytes = std::fs::read(path).unwrap();
+        let tail = &bytes[bytes.len() - 32..];
+        let keys: Vec<u16> = tail.chunks(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
+        assert_eq!(&keys[12..], &[3072, 0, 1, 32645]);
+        let tie = &bytes[bytes.len() - 80..bytes.len() - 32];
+        let values: Vec<f64> = tie.chunks(8).map(|b| f64::from_le_bytes(b.try_into().unwrap())).collect();
+        assert_eq!(values[3], 244800.0);
+        assert_eq!(values[4], 2906640.0);
+    }
+
+    #[test]
+    fn test_utm_grid_lon_lat_at_central_meridian() {
+        let grid = UtmGrid {
+            epsg: 32645, zone: 45, northern: true,
+            x_ul: 500000.0, y_ul: 2820000.0, dx: 80.0, dy: 80.0,
+        };
+        let [lon, lat] = grid.lon_lat(0.0, 0.0);
+        assert!((lon - 87.0).abs() < 1e-6, "lon {lon}");
+        assert!((lat - 25.49).abs() < 0.05, "lat {lat}");
     }
 
     #[test]

@@ -4,6 +4,7 @@ import { formatBytes, formatElapsed } from '../helpers';
 import { useGatewayStore } from '../stores/useGatewayStore';
 import { useJobStore } from '../stores/useJobStore';
 import { useMapStore } from '../stores/useMapStore';
+import ConnectionModal from '../../../components/ConnectionModal';
 
 export default function FloodConfigPanel({
     dataMode, setDataMode, localFilePath, setLocalFilePath, metadata,
@@ -49,6 +50,7 @@ export default function FloodConfigPanel({
     // Stores
     const gatewayOnline = useGatewayStore(state => state.gatewayOnline);
     const elapsed = useJobStore(state => state.elapsed);
+    const [showConnectionModal, setShowConnectionModal] = useState(false);
 
     const drawnAoi = useMapStore(state => state.drawnAoi);
     const setDrawnAoi = useMapStore(state => state.setDrawnAoi);
@@ -105,8 +107,20 @@ export default function FloodConfigPanel({
                     <h2>Configure analysis</h2>
                     <p>Adjust calibrated radar parameters, inspect the expected effect, then run the Rust pipeline explicitly.</p>
                 </div>
-                <div className={`scientist-engine-state ${gatewayOnline ? 'is-ready' : 'is-offline'}`}><span />{gatewayOnline ? 'Gateway ready' : 'Gateway offline'}</div>
+                <div 
+                    className={`scientist-engine-state ${gatewayOnline ? 'is-ready' : 'is-offline'}`}
+                    onClick={() => setShowConnectionModal(true)}
+                    style={{ cursor: 'pointer' }}
+                    title="Click to view or edit Gateway Server URL / Cloudflare Tunnel"
+                >
+                    <span />{gatewayOnline ? 'Gateway ready' : 'Gateway offline (configure)'}
+                </div>
             </div>
+
+            <ConnectionModal
+                isOpen={showConnectionModal}
+                onClose={() => setShowConnectionModal(false)}
+            />
 
             {/* DATA SOURCE */}
             <div style={{ fontFamily: MONO, fontSize: '10px', color: C.textDim, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>DATA SOURCE</div>

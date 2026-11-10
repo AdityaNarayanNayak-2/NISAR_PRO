@@ -25,14 +25,23 @@ import gunwDataFlowMd from '../../../Docs/Architecture/gunw_data_flow.md?raw'
 import sarDashboardInternalsMd from '../../../Docs/Architecture/sar_dashboard_internals.md?raw'
 
 import architectureOverview from '../../../Docs/assets/architecture_overview.png'
+import dashboardOverview from '../../../Docs/assets/Dashboard.jpeg'
+import outputSample from '../../../Docs/assets/output.jpeg'
+import zoomedAnalysis from '../../../Docs/assets/zommed.jpeg'
 
 // Relative image paths as written inside the markdown files.
 export const assetMap = {
     '../assets/architecture_overview.png': architectureOverview,
     'architecture_overview.png': architectureOverview,
+    '../assets/Dashboard.jpeg': dashboardOverview,
+    'Dashboard.jpeg': dashboardOverview,
+    '../assets/output.jpeg': outputSample,
+    'output.jpeg': outputSample,
+    '../assets/zommed.jpeg': zoomedAnalysis,
+    'zommed.jpeg': zoomedAnalysis,
 }
 
-export const homeAssets = { architectureOverview }
+export const homeAssets = { architectureOverview, dashboardOverview }
 
 export const docGroups = [
     {

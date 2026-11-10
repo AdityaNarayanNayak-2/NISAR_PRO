@@ -1,0 +1,78 @@
+{
+  "areas": {
+    "new_inundation_high_acres": 228010.68286096663,
+    "new_inundation_high_km2": 922.7263999999999,
+    "new_inundation_low_acres": 0.0,
+    "new_inundation_low_km2": 0.0,
+    "new_inundation_medium_acres": 191032.6436127206,
+    "new_inundation_medium_km2": 773.0816,
+    "permanent_water_acres": 548165.9836673209,
+    "permanent_water_km2": 2218.3487999999993,
+    "receded_water_acres": 363552.54548222123,
+    "receded_water_km2": 1471.2447999999997,
+    "stable_non_water_acres": 12551724.301531855,
+    "stable_non_water_km2": 50795.02079999999,
+    "total_area_acres": 28596407.285062775,
+    "total_area_km2": 115725.54239999999,
+    "total_flood_acres": 419043.3264736872,
+    "total_flood_km2": 1695.8079999999998
+  },
+  "confidence_reasons": [
+    "calibrated_log_ratio_change_detection",
+    "otsus_method_on_change_image",
+    "region_growing_and_morphology",
+    "coherence_unavailable_default_medium_confidence"
+  ],
+  "crop": {
+    "center_lat": 25.5,
+    "center_lon": 86.5,
+    "preset": "full"
+  },
+  "flood_regions": 2534,
+  "georef_bbox": {
+    "east": 87.88372482354465,
+    "north": 26.27675901256385,
+    "south": 23.21657536877244,
+    "west": 84.44496905332802
+  },
+  "method": {
+    "coherence_used": false,
+    "detector": "log_ratio_change_detection",
+    "growth_threshold_db": -2.5,
+    "min_change_db": -3.0,
+    "morphology": "open_3x3 + close_3x3 + cc_filter_8px",
+    "raw_otsu_db": -3.1986169815063477,
+    "region_growing": true,
+    "seed_threshold_db": -5.0,
+    "speckle_filter": "median_3x3",
+    "threshold_db": -3.1986169815063477,
+    "threshold_method": "otsu_on_change_image"
+  },
+  "product": {
+    "active_id": "NISAR_L2_PR_GCOV_029_098_A_014_4005_DHDH_A_20260831T233810_20260831T233845_P05023_N_F_J_001.h5",
+    "baseline_id": "NISAR_L2_PR_GCOV_026_098_A_014_4005_DHDH_A_20260726T233812_20260726T233846_P05023_N_F_J_001.h5",
+    "center_frequency_hz": 1239000000.0,
+    "crs": "EPSG:32645",
+    "frequency": "L",
+    "instrument": "LSAR",
+    "pixel_spacing_x_m": 80.0,
+    "pixel_spacing_y_m": -80.0,
+    "polarization": "HH",
+    "radar_band": "L-band",
+    "wavelength_m": 0.2419632429378531
+  },
+  "replay": {
+    "active_preview": "sar-bihar-jul26-aug31-progression_flood_active.png",
+    "available": true,
+    "baseline_preview": "sar-bihar-jul26-aug31-progression_flood_baseline.png",
+    "columns": 4293,
+    "intermediate_observations": false,
+    "mask_preview": "sar-bihar-jul26-aug31-progression_flood.png",
+    "observation_model": "two_observations_plus_derived_detection",
+    "row_order": "north_to_south",
+    "rows": 4212
+  },
+  "warnings": [
+    "Full-scene swath coverage: 48.5% valid pixels (rotated track within UTM bounding grid)"
+  ]
+}

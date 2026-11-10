@@ -1,0 +1,45 @@
+{
+ "reference": "Sentinel-2 13 Sep 2026, NDWI >= 0, cloud-free pixels in the common footprint",
+ "nisar_date": "2026-09-12",
+ "band": "L",
+ "scored_km2": 7946.03,
+ "note": "Thresholds come from the fusion script and were not tuned against this reference.",
+ "results": {
+  "copol_baseline": {
+   "rule": "HH < -14.0 dB",
+   "true_positive": 129959,
+   "false_positive": 28186,
+   "false_negative": 18528,
+   "true_negative": 1064894,
+   "precision": 0.8218,
+   "recall": 0.8752,
+   "f1": 0.8477,
+   "iou": 0.7356,
+   "overall_accuracy": 0.9624
+  },
+  "copol_and_crosspol": {
+   "rule": "HH < -13.0 dB and HV < -21.5 dB",
+   "true_positive": 126754,
+   "false_positive": 28531,
+   "false_negative": 21733,
+   "true_negative": 1064549,
+   "precision": 0.8163,
+   "recall": 0.8536,
+   "f1": 0.8345,
+   "iou": 0.7161,
+   "overall_accuracy": 0.9595
+  },
+  "span": {
+   "rule": "HHHH + 2 * HVHV < -13.5 dB",
+   "true_positive": 123594,
+   "false_positive": 17269,
+   "false_negative": 24893,
+   "true_negative": 1075811,
+   "precision": 0.8774,
+   "recall": 0.8324,
+   "f1": 0.8543,
+   "iou": 0.7456,
+   "overall_accuracy": 0.966
+  }
+ }
+}

@@ -1,0 +1,271 @@
+{
+  "manifest_version": 1,
+  "created_utc": "2026-11-10T09:27:47.711675+00:00",
+  "git": {
+    "commit": "bf8d3199fd5efa92edb79e91f6b9a05bdf66cdff",
+    "branch": "dev"
+  },
+  "runtime": {
+    "python": "3.12.14 (main, Aug 13 2026, 00:00:00) [GCC 14.3.1 20251022 (Red Hat 14.3.1-4)]",
+    "platform": "Linux-6.12.0-211.56.1.el10_2.x86_64-x86_64-with-glibc2.39",
+    "machine": "x86_64"
+  },
+  "package_root": "ingarss_2026",
+  "files": [
+    {
+      "path": "ingarss_2026/POLARIZATION_ASSESSMENT.md",
+      "bytes": 3112,
+      "sha256": "34f3f3d6a9e8ce0e6106838e34d04078788e5ed1149f240e4cbfbb23275970b7"
+    },
+    {
+      "path": "ingarss_2026/README.md",
+      "bytes": 13421,
+      "sha256": "6f93ed64e46131d4c18f3efac4b385f264c322d0bc0396522a43cf4e41e284c1"
+    },
+    {
+      "path": "ingarss_2026/TECHNICAL_NOTE.md",
+      "bytes": 25476,
+      "sha256": "437399511f38512ee8f8c844f049a46b77316caeb82a3d608412a30fc4019766"
+    },
+    {
+      "path": "ingarss_2026/TECHNICAL_NOTE.pdf",
+      "bytes": 2585999,
+      "sha256": "275b8e5fa9579f5bc050b9914cda4145919cdf8a6baa338772bede665e6235bc"
+    },
+    {
+      "path": "ingarss_2026/VALIDATION.md",
+      "bytes": 9311,
+      "sha256": "46a5206018f6343c23900082ca72f238bfc396c05c8b22bd838b30cc8d2c44a1"
+    },
+    {
+      "path": "ingarss_2026/bin/sar_science_processor",
+      "bytes": 6514200,
+      "sha256": "d391e398fe9e4b4348f2ddbec10e4d4cb2da23cdca3e2c590deabb4c92e1554e"
+    },
+    {
+      "path": "ingarss_2026/explainer/NISAR_Pro_Visual_Walkthrough.pdf",
+      "bytes": 9882785,
+      "sha256": "fe3f02710c269a52c6e2d8c554bc37e61c7ab2b447a1f7fd86c74b762fd1824c"
+    },
+    {
+      "path": "ingarss_2026/explainer/timelapse_L_band.gif",
+      "bytes": 1265579,
+      "sha256": "26cf9aba077535b729785b20a1cbe692a3db06d6a96ba4790f5a89baad7a0f0b"
+    },
+    {
+      "path": "ingarss_2026/explainer/walkthrough_numbers.json",
+      "bytes": 5291,
+      "sha256": "c3fa209f76c17565c0c8e2a23ef96e6e19149980790236e0912d75617ec8fa55"
+    },
+    {
+      "path": "ingarss_2026/maps/fig0_aoi_and_footprint.png",
+      "bytes": 265871,
+      "sha256": "1ce74b0371b7ea73c8f470663f74e806e49e3cffeaa8a48981747be596191a87"
+    },
+    {
+      "path": "ingarss_2026/maps/fig1_change_maps_aug31_sep12.png",
+      "bytes": 306014,
+      "sha256": "40f969170475ca4cb431760e56e85bf245a958ad5c21c9fa77c08c63e9df0ddf"
+    },
+    {
+      "path": "ingarss_2026/maps/fig2_water_masks_sep12.png",
+      "bytes": 226254,
+      "sha256": "fac6ca4471523eebdff63a0f9da989fc755f9aab8023c467773e07040606ff23"
+    },
+    {
+      "path": "ingarss_2026/maps/fig3_newly_detected_water_fused.png",
+      "bytes": 215105,
+      "sha256": "1ecd0079dd8c5138345fbe35bfbccd4b97f834311b8039281198084ddfb2a4f0"
+    },
+    {
+      "path": "ingarss_2026/maps/fig4_l_band_lifecycle.png",
+      "bytes": 338884,
+      "sha256": "c3302c1068122386632328a42f107ffe6a71028c6379e70bde2e83a5faf1e33e"
+    },
+    {
+      "path": "ingarss_2026/maps/fig5_sentinel2_agreement.png",
+      "bytes": 91603,
+      "sha256": "a2744039a3dd18dfaa3be34f7894a4a532098737d30cd089c582ac2c9789fbba"
+    },
+    {
+      "path": "ingarss_2026/note_figures/fig_L_vs_S_aug31_sep12.jpg",
+      "bytes": 641053,
+      "sha256": "feb2bc4a1310f8c46e58d13d85b06260ffdb9eb206804054ce84923183c990a7"
+    },
+    {
+      "path": "ingarss_2026/note_figures/fig_fusion_output.jpg",
+      "bytes": 495480,
+      "sha256": "0911a6d781940244b1834ab7b4f3a9a361935e6fdaf028167a6eb7a9ada51b69"
+    },
+    {
+      "path": "ingarss_2026/note_figures/fig_fusion_workflow.png",
+      "bytes": 162732,
+      "sha256": "7811bd6ba6f2a9b5f3d2e0ec2ad8cf2e673e3837931171cb37ef2f4d17ebd1e3"
+    },
+    {
+      "path": "ingarss_2026/note_figures/fig_stages.jpg",
+      "bytes": 524510,
+      "sha256": "02c769425a8334f8bfb7c511c2d72c824e28f1ef0781776cccadcf884cb6c108"
+    },
+    {
+      "path": "ingarss_2026/note_figures/fig_timelapse.jpg",
+      "bytes": 585727,
+      "sha256": "7501cf542f1cd5fbb153826434d3b8dd5ebb737df7d347f3fb8b4064a075fe71"
+    },
+    {
+      "path": "ingarss_2026/presentation.pdf",
+      "bytes": 1098298,
+      "sha256": "3135df295f68744ca180ca22b53d52196a3e19b7dba481580551dccc8c6edd8e"
+    },
+    {
+      "path": "ingarss_2026/results/LS_fused_aug31_sep12/fusion_diagnostics.json",
+      "bytes": 10030,
+      "sha256": "9730b4a564943a906ad75903519fab5748f5c62ebb336b46d108888742bdea63"
+    },
+    {
+      "path": "ingarss_2026/results/LS_fused_aug31_sep12/sar-bihar-ls-fused-aug31-sep12_class.tif",
+      "bytes": 321956,
+      "sha256": "36806d9e15cfacd465674efc0e3fe0c6dbf7463f86adcddbca260c693ecb9141"
+    },
+    {
+      "path": "ingarss_2026/results/LS_fused_aug31_sep12/sar-bihar-ls-fused-aug31-sep12_flood.json",
+      "bytes": 6833,
+      "sha256": "a6c0a6cfb9ebdcda6c00589b6caca9e545eca419724b27983ca032d2b9ba3921"
+    },
+    {
+      "path": "ingarss_2026/results/LS_fused_aug31_sep12/valid_support.tif",
+      "bytes": 40683,
+      "sha256": "6cb9ed6ce459b3a6d5c4e0e6a70f9cf0b1b282e47434c0215f69f468e61bd92c"
+    },
+    {
+      "path": "ingarss_2026/results/L_aug31_sep12/sar-bihar-aug31-sep12-full_flood.geo.json",
+      "bytes": 4663716,
+      "sha256": "32974187b409cd065fb8e8b942ff9d1d3989274f1fdcf503edb9f68ab72a562e"
+    },
+    {
+      "path": "ingarss_2026/results/L_aug31_sep12/sar-bihar-aug31-sep12-full_flood.json",
+      "bytes": 2709,
+      "sha256": "7d1d459a38523817f5935be3fb74841e5d10e8cce90185bbd3a9333eb802a75c"
+    },
+    {
+      "path": "ingarss_2026/results/L_aug31_sep12/sar-bihar-aug31-sep12-full_flood_class.tif",
+      "bytes": 18942502,
+      "sha256": "1a420eaa43304168d3509316602614093e6ef89662d5ad593316094ad095415e"
+    },
+    {
+      "path": "ingarss_2026/results/L_jul26_aug31/sar-bihar-jul26-aug31-progression_flood.geo.json",
+      "bytes": 6625659,
+      "sha256": "adc81701cfc71d0532d4fa173babad653260c196570159cb1f4faf9898f64f5a"
+    },
+    {
+      "path": "ingarss_2026/results/L_jul26_aug31/sar-bihar-jul26-aug31-progression_flood.json",
+      "bytes": 2729,
+      "sha256": "5bdd260471f3bfa8c152a5c389b5e39dad511e1ca3a52a52409103b260bc8239"
+    },
+    {
+      "path": "ingarss_2026/results/L_jul26_aug31/sar-bihar-jul26-aug31-progression_flood_class.tif",
+      "bytes": 18942502,
+      "sha256": "999883f1955a493f20a15d09b4b210cfc47cb86a6be5673a6bef2f1b108a02d2"
+    },
+    {
+      "path": "ingarss_2026/results/L_sep12_oct18/sar-bihar-sep12-oct18-recession-erosion40_flood.geo.json",
+      "bytes": 1330985,
+      "sha256": "adbfe0d74174e2c7c5c15a3ef52ef67a285ad0048924b3aef828094d6bc46ba7"
+    },
+    {
+      "path": "ingarss_2026/results/L_sep12_oct18/sar-bihar-sep12-oct18-recession-erosion40_flood.json",
+      "bytes": 2747,
+      "sha256": "feff5df9ce0d5111da6e0a7c56567f2bffb27fa972f3b235fea2b732b9402812"
+    },
+    {
+      "path": "ingarss_2026/results/L_sep12_oct18/sar-bihar-sep12-oct18-recession-erosion40_flood_class.tif",
+      "bytes": 18942502,
+      "sha256": "b273d1ae5bcde9466e32aef13a114bbc55024628d8b52a09b26c18d3725e1be7"
+    },
+    {
+      "path": "ingarss_2026/results/S_aug31_sep12/sar-bihar-sband-aug31-sep12-full_flood.geo.json",
+      "bytes": 4111387,
+      "sha256": "486edd04b02e6eabbad6182666d50cfac02492bd05d09873a5d0e651fce26283"
+    },
+    {
+      "path": "ingarss_2026/results/S_aug31_sep12/sar-bihar-sband-aug31-sep12-full_flood.json",
+      "bytes": 2713,
+      "sha256": "931ceb0f11d6d58692df53c890da74e8dcfb0150e5ec7460f7645fdce462d995"
+    },
+    {
+      "path": "ingarss_2026/results/S_aug31_sep12/sar-bihar-sband-aug31-sep12-full_flood_class.tif",
+      "bytes": 18942502,
+      "sha256": "e4f8d3eeb7fb0be5941f7625dfdd992fc9df36cb46ca50168998165a5644c25e"
+    },
+    {
+      "path": "ingarss_2026/results/supplementary/L_sep12_oct18_edge3px/sar-bihar-sep12-oct18-recession_flood.json",
+      "bytes": 2697,
+      "sha256": "a5073af7cf24286b7fc2eff64dda11d95a0a6167e6bc4d2b5779d6692958d7a4"
+    },
+    {
+      "path": "ingarss_2026/results/validation/polarization_feature_scores.json",
+      "bytes": 1133,
+      "sha256": "68e4fcd860b8a364ae700d7ab5b2e444288fc4deee9597bde099ecf08c3b9483"
+    },
+    {
+      "path": "ingarss_2026/results/validation/sand_rule_check.json",
+      "bytes": 1374,
+      "sha256": "ed751b564a16262734c36010a959ab21d40e272f4ff99694bdf6b8ba1ab8a290"
+    },
+    {
+      "path": "ingarss_2026/results/validation/sentinel2_validation.json",
+      "bytes": 27108,
+      "sha256": "f6c9ffd3163c09d15bff1593ccb63e317520be043a93d481e16f232268afcb9e"
+    },
+    {
+      "path": "ingarss_2026/run_bihar_analysis.py",
+      "bytes": 10887,
+      "sha256": "ff42e65fe8acc0aaf8a075c7711dfa396d147d418735186029189bc8fc5de25c"
+    },
+    {
+      "path": "ingarss_2026/scripts/build_provenance_manifest.py",
+      "bytes": 2742,
+      "sha256": "ee89ca7dbb53bd24b2555712dd248b8dd11aa45b8e7e3ea1ed5ab3786236ccb4"
+    },
+    {
+      "path": "ingarss_2026/scripts/build_walkthrough_doc.py",
+      "bytes": 23364,
+      "sha256": "6af5fb07e7998f735a7740fa76e33a5abf90ab28bc42670c96a231c2c4a75fa9"
+    },
+    {
+      "path": "ingarss_2026/scripts/check_sand_rule.py",
+      "bytes": 4602,
+      "sha256": "739e1eb36693aeb2483878746fb01bdac73b72e82e2acbf6cf369854107caabf"
+    },
+    {
+      "path": "ingarss_2026/scripts/make_maps.py",
+      "bytes": 11871,
+      "sha256": "a8737fddb3c0a0252fca8e10176a37a845a0c441c342d52a777aa22a3ec21c9a"
+    },
+    {
+      "path": "ingarss_2026/scripts/make_note_figures.py",
+      "bytes": 5610,
+      "sha256": "6e15a8df54d62bd125a0a5e18cb4152d6f3f74497335930650ada25526e83606"
+    },
+    {
+      "path": "ingarss_2026/scripts/make_walkthrough.py",
+      "bytes": 21255,
+      "sha256": "309d8c05465cbde67c75e814744a5abc0dc6ff1f4ed965405bddbf0a4e8cb3af"
+    },
+    {
+      "path": "ingarss_2026/scripts/run_ls_fusion_and_pol_assessment.py",
+      "bytes": 26283,
+      "sha256": "9fa8af6fb6432c028cd592ef0328994e6fa82ee624cb2edd0870e5b76c61a1a6"
+    },
+    {
+      "path": "ingarss_2026/scripts/score_polarization_features.py",
+      "bytes": 3428,
+      "sha256": "886ed0e56afe70033b4cba58a63ef4a5f9edc2bba5936f08ade82982f651b43c"
+    },
+    {
+      "path": "ingarss_2026/scripts/validate_sentinel2.py",
+      "bytes": 9472,
+      "sha256": "b29f106f1cfd2eff81d068290ec68063b8dfd5649cbf69db1c0e402cd216e260"
+    }
+  ]
+}

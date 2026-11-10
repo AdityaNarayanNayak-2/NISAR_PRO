@@ -214,6 +214,7 @@ pub async fn spawn_processing_job(
     if is_local_mode() {
         let (cancel_tx, cancel_rx) = tokio::sync::mpsc::channel(1);
         metadata.write().await.cancel_tx = Some(cancel_tx);
+        let semaphore = state.processor_semaphore.clone();
 
         // ─── LOCAL SUBPROCESS MODE: spawn processor as a child process ───
         tokio::spawn(async move {
@@ -239,6 +240,7 @@ pub async fn spawn_processing_job(
                 polarization,
                 multilook_factor,
                 cancel_rx,
+                semaphore,
             ).await;
         });
     } else {
@@ -276,6 +278,7 @@ async fn spawn_local_job(
     polarization: Option<String>,
     multilook_factor: Option<usize>,
     mut cancel_rx: tokio::sync::mpsc::Receiver<()>,
+    semaphore: Arc<tokio::sync::Semaphore>,
 ) {
     let results_dir = std::path::Path::new("results");
     if !results_dir.exists() {
@@ -325,17 +328,30 @@ async fn spawn_local_job(
     // BINARY DISPATCH: SAR Science Processor vs Standard Processor
     // ═══════════════════════════════════════════════════════════════════
     let use_science = processor.as_deref() == Some("science");
-    let binary = if use_science {
-        find_science_processor_binary()
-    } else {
-        find_processor_binary()
-    };
+    if !use_science {
+        // The old sar_processor (InSAR / infrastructure modes) was removed from the repo.
+        let msg = "This mode needs the old sar_processor, which has been removed. Use the flood profile (sar_science_processor).";
+        error!("Job {}: {}", job_id, msg);
+        let mut m = metadata.write().await;
+        m.status = JobStatus::Failed(msg.to_string());
+        let _ = m.tx.send(format!("[ERROR] {}", msg));
+        return;
+    }
+    let binary = find_science_processor_binary();
     info!("Local Mode: Using binary at {:?} (science={})", binary, use_science);
 
     let mut cmd = Command::new(&binary);
     cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("RUST_LOG", "info");
+
+    // On Windows the gateway runs without a console, so stop each engine run
+    // from opening its own black console window.
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
 
     if use_science {
         // ── SAR Science Processor args ────────────────────────────────
@@ -428,11 +444,29 @@ async fn spawn_local_job(
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // CONCURRENCY CONTROL: Wait for processor permit
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        let m = metadata.read().await;
+        let _ = m.tx.send("[SYSTEM] Enqueued in concurrency scheduler. Waiting for processor permit...".to_string());
+    }
+
+    let _permit = match semaphore.acquire().await {
+        Ok(permit) => permit,
+        Err(_) => {
+            let mut m = metadata.write().await;
+            m.status = JobStatus::Failed("Server concurrency limiter was closed".to_string());
+            let _ = m.tx.send("[ERROR] Server concurrency limiter closed.".to_string());
+            return;
+        }
+    };
+
     let binary_label = if use_science { "sar_science_processor" } else { "sar_processor" };
     {
         let mut m = metadata.write().await;
         m.status = JobStatus::Running;
-        let _ = m.tx.send(format!("[SYSTEM] LOCAL_MODE: Spawning {} (job={})", binary_label, job_id));
+        let _ = m.tx.send(format!("[SYSTEM] Processor permit acquired. Spawning {} (job={})", binary_label, job_id));
     }
 
     let mut child = match cmd.spawn() {
@@ -556,29 +590,6 @@ async fn spawn_local_job(
             let _ = m.tx.send(format!("[SYSTEM] PROCESS_FAILED: {}", err));
         }
     }
-}
-
-/// Find the sar_processor binary, trying release then debug build
-fn find_processor_binary() -> String {
-    let possible_paths = [
-        "../sar_processor/target/release/sar_processor",
-        "../sar_processor/target/debug/sar_processor",
-        "./sar_processor",
-    ];
-
-    for p in &possible_paths {
-        if std::path::Path::new(p).exists() {
-            return p.to_string();
-        }
-        // Windows builds produce <name>.exe
-        let exe = format!("{}.exe", p);
-        if std::path::Path::new(&exe).exists() {
-            return exe;
-        }
-    }
-
-    // Fallback: assume it's in PATH (Command resolves the .exe there automatically)
-    "sar_processor".to_string()
 }
 
 /// Locate the sar_science_processor binary (SAR Science InSAR/GCOV engine)

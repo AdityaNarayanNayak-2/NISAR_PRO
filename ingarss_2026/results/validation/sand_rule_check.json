@@ -1,0 +1,66 @@
+{
+ "12Sep_vs_S2_13Sep": {
+  "sand_rule_L_dark_S_bright": {
+   "px": 16813,
+   "km2": 107.6,
+   "acres": 26589,
+   "ndwi_water_pct": 8.7,
+   "ndwi_median": -0.266,
+   "scl_vegetation_pct": 63.2,
+   "scl_bare_pct": 18.7,
+   "scl_water_pct": 9.9
+  },
+  "control_both_dark": {
+   "px": 166173,
+   "km2": 1063.51,
+   "acres": 262798,
+   "ndwi_water_pct": 80.3,
+   "ndwi_median": 0.115,
+   "scl_vegetation_pct": 8.6,
+   "scl_bare_pct": 6.7,
+   "scl_water_pct": 79.1
+  },
+  "control_L_not_dark": {
+   "px": 1058581,
+   "km2": 6774.92,
+   "acres": 1674119,
+   "ndwi_water_pct": 1.3,
+   "ndwi_median": -0.406,
+   "scl_vegetation_pct": 89.8,
+   "scl_bare_pct": 7.3,
+   "scl_water_pct": 1.4
+  }
+ },
+ "31Aug_vs_S2_29Aug": {
+  "sand_rule_L_dark_S_bright": {
+   "px": 11622,
+   "km2": 74.38,
+   "acres": 18380,
+   "ndwi_water_pct": 9.2,
+   "ndwi_median": -0.19,
+   "scl_vegetation_pct": 16.5,
+   "scl_bare_pct": 56.8,
+   "scl_water_pct": 25.0
+  },
+  "control_both_dark": {
+   "px": 134178,
+   "km2": 858.74,
+   "acres": 212199,
+   "ndwi_water_pct": 70.3,
+   "ndwi_median": 0.051,
+   "scl_vegetation_pct": 3.9,
+   "scl_bare_pct": 28.3,
+   "scl_water_pct": 63.6
+  },
+  "control_L_not_dark": {
+   "px": 413580,
+   "km2": 2646.91,
+   "acres": 654066,
+   "ndwi_water_pct": 2.6,
+   "ndwi_median": -0.319,
+   "scl_vegetation_pct": 40.9,
+   "scl_bare_pct": 53.0,
+   "scl_water_pct": 4.3
+  }
+ }
+}

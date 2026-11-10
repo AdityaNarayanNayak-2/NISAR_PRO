@@ -5,6 +5,7 @@ import { useJobStore } from '../stores/useJobStore';
 import { useMapStore } from '../stores/useMapStore';
 import { PROFILES } from '../constants';
 import { parseFloodReport } from '../flood/floodReportHelpers';
+import ConnectionModal from '../../../components/ConnectionModal';
 
 const NAV_ITEMS = [
     ['map', 'Live Map'],
@@ -21,6 +22,7 @@ export default function TopBar({ profile, setProfile, onOpenReport, activeView =
     const viewingResult = useMapStore(state => state.viewingResult);
     const [profileOpen, setProfileOpen] = useState(false);
     const [utcTime, setUtcTime] = useState('');
+    const [connectionModalOpen, setConnectionModalOpen] = useState(false);
 
     const ribbonData = profile === 'flood' && viewingResult?.pipeline === 'flood' && viewingResult.floodReport
         ? parseFloodReport(viewingResult.floodReport)
@@ -87,11 +89,26 @@ export default function TopBar({ profile, setProfile, onOpenReport, activeView =
                 <Search size={15} aria-hidden="true" />
                 <span>Search region or lat/lon</span>
                 <kbd>Ctrl + Shift + F</kbd>
-                <span className={`nisar-online-dot ${gatewayOnline ? 'is-online' : 'is-offline'}`} />
-                <span className="nisar-command-status">{gatewayOnline ? 'Online' : 'Offline'}</span>
+                <button
+                    type="button"
+                    onClick={() => setConnectionModalOpen(true)}
+                    title="Click to configure Gateway Connection & Cloudflare Tunnel"
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        background: 'none', border: 'none', cursor: 'pointer', padding: 0
+                    }}
+                >
+                    <span className={`nisar-online-dot ${gatewayOnline ? 'is-online' : 'is-offline'}`} />
+                    <span className="nisar-command-status">{gatewayOnline ? 'Online' : 'Offline'}</span>
+                </button>
                 {ribbonData && <button type="button" className="nisar-report-shortcut" onClick={onOpenReport}><FileText size={14} /> Report</button>}
                 <button type="button" className="nisar-terminal-shortcut" onClick={() => setTerminalOpen(value => !value)}>{terminalOpen ? 'Close terminal' : utcTime}</button>
             </div>
+
+            <ConnectionModal
+                isOpen={connectionModalOpen}
+                onClose={() => setConnectionModalOpen(false)}
+            />
         </>
     );
 }

@@ -1,0 +1,519 @@
+{
+  "note": "Pixel counts of rule behaviour. These are not accuracy measurements.",
+  "water_area_per_date": {
+    "l_only": {
+      "stable": {
+        "px": 517942,
+        "km2": 3314.83,
+        "acres": 819112
+      },
+      "gain": {
+        "px": 177678,
+        "km2": 1137.14,
+        "acres": 280993
+      },
+      "loss": {
+        "px": 138881,
+        "km2": 888.84,
+        "acres": 219637
+      },
+      "water_date1": {
+        "px": 656823,
+        "km2": 4203.67,
+        "acres": 1038749
+      },
+      "water_date2": {
+        "px": 695620,
+        "km2": 4451.97,
+        "acres": 1100105
+      }
+    },
+    "s_only": {
+      "stable": {
+        "px": 397871,
+        "km2": 2546.37,
+        "acres": 629223
+      },
+      "gain": {
+        "px": 183576,
+        "km2": 1174.89,
+        "acres": 290321
+      },
+      "loss": {
+        "px": 33591,
+        "km2": 214.98,
+        "acres": 53123
+      },
+      "water_date1": {
+        "px": 431462,
+        "km2": 2761.36,
+        "acres": 682346
+      },
+      "water_date2": {
+        "px": 581447,
+        "km2": 3721.26,
+        "acres": 919544
+      }
+    },
+    "fused": {
+      "stable": {
+        "px": 414420,
+        "km2": 2652.29,
+        "acres": 655395
+      },
+      "gain": {
+        "px": 208929,
+        "km2": 1337.15,
+        "acres": 330416
+      },
+      "loss": {
+        "px": 113026,
+        "km2": 723.37,
+        "acres": 178748
+      },
+      "water_date1": {
+        "px": 527446,
+        "km2": 3375.65,
+        "acres": 834142
+      },
+      "water_date2": {
+        "px": 623349,
+        "km2": 3989.43,
+        "acres": 985811
+      }
+    }
+  },
+  "l_s_gain_agreement": {
+    "both": {
+      "px": 134150,
+      "km2": 858.56,
+      "acres": 212155
+    },
+    "l_only": {
+      "px": 43528,
+      "km2": 278.58,
+      "acres": 68838
+    },
+    "s_only": {
+      "px": 49426,
+      "km2": 316.33,
+      "acres": 78166
+    },
+    "jaccard": 0.5907
+  },
+  "fused_gain_sources": {
+    "both_bands": {
+      "px": 116164,
+      "km2": 743.45,
+      "acres": 183710
+    },
+    "l_band_only": {
+      "px": 20658,
+      "km2": 132.21,
+      "acres": 32670
+    },
+    "s_band_only": {
+      "px": 37180,
+      "km2": 237.95,
+      "acres": 58799
+    },
+    "canopy_rule_only": {
+      "px": 34927,
+      "km2": 223.53,
+      "acres": 55236
+    }
+  },
+  "candidates_removed_by_s_filter": {
+    "px": 52922,
+    "km2": 338.7,
+    "acres": 83695
+  },
+  "wind_gate_pixels_added_to_stable_water": {
+    "px": 42267,
+    "km2": 270.51,
+    "acres": 66844
+  },
+  "sandbar_gate_stable_pixels_removed": {
+    "px": 1383,
+    "km2": 8.85,
+    "acres": 2187
+  },
+  "gain_not_below_water_threshold_on_later_date": {
+    "l_only": {
+      "px": 44740,
+      "km2": 286.34,
+      "acres": 70755,
+      "of": {
+        "px": 177678,
+        "km2": 1137.14,
+        "acres": 280993
+      }
+    },
+    "s_only": {
+      "px": 51505,
+      "km2": 329.63,
+      "acres": 81454,
+      "of": {
+        "px": 183576,
+        "km2": 1174.89,
+        "acres": 290321
+      }
+    },
+    "fused": {
+      "px": 15303,
+      "km2": 97.94,
+      "acres": 24201,
+      "of": {
+        "px": 208929,
+        "km2": 1337.15,
+        "acres": 330416
+      }
+    }
+  },
+  "rule_on_off": {
+    "all_rules": {
+      "stable": {
+        "px": 414420,
+        "km2": 2652.29,
+        "acres": 655395
+      },
+      "gain": {
+        "px": 208929,
+        "km2": 1337.15,
+        "acres": 330416
+      },
+      "loss": {
+        "px": 113026,
+        "km2": 723.37,
+        "acres": 178748
+      },
+      "water_date1": {
+        "px": 527446,
+        "km2": 3375.65,
+        "acres": 834142
+      },
+      "water_date2": {
+        "px": 623349,
+        "km2": 3989.43,
+        "acres": 985811
+      }
+    },
+    "without_sandbar_gate": {
+      "stable": {
+        "px": 419416,
+        "km2": 2684.26,
+        "acres": 663296
+      },
+      "gain": {
+        "px": 206671,
+        "km2": 1322.69,
+        "acres": 326845
+      },
+      "loss": {
+        "px": 112998,
+        "km2": 723.19,
+        "acres": 178703
+      },
+      "water_date1": {
+        "px": 532414,
+        "km2": 3407.45,
+        "acres": 841999
+      },
+      "water_date2": {
+        "px": 626087,
+        "km2": 4006.96,
+        "acres": 990141
+      }
+    },
+    "without_wind_gate": {
+      "stable": {
+        "px": 372153,
+        "km2": 2381.78,
+        "acres": 588551
+      },
+      "gain": {
+        "px": 216687,
+        "km2": 1386.8,
+        "acres": 342685
+      },
+      "loss": {
+        "px": 113139,
+        "km2": 724.09,
+        "acres": 178926
+      },
+      "water_date1": {
+        "px": 485292,
+        "km2": 3105.87,
+        "acres": 767477
+      },
+      "water_date2": {
+        "px": 588840,
+        "km2": 3768.58,
+        "acres": 931236
+      }
+    },
+    "without_canopy_rule": {
+      "stable": {
+        "px": 414420,
+        "km2": 2652.29,
+        "acres": 655395
+      },
+      "gain": {
+        "px": 174002,
+        "km2": 1113.61,
+        "acres": 275180
+      },
+      "loss": {
+        "px": 113026,
+        "km2": 723.37,
+        "acres": 178748
+      },
+      "water_date1": {
+        "px": 527446,
+        "km2": 3375.65,
+        "acres": 834142
+      },
+      "water_date2": {
+        "px": 588422,
+        "km2": 3765.9,
+        "acres": 930574
+      }
+    },
+    "without_s_band_filter": {
+      "stable": {
+        "px": 414420,
+        "km2": 2652.29,
+        "acres": 655395
+      },
+      "gain": {
+        "px": 261851,
+        "km2": 1675.85,
+        "acres": 414111
+      },
+      "loss": {
+        "px": 113026,
+        "km2": 723.37,
+        "acres": 178748
+      },
+      "water_date1": {
+        "px": 527446,
+        "km2": 3375.65,
+        "acres": 834142
+      },
+      "water_date2": {
+        "px": 676271,
+        "km2": 4328.13,
+        "acres": 1069505
+      }
+    },
+    "union_only": {
+      "stable": {
+        "px": 373536,
+        "km2": 2390.63,
+        "acres": 590738
+      },
+      "gain": {
+        "px": 227104,
+        "km2": 1453.47,
+        "acres": 359159
+      },
+      "loss": {
+        "px": 113139,
+        "km2": 724.09,
+        "acres": 178926
+      },
+      "water_date1": {
+        "px": 486675,
+        "km2": 3114.72,
+        "acres": 769664
+      },
+      "water_date2": {
+        "px": 600640,
+        "km2": 3844.1,
+        "acres": 949897
+      }
+    }
+  },
+  "threshold_sensitivity": {
+    "s_gate_-11.5": {
+      "stable": {
+        "px": 405362,
+        "km2": 2594.32,
+        "acres": 641070
+      },
+      "gain": {
+        "px": 188818,
+        "km2": 1208.44,
+        "acres": 298611
+      },
+      "loss": {
+        "px": 113072,
+        "km2": 723.66,
+        "acres": 178820
+      },
+      "water_date1": {
+        "px": 518434,
+        "km2": 3317.98,
+        "acres": 819890
+      },
+      "water_date2": {
+        "px": 594180,
+        "km2": 3802.75,
+        "acres": 939681
+      }
+    },
+    "s_gate_-9.5": {
+      "stable": {
+        "px": 417843,
+        "km2": 2674.2,
+        "acres": 660808
+      },
+      "gain": {
+        "px": 226452,
+        "km2": 1449.29,
+        "acres": 358128
+      },
+      "loss": {
+        "px": 113002,
+        "km2": 723.21,
+        "acres": 178710
+      },
+      "water_date1": {
+        "px": 530845,
+        "km2": 3397.41,
+        "acres": 839518
+      },
+      "water_date2": {
+        "px": 644295,
+        "km2": 4123.49,
+        "acres": 1018936
+      }
+    },
+    "sandbar_l_-14.0": {
+      "stable": {
+        "px": 415141,
+        "km2": 2656.9,
+        "acres": 656535
+      },
+      "gain": {
+        "px": 208802,
+        "km2": 1336.33,
+        "acres": 330215
+      },
+      "loss": {
+        "px": 113026,
+        "km2": 723.37,
+        "acres": 178748
+      },
+      "water_date1": {
+        "px": 528167,
+        "km2": 3380.27,
+        "acres": 835283
+      },
+      "water_date2": {
+        "px": 623943,
+        "km2": 3993.24,
+        "acres": 986750
+      }
+    },
+    "sandbar_l_-12.0": {
+      "stable": {
+        "px": 413475,
+        "km2": 2646.24,
+        "acres": 653900
+      },
+      "gain": {
+        "px": 209183,
+        "km2": 1338.77,
+        "acres": 330818
+      },
+      "loss": {
+        "px": 113026,
+        "km2": 723.37,
+        "acres": 178748
+      },
+      "water_date1": {
+        "px": 526501,
+        "km2": 3369.61,
+        "acres": 832648
+      },
+      "water_date2": {
+        "px": 622658,
+        "km2": 3985.01,
+        "acres": 984718
+      }
+    }
+  },
+  "channel_separability_12_sep": {
+    "caution": "Water and land samples come from HH-based classes, which favours HH.",
+    "l_hh": {
+      "water_mean_db": -16.84,
+      "land_mean_db": -7.46,
+      "separability": 4.278
+    },
+    "l_hv": {
+      "water_mean_db": -23.91,
+      "land_mean_db": -15.66,
+      "separability": 3.297
+    },
+    "l_hv_minus_hh": {
+      "water_mean_db": -7.07,
+      "land_mean_db": -8.2,
+      "separability": 0.585
+    },
+    "s_hh": {
+      "water_mean_db": -16.22,
+      "land_mean_db": -7.82,
+      "separability": 4.938
+    },
+    "s_hv": {
+      "water_mean_db": -18.88,
+      "land_mean_db": -14.18,
+      "separability": 3.402
+    },
+    "s_hv_minus_hh": {
+      "water_mean_db": -2.66,
+      "land_mean_db": -6.35,
+      "separability": 3.026
+    }
+  },
+  "gain_with_hv_drop_of_3db": {
+    "l_gain_with_l_hv_drop": {
+      "px": 119815,
+      "km2": 766.82,
+      "acres": 189484,
+      "of": {
+        "px": 177678,
+        "km2": 1137.14,
+        "acres": 280993
+      }
+    },
+    "s_gain_with_s_hv_drop": {
+      "px": 103336,
+      "km2": 661.35,
+      "acres": 163423,
+      "of": {
+        "px": 183576,
+        "km2": 1174.89,
+        "acres": 290321
+      }
+    }
+  },
+  "gain_outside_water_present_26jul_and_31aug": {
+    "l_only": {
+      "px": 177678,
+      "km2": 1137.14,
+      "acres": 280993
+    },
+    "s_only": {
+      "px": 174607,
+      "km2": 1117.48,
+      "acres": 276137
+    },
+    "fused": {
+      "px": 200434,
+      "km2": 1282.78,
+      "acres": 316981
+    }
+  }
+}
