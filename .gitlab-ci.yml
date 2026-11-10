@@ -64,7 +64,7 @@ build_linux_release:
     tar -czf "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" -C release "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64"
     export PACKAGE_BASE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/nisar-pro/${PACKAGE_VERSION}"
     export ARCHIVE_URL="${PACKAGE_BASE_URL}/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz"
-    curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" "$ARCHIVE_URL"
+    curl --fail-with-body --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" "$ARCHIVE_URL" || { echo "Upload refused. Check Settings > General > Visibility > Package registry is on." >&2; exit 1; }
     sed "s|__NISAR_PRO_ARCHIVE_URL__|${ARCHIVE_URL}|" installer/install.sh > "release/install.sh"
     chmod +x "release/install.sh"
     curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file release/install.sh "${PACKAGE_BASE_URL}/install.sh"
@@ -78,6 +78,10 @@ build_linux_release:
 publish_gitlab_release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
+  # Manual: the tag v$RELEASE_VERSION can exist only once, so publishing it on every push to main
+  # would fail from the second run on. Raise RELEASE_VERSION, then press play on this job.
+  # Needs Settings > General > Visibility: "Package registry" and "Releases" switched on.
+  when: manual
   needs:
     - job: build_linux_release
       artifacts: true

@@ -168,7 +168,7 @@ tr:last-child td { border-bottom: 1px solid #000; }
 td.r { text-align: right; white-space: nowrap; }
 .float { flex: 0 0 auto; margin: 0 0 9px; }
 figure { text-align: center; }
-figure img { width: 100%; display: block; }
+figure img { width: 84%; display: block; margin: 0 auto; }
 figcaption { font-size: 8pt; text-align: justify; margin-top: 3px; }
 .ref { text-indent: -2.2em; padding-left: 2.2em; font-size: 7.8pt; margin: 1px 0; text-align: left; }
 """

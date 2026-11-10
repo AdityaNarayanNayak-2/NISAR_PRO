@@ -174,11 +174,11 @@ npm run build
 
 Package files, how each was made and how to check them are listed in `ingarss_2026/README.md`.
 
-1. **Presentation**: `presentation.pdf` (8 slides). A designed PPTX version is being finalised from `~/Downloads/NISAR Pro - InGARSS 2026 Presentation (fixed).pptx`.
+1. **Presentation**: `presentation.pdf` (8 slides), built by `python3 scripts/build_presentation.py` (also rebuilds the manifest). A designed PPTX version is being finalised from `~/Downloads/NISAR Pro - InGARSS 2026 Presentation (fixed).pptx`.
 2. **Maps**: `maps/` and `results/`. Class GeoTIFFs are EPSG:32645.
 3. **Code**: `run_bihar_analysis.py` plus `scripts/`. The notebook was removed by Aditya's decision; do not reintroduce it.
 4. **README**: `README.md`.
-5. **Technical Note**: `TECHNICAL_NOTE.md` and `TECHNICAL_NOTE.pdf` (6 pages, A4, IEEE two-column, 5 figures from `note_figures/`). Written in Aditya's plain voice. Figures: `scripts/make_note_figures.py`; PDF: `./scripts/build_note_pdf.sh` (also rebuilds the manifest).
+5. **Technical Note**: `TECHNICAL_NOTE.md` and `TECHNICAL_NOTE.pdf` (4 pages, A4, IEEE two-column, 3 figures from `note_figures/`). Written in Aditya's plain voice. Figures: `scripts/make_note_figures.py`; PDF: `./scripts/build_note_pdf.sh` (also rebuilds the manifest).
 6. **Polarization**: `POLARIZATION_ASSESSMENT.md`.
 
 ---

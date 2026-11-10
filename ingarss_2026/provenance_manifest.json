@@ -1,8 +1,8 @@
 {
   "manifest_version": 1,
-  "created_utc": "2026-11-10T10:28:04.088151+00:00",
+  "created_utc": "2026-11-10T11:50:49.453610+00:00",
   "git": {
-    "commit": "3dd8b76b13fa73b684521fbe425cbee0508236e3",
+    "commit": "7c39958f5ae22b721ddcf5c7057cd1b8478a1b92",
     "branch": "dev"
   },
   "runtime": {
@@ -19,18 +19,18 @@
     },
     {
       "path": "ingarss_2026/README.md",
-      "bytes": 13516,
-      "sha256": "dd04d2441752efb54772c7adf8e6a5a874afdee9efe003e15cd2ddbb78d5677a"
+      "bytes": 19979,
+      "sha256": "95888e5a064118cb1743e028796483f19b1fc09e1d9788eb80406840621d3d73"
     },
     {
       "path": "ingarss_2026/TECHNICAL_NOTE.md",
-      "bytes": 25570,
-      "sha256": "aa98a78237f41ca804872d22cbbaadf2ec734d27c1e66c2554ba16115bdc81d8"
+      "bytes": 19506,
+      "sha256": "362456f509ddc3652fe011ad1a770e0dab3f59de52f90463b51896591f82f002"
     },
     {
       "path": "ingarss_2026/TECHNICAL_NOTE.pdf",
-      "bytes": 2586202,
-      "sha256": "f94a2edbd8e1c0ff451d1a58fcb622b02c9cb364dd02412dbd3423d2facdd8d2"
+      "bytes": 1928544,
+      "sha256": "b9383f32fd8625bfef75039d6a308cfd2a8f736d07dc5bae9ce42999c6b8fee7"
     },
     {
       "path": "ingarss_2026/VALIDATION.md",
@@ -93,16 +93,6 @@
       "sha256": "feb2bc4a1310f8c46e58d13d85b06260ffdb9eb206804054ce84923183c990a7"
     },
     {
-      "path": "ingarss_2026/note_figures/fig_fusion_output.jpg",
-      "bytes": 495480,
-      "sha256": "0911a6d781940244b1834ab7b4f3a9a361935e6fdaf028167a6eb7a9ada51b69"
-    },
-    {
-      "path": "ingarss_2026/note_figures/fig_fusion_workflow.png",
-      "bytes": 162732,
-      "sha256": "7811bd6ba6f2a9b5f3d2e0ec2ad8cf2e673e3837931171cb37ef2f4d17ebd1e3"
-    },
-    {
       "path": "ingarss_2026/note_figures/fig_stages.jpg",
       "bytes": 524510,
       "sha256": "02c769425a8334f8bfb7c511c2d72c824e28f1ef0781776cccadcf884cb6c108"
@@ -114,8 +104,8 @@
     },
     {
       "path": "ingarss_2026/presentation.pdf",
-      "bytes": 1098298,
-      "sha256": "3135df295f68744ca180ca22b53d52196a3e19b7dba481580551dccc8c6edd8e"
+      "bytes": 2014296,
+      "sha256": "7e9a105dadcf1ef012dbf5edfc3b5f32b257e7a018029522c8502bc2256cb395"
     },
     {
       "path": "ingarss_2026/results/LS_fused_aug31_sep12/fusion_diagnostics.json",
@@ -219,8 +209,8 @@
     },
     {
       "path": "ingarss_2026/run_bihar_analysis.py",
-      "bytes": 10887,
-      "sha256": "ff42e65fe8acc0aaf8a075c7711dfa396d147d418735186029189bc8fc5de25c"
+      "bytes": 10937,
+      "sha256": "8a596d1bc863306cc68efb1b16637485c2cc7d171f8adda847a2c599fd341fc8"
     },
     {
       "path": "ingarss_2026/scripts/build_provenance_manifest.py",
@@ -244,8 +234,8 @@
     },
     {
       "path": "ingarss_2026/scripts/make_note_figures.py",
-      "bytes": 5610,
-      "sha256": "6e15a8df54d62bd125a0a5e18cb4152d6f3f74497335930650ada25526e83606"
+      "bytes": 3320,
+      "sha256": "ebed399aa7b5de81f9ad866820a5b3e2d33cbf0e6cd701657bbfebe74672fa3e"
     },
     {
       "path": "ingarss_2026/scripts/make_walkthrough.py",

@@ -99,10 +99,10 @@ def run_engine(engine_args):
     res = subprocess.run(cmd, capture_output=True, text=True, check=False)  # exit code handled below
     secs = round(time.perf_counter() - t0, 3)
     bench_path = ROOT / "benchmarks.json"
-    bench = json.loads(bench_path.read_text()) if bench_path.exists() else {"runs": []}
+    bench = json.loads(bench_path.read_text(encoding="utf-8")) if bench_path.exists() else {"runs": []}
     label = " ".join(Path(t).name if "/" in t else t for t in cmd[1:])  # file names only, no local folders
     bench["runs"].append({"label": label, "seconds": secs, "returncode": res.returncode})
-    bench_path.write_text(json.dumps(bench, indent=2) + "\n")
+    bench_path.write_text(json.dumps(bench, indent=2) + "\n", encoding="utf-8")
     print(f"exit {res.returncode}, {secs} s")
     if res.returncode != 0:
         print(res.stderr[-1000:], file=sys.stderr)
@@ -140,7 +140,7 @@ def main():
     for key, label in METHODS:
         w = diag["water_area_per_date"][key]
         print(f"{label:10}{w['water_date1']['km2']:>14,.2f} km2{w['water_date2']['km2']:>14,.2f} km2")
-    print("Fusion rules: TECHNICAL_NOTE section 5. Code: scripts/run_ls_fusion_and_pol_assessment.py")
+    print("Fusion rules: TECHNICAL_NOTE section V. Code: scripts/run_ls_fusion_and_pol_assessment.py")
 
     heading("Task D. Change classes on the common footprint (31 Aug -> 12 Sep)")
     print(f"{'':10}{'stable water':>16}{'new water':>14}{'water loss':>14}{'stable land':>15}")
@@ -191,7 +191,7 @@ def main():
 
     heading("Task G. Reproducibility")
     print("Engine: bin/sar_science_processor (Linux x86_64). Commands for every run: README.md.")
-    bench = json.loads((ROOT / "benchmarks.json").read_text())
+    bench = json.loads((ROOT / "benchmarks.json").read_text(encoding="utf-8"))
     for run in bench.get("runs", []):
         band = "S-band" if "--radar-band s" in run["label"] else "L-band"
         print(f"Measured engine run, {band} pair: {run['seconds']:.1f} s, exit code {run['returncode']}")

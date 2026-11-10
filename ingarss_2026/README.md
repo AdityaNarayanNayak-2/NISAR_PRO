@@ -20,32 +20,74 @@ tests. It did not score higher than S-band: equal on 12 Sep, lower on 31 Aug and
 | S-band | 1,174.89 km² (290,322 acres) | 0.891 |
 | L+S | 1,337.15 km² (330,417 acres) | 0.891 |
 
-## Check the package (2 minutes, no downloads)
+## Step 1: check the package (2 minutes)
 
-Needs Python 3 only. No granules, no internet, nothing to install.
+This step needs only Python 3.8 or newer. No granules, no internet and no extra packages: the
+checker uses the Python standard library only. It works on Linux, macOS and Windows.
+
+**1. Get the folder.** Either unzip `ingarss_2026.zip`, or clone the repository:
 
 ```bash
-cd ingarss_2026
-python3 run_bihar_analysis.py
+git clone https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro.git
+cd nisar_pro
 ```
 
-What it does and what you should see:
+**2. Check your Python version.** It must print 3.8 or higher.
 
-1. **File check.** Compares every file in this folder with its SHA-256 fingerprint in
-   `provenance_manifest.json`. The two numbers in `N of N files match` should be equal. A file edited after the
-   results were made is listed by name.
+| System | Command |
+|---|---|
+| Linux, macOS | `python3 --version` |
+| Windows (PowerShell or Command Prompt) | `python --version` (or `py --version`) |
+
+**3. Run the checker.** It can be started from any folder; these commands start it from the
+folder that contains `ingarss_2026`.
+
+| System | Command |
+|---|---|
+| Linux, macOS | `python3 ingarss_2026/run_bihar_analysis.py` |
+| Windows | `python ingarss_2026\run_bihar_analysis.py` |
+
+**4. Read the output.** In order:
+
+1. **File check.** Every file in this folder is compared with its SHA-256 fingerprint in
+   `provenance_manifest.json`. You should see `49 of 49 files match their SHA-256 hash.` A changed file is
+   listed by name.
 2. **Results for Tasks A to H** of the problem statement, in the same order. Every number is read
    from the JSON files in `results/`; none is typed into the script.
 3. **Area check.** For each method, the classes must add up to the whole analysed area.
 4. **Answer to the research question**, worked out from the Sentinel-2 scores.
-5. Last line: `ALL CHECKS PASSED`, and exit code 0.
+5. Last line: `ALL CHECKS PASSED`, exit code 0. Other exit codes: 2 an input file is missing,
+   3 a check failed, 4 the optional engine run failed.
+
+The checker only reads files. It writes nothing unless you add `--run-engine`, which needs the granules.
+
+### If the checker does not pass
+
+| What you see | Cause | Fix |
+|---|---|---|
+| `python3: command not found` (Windows) | Windows names it `python` or `py` | Use `python` or `py` instead of `python3` |
+| `SyntaxError` right at the start | Python 2 or Python 3.7 and older | Install Python 3.8 or newer |
+| Some `.md`, `.py` or `.json` files do not match (Windows clone) | Git turned line endings into CRLF in a copy cloned before 10 Nov 2026 | In the repository: `git rm -r --cached -q ingarss_2026` then `git checkout HEAD -- ingarss_2026`, or clone again |
+| A file does not match after you opened it | An editor saved it again (line endings or encoding) | Unzip or check out the folder again; do not save files inside it |
+| `missing` for `.tif` files | An old clone, from before the GeoTIFFs were added | `git pull`, or use the zip |
+| `No such file or directory` | Wrong path to the script | Run `ls ingarss_2026` (Windows: `dir ingarss_2026`) and check the folder is there |
+
+## Step 2: look at the maps and data (optional)
+
+- Open `TECHNICAL_NOTE.pdf`, `presentation.pdf` and the `maps/` PNGs in any viewer.
+- Open the GeoTIFFs in `results/*/` in QGIS: *Layer → Add Layer → Add Raster Layer*. They are
+  EPSG:32645 with 80 m pixels. To colour them by class, use *Symbology → Paletted/Unique values*
+  with the class codes listed further down.
+- Open the GeoJSON files in QGIS (*Add Vector Layer*) or drag them onto https://geojson.io to see the
+  new-water polygons on a basemap. The largest file is about 7 MB, so it takes a few seconds.
+- Every number in the JSON reports is in km² and acres. The checker prints the main ones.
 
 ## What to read and look at
 
 | File | What it is |
 |---|---|
-| `TECHNICAL_NOTE.pdf` | The technical note, 6 pages, IEEE two-column layout with 5 figures (source text: `TECHNICAL_NOTE.md`) |
-| `presentation.pdf` | 8 slides |
+| `TECHNICAL_NOTE.pdf` | The technical note, 4 pages, IEEE two-column layout with 3 figures (source text: `TECHNICAL_NOTE.md`) |
+| `presentation.pdf` | 8 slides, built by `scripts/build_presentation.py` in the GitLab repo |
 | `explainer/NISAR_Pro_Visual_Walkthrough.pdf` | 13 pages: each processing stage with real pixels, before/after images for every date pair, and a time-lapse |
 | `explainer/timelapse_L_band.gif` | The four L-band dates as an animation |
 | `maps/fig0` to `fig5` | AOI map, change maps, water masks, new water, the season, Sentinel-2 scores. Each shows dates, legend, CRS, 80 m and data source |
@@ -58,10 +100,10 @@ What it does and what you should see:
 |---|---|
 | A. Data review, AOI map | `maps/fig0_aoi_and_footprint.png`; data list and catalogue search below |
 | B. L-band and S-band water masks | `maps/fig2_water_masks_sep12.png`; `results/L_aug31_sep12/`, `results/S_aug31_sep12/` |
-| C. L+S water mask and method | `results/LS_fused_aug31_sep12/`; technical note section 5 |
+| C. L+S water mask and method | `results/LS_fused_aug31_sep12/`; technical note section V |
 | D. Change maps and areas | `maps/fig1_change_maps_aug31_sep12.png`; checker output, Task D |
-| E. New water | `maps/fig3_newly_detected_water_fused.png`, `maps/fig4_l_band_lifecycle.png`; technical note section 7 |
-| F. Comparing the three methods | Technical note sections 7–8; `VALIDATION.md`; `maps/fig5_sentinel2_agreement.png` |
+| E. New water | `maps/fig3_newly_detected_water_fused.png`, `maps/fig4_l_band_lifecycle.png`; technical note section VI |
+| F. Comparing the three methods | Technical note sections IV, V and VII; `VALIDATION.md`; `maps/fig5_sentinel2_agreement.png` |
 | G. Reproducibility | This README; `run_bihar_analysis.py`; `scripts/`; `bin/` |
 | H. Polarization | `POLARIZATION_ASSESSMENT.md` |
 | Validation and uncertainty | `VALIDATION.md` |
@@ -75,9 +117,10 @@ What it does and what you should see:
 | `results/validation/` | `scripts/validate_sentinel2.py`, `scripts/check_sand_rule.py`, `scripts/score_polarization_features.py`. They download Sentinel-2 images and compare them with our maps |
 | `maps/` | `scripts/make_maps.py`. It draws the figures from the GeoTIFFs and JSONs above |
 | `explainer/` | `scripts/make_walkthrough.py` reads the granules again at 80 m with Python (h5py) for the before/after images, and uses the engine's class maps for the results. `scripts/build_walkthrough_doc.py` writes the text, printed to PDF with a browser |
-| `note_figures/` | `scripts/make_note_figures.py`. The 5 figures of the technical note: compressed walkthrough figures, the L-band vs S-band comparison and the fusion workflow diagram |
+| `note_figures/` | `scripts/make_note_figures.py`. The 3 figures of the technical note: two compressed walkthrough figures (the 7 stages and the time-lapse) and the L-band vs S-band comparison |
 | `provenance_manifest.json` | `scripts/build_provenance_manifest.py`. A SHA-256 fingerprint of every file, so anyone can check nothing changed |
 | `benchmarks.json` | `run_bihar_analysis.py --run-engine`. Measured engine run times |
+| `presentation.pdf`, `TECHNICAL_NOTE.pdf` | `scripts/build_presentation.py` and `scripts/build_note_pdf.sh` in the GitLab repository (printed with Chrome) |
 
 All GeoTIFFs are EPSG:32645 (UTM zone 45N) with 80 m pixels. They open in QGIS or any GIS.
 Class codes: 0 land or outside the scene, 1 stable water, 2 new water (high confidence),
@@ -102,39 +145,105 @@ both bands cover, so its numbers come from `results/LS_fused_aug31_sep12/`. For 
 water is 1,166.21 km² (288,177 acres) on its own area and 1,137.14 km² (280,993 acres) on the shared
 area. File names contain "flood" because that is how the engine names its outputs; no flood is claimed.
 
-## Run everything again from the granules
+## Step 3: run everything again from the granules (optional, about 1 hour)
 
-Needs Linux x86_64, the six `.h5` files listed below (about 7 GB each), and Python 3 with `numpy`,
-`h5py`, `rasterio`, `requests` and `matplotlib`. The Sentinel-2 steps need internet.
+This rebuilds every result from the six radar files. It is only needed to repeat the processing;
+Step 1 already checks the packaged results.
+
+**What you need**
+
+- Linux x86_64 with glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10). Check with
+  `ldd --version`. On Windows, use WSL2 with Ubuntu 22.04 or newer. The engine does not run on macOS.
+- 8 GB of RAM or more, and about 60 GB of free disk: the granules take about 53 GB (L-band about 7 GB
+  each, S-band about 12.6 GB each), the outputs a few GB.
+- The six `.h5` files listed under "Data used", all in one folder. Check each one with
+  `sha256sum <file>` against the table; a broken download is the most common cause of a failed run.
+- Python 3.8+ with these packages: `pip install numpy h5py rasterio requests matplotlib pillow`
+- Internet for the Sentinel-2 steps only.
+- For the PDFs only: Google Chrome (or Chromium) and `pdfinfo` (poppler-utils).
+
+**Set up once**
 
 ```bash
 cd ingarss_2026
+chmod +x bin/sar_science_processor          # unzip tools often drop the run permission
+./bin/sar_science_processor --help | head -3  # must print the usage text
 B=bin/sar_science_processor
 D=/path/to/folder/with/the/six/granules
-# engine: one run per pair of dates (--slave is the earlier date); S-band only changes --radar-band
+mkdir -p /tmp/nisar
+```
+
+**a. Engine, one run per pair** (about 1 minute each, at most 2.32 GB of memory). `--input` is the later
+date and `--slave` the earlier one. Only `--radar-band` changes for S-band. Replace each `<...>` with
+the file name from the table.
+
+```bash
 $B --mode flood --input $D/<12-Sep-LSAR>.h5 --slave $D/<31-Aug-LSAR>.h5 --crop-preset full --swath-edge-erosion 40 --radar-band l --output /tmp/nisar/L
 $B --mode flood --input $D/<12-Sep-SSAR>.h5 --slave $D/<31-Aug-SSAR>.h5 --crop-preset full --swath-edge-erosion 40 --radar-band s --output /tmp/nisar/S
 $B --mode flood --input $D/<31-Aug-LSAR>.h5 --slave $D/<26-Jul-LSAR>.h5 --crop-preset full --swath-edge-erosion 40 --radar-band l --output /tmp/nisar/jul
 $B --mode flood --input $D/<18-Oct-LSAR>.h5 --slave $D/<12-Sep-LSAR>.h5 --crop-preset full --swath-edge-erosion 40 --radar-band l --output /tmp/nisar/oct
-# fusion
+```
+
+Each run writes `<output>_flood_class.tif`, `<output>_flood.geo.json`, `<output>_flood.json` and
+PNG previews. Compare your areas with the packaged ones:
+
+```bash
+python3 -c "import json,sys; [print(f, '%.2f km2, %.0f acres' % (a['new_inundation_high_km2'], a['new_inundation_high_acres'])) for f in sys.argv[1:] for a in [json.load(open(f))['areas']]]" \
+  /tmp/nisar/L_flood.json results/L_aug31_sep12/sar-bihar-aug31-sep12-full_flood.json
+```
+
+Both lines should show the same value: L-band high-confidence new water, 31 Aug → 12 Sep,
+713.74 km² (176,369 acres).
+
+**b. L+S fusion** (about 4 minutes, 3.2 GB of memory):
+
+```bash
 python3 scripts/run_ls_fusion_and_pol_assessment.py --data-dir $D --l-class /tmp/nisar/L_flood_class.tif \
    --s-class /tmp/nisar/S_flood_class.tif --jul-class /tmp/nisar/jul_flood_class.tif --out-dir /tmp/nisar/fused
-# checks against Sentinel-2
+```
+
+**c. Checks against Sentinel-2** (needs internet; the first run downloads the images into `/tmp/s2`):
+
+```bash
 python3 scripts/validate_sentinel2.py --results results --work-dir /tmp/s2 --output /tmp/nisar/sentinel2_validation.json
 python3 scripts/check_sand_rule.py --data-dir $D --results results --work-dir /tmp/s2 --output /tmp/nisar/sand_rule_check.json
 python3 scripts/score_polarization_features.py --data-dir $D --results results --work-dir /tmp/s2 --output /tmp/nisar/pol_scores.json
-# figures and walkthrough
-python3 scripts/make_maps.py --results results --out /tmp/nisar/maps
-python3 scripts/make_walkthrough.py --data-dir $D --results results --work-dir /tmp/walk --out explainer
-python3 scripts/build_walkthrough_doc.py
-python3 scripts/make_note_figures.py
-../scripts/build_note_pdf.sh   # technical note PDF (Chrome)
 ```
 
-Each engine run reads two full scenes (2.31 billion values) in 44 to 65 s with at most 2.32 GB of
-memory, on a 4-core, 15 GB Linux workstation. The fusion takes about 4 minutes and 3.2 GB.
-We reran all of this on 7–10 November 2026 and got the same areas; the fused and 12 Sep → 18 Oct
-class maps were also compared byte for byte and matched.
+**d. Maps and figures.** These write into `/tmp`, so the package stays unchanged:
+
+```bash
+python3 scripts/make_maps.py --results results --out /tmp/nisar/maps
+python3 scripts/make_walkthrough.py --data-dir $D --results results --work-dir /tmp/walk --out /tmp/nisar/walk
+python3 scripts/make_note_figures.py --src /tmp/nisar/walk
+```
+
+Steps c and d read the packaged `results/` folder, so they check the packaged maps. To run them
+on your own outputs from steps a and b, copy those files over the packaged ones first. After that,
+Step 1 reports those files as changed, which is expected.
+
+The PDFs are printed with Chrome. For the walkthrough, run `make_walkthrough.py` with `--out explainer`,
+then `python3 scripts/build_walkthrough_doc.py`, print `explainer/walkthrough.html` with the Chrome
+command at the top of that script, and delete the `walk_*.png` and `walkthrough.html` working files
+from `explainer/`. The technical note and slides are built by `scripts/build_note_pdf.sh` and
+`scripts/build_presentation.py` in the GitLab repository.
+After any change inside this folder, run `python3 scripts/build_provenance_manifest.py` so Step 1
+passes again.
+
+We reran all of this on 7–10 November 2026 on a 4-core, 15 GB Linux workstation and got the same
+areas; the fused and 12 Sep → 18 Oct class maps were also compared byte for byte and matched.
+
+### If a step fails
+
+| What you see | Cause | Fix |
+|---|---|---|
+| `Permission denied` on `bin/sar_science_processor` | The run permission was lost when unzipping | `chmod +x bin/sar_science_processor` |
+| `GLIBC_2.35 not found` | Linux older than the list above | Use a newer Linux, a Docker `ubuntu:22.04` container, or build the engine from source (`cargo build --release` in `sar_science_processor/` on GitLab) |
+| `ModuleNotFoundError: No module named ...` | A Python package is missing | `pip install numpy h5py rasterio requests matplotlib pillow` |
+| HDF5 or read error from the engine | Incomplete granule download | Compare `sha256sum` with the table and download again |
+| Sentinel-2 download errors | No internet or the Planetary Computer is busy | Run the step again; files already downloaded stay in `/tmp/s2` |
+| `Missing ['walk_A_stages.png', ...]` | `make_note_figures.py` cannot find the walkthrough images | Run `make_walkthrough.py` first and pass its `--out` folder as `--src` |
+| Step 1 fails after a rerun | Files in the package were overwritten | Expected if you copied in your own outputs; run `build_provenance_manifest.py`, or unzip again |
 
 ## Data used
 
@@ -180,7 +289,7 @@ dates; other dates were not searched.
 
 ## How it works
 
-The full method with formulas is in the technical note (sections 3–5) and the walkthrough (Part 1).
+The full method with formulas is in the technical note (sections II–V) and the walkthrough (Part 1).
 
 1. Read each scene in strips of 1,024 rows and average every 8 × 8 block of power into one 80 m pixel.
 2. Convert to dB. Power below 0.0001 is no data. Cut 40 pixels next to every no-data edge.
