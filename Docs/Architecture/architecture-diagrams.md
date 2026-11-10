@@ -1,139 +1,217 @@
-# NISAR Pro — Platform Architecture & Ecosystem Blueprint
-> **Current Active Version**: Verified Production Pipeline for InGARSS 2026 Phase-1 Hackathon.
-> **Scope**: Hybrid Edge-Cloud Topology, Dual Science Engines (Flood & InSAR), Hyperslab Streaming, and 4-Class Temporal Dynamics.
+# NISAR Pro architecture
+
+This page shows how the parts of NISAR Pro fit together. Everything here is taken from the
+code in this repository (November 2026). Speeds and memory are the measured values from the
+InGARSS 2026 runs.
 
 ---
 
-## 1. High-Level System Topology
+## 1. The big picture
 
-NISAR Pro employs a **Hybrid Edge-Cloud Topology**. The control plane is delivered via an interactive web interface, while all heavy, CPU-bound SAR processing, HDF5 parsing, and spatial analytics execute on local hardware:
+NISAR Pro has three programs and one hackathon package.
 
-```mermaid
-graph TD
-    subgraph Frontend Control Plane [Frontend Web Dashboard: sar-dashboard-v3]
-        Dashboard[React 19 + Vite Dashboard<br/>Leaflet Map + Dark Theme UI]
-        FloodReplay[Flood Event Replay Controller<br/>Baseline -> Active -> Result]
-        InsightsPanel[Flood Insight Panel<br/>4-Class Temporal Metrics: km² & ac]
-    end
-
-    subgraph Scientific Data Providers [Authoritative Data Streams]
-        NASA_ASF[NASA ASF Vertex API<br/>NISAR L-band & S-band Granules]
-        Local_NISAR[Local NISAR Storage<br/>/home/aditya/Desktop/nisar_data/]
-    end
-
-    subgraph Backend Microservice [Local Gateway: sar-gateway]
-        Gateway[Rust Axum Server<br/>Port 3000 / Tokio Async]
-        JobManager[Job Orchestrator<br/>jobs.rs / Process Spawner]
-        Preloader[Historical Job Preloader<br/>Persistent Storage Ingestion]
-        SSE[SSE Event Broadcaster<br/>Real-Time Log Streamer]
-    end
-
-    subgraph Science Compute Engine [Scientific Core: sar_science_processor]
-        Reader[Streaming Chunked Reader<br/>ChunkedF32Reader / 1024-row Hyperslabs]
-        Multilook[8x8 Integer Multilooker<br/>10m -> 80m Spacing Lattice]
-        FloodEngine[7-Stage Flood Detection<br/>Otsu + 4-Class InGARSS Partition]
-        InSAREngine[InSAR Deformation Engine<br/>Coherence SAT + Goldstein Filter]
-        Exporter[Multi-Format Exporter<br/>RGBA PNG + GeoTIFF + GeoJSON]
-    end
-
-    %% Communication Flows
-    Dashboard <-->|1. HTTP / REST API & SPA Fallback| Gateway
-    Dashboard <-->|2. Server-Sent Events (SSE) Logs| SSE
-    Gateway <-->|3. Preload & Serve Artifacts| Exporter
-    JobManager -->|4. Spawns Subprocess CLI| Science Compute Engine
-    Local_NISAR -->|5. Zero-Copy Hyperslab Reads| Reader
-    Reader --> Multilook
-    Multilook --> FloodEngine
-    Multilook --> InSAREngine
-    FloodEngine --> Exporter
-    Exporter -->|6. Static File Service /results/*| Gateway
-    Gateway -->|7. GeoJSON & Image Overlays| Dashboard
-```
-
----
-
-## 2. Dual Scientific Pipelines
-
-NISAR Pro supports two independent, production-grade scientific processing pipelines:
-
-```mermaid
-graph TD
-    InputData[Incoming Radar Dataset] --> ModeCheck{Processing Pipeline?}
-    
-    %% Pipeline 1: Flood
-    ModeCheck -->|Mode: flood| FloodPipeline[InGARSS 2026 NISAR Flood Pipeline]
-    subgraph Flood Pipeline [sar_science_processor --mode flood]
-        F1[Raw GCOV Pair: Date 1 & Date 2] --> F2[Streaming Hyperslab Read: 1024 Rows]
-        F2 --> F3[8x8 Multilooking: 1.157B -> 18.08M px]
-        F3 --> F4[Speckle Filter: 3x3 Median]
-        F4 --> F5[Log-Ratio Change: active_dB - baseline_dB]
-        F5 --> F6[Otsu Threshold & Seeded Region Growing]
-        F6 --> F7[InGARSS Section 6: 4-Class Partition]
-        F7 --> F8[Artifacts: RGBA PNG, GeoJSON, Class TIFF, JSON Report]
-    end
-
-    %% Pipeline 2: InSAR
-    ModeCheck -->|Mode: insar| InSARPipeline[Multi-Temporal InSAR Pipeline]
-    subgraph InSAR Pipeline [sar_science_processor --mode insar]
-        I1[Master & Slave SLC / GUNW] --> I2[Orbit State Vector Interpolation]
-        I2 --> I3[2D FFT Cross-Correlation Coregistration]
-        I3 --> I4[Interferogram Complex Conjugate]
-        I4 --> I5[Coherence SAT Window Filtering]
-        I5 --> I6[Adaptive Goldstein Spectral Filter]
-        I6 --> I7[SNAPHU Phase Unwrapping]
-        I7 --> I8[Line-of-Sight Displacement d = λφ / 4π]
-    end
-```
-
----
-
-## 3. The 1.157 Billion Pixel Breakthrough Architecture
-
-Handling full-scene NISAR swaths (e.g. the Ganga Alluvial Plain in Bihar: $33,696 \times 34,344$ pixels = 1.157 billion pixels per date) without running out of memory:
-
-### A. The 8×8 Integer Lattice Alignment
-- L-band shape: `33,696 × 34,344` ($10\text{ m}$ spacing) — exact multiple of 8.
-- S-band shape: `33,120 × 34,200` ($10\text{ m}$ spacing) — exact multiple of 8.
-- L-to-S origin offset: $\Delta X = 720\text{ m} = 72\text{ px}$, $\Delta Y = 2880\text{ m} = 288\text{ px}$ — exact multiple of 8.
-- At $8\times 8$ block multilooking ($80\text{ m} \times 80\text{ m}$ ground spacing), the L-band scene reduces from 1.157 billion pixels down to $4,212 \times 4,293$ ($18.08\text{M}$ pixels = **72 MB** per array).
-
-### B. Streaming Hyperslab Ingestion
-- `parse_nisar_full_scene_multilooked` uses `ChunkedF32Reader` to read **1,024-row horizontal hyperslabs** directly from HDF5.
-- Applies SIMD-accelerated block averaging with Rayon across CPU cores on the fly and discards raw bytes immediately.
-- Ingests $2.31\text{ billion}$ observations across two dates in **63 seconds** with **1.79 GB peak RAM**.
-
----
-
-## 4. InGARSS 2026 Section 6: 4-Class Temporal Dynamics
+| Part | Folder | Language | Job |
+|---|---|---|---|
+| Science engine | `sar_science_processor/` | Rust | Reads NISAR `.h5` files and makes the water / change maps |
+| Gateway | `sar-gateway/` | Rust (Axum, Tokio) | Web server on port 3000. Starts engine jobs, streams their logs, serves results and the dashboard |
+| Dashboard | `sar-dashboard-v3/` | React + Vite + Leaflet | The web page: pick granules, run a job, look at the maps |
+| Hackathon package | `ingarss_2026/` | Python (standard library for the checker) | Fusion, validation, maps and the reviewer checker for InGARSS 2026 |
 
 ```mermaid
 graph LR
-    subgraph Observation Dates
-        D1[Baseline: 26 Jul 2026]
-        D2[Active: 12 Sep 2026]
+    User([User in a browser])
+    subgraph Local computer
+        Dash[Dashboard<br/>sar-dashboard-v3/dist]
+        GW[Gateway<br/>sar-gateway :3000]
+        Eng[Science engine<br/>sar_science_processor]
+        Res[(sar-gateway/results/)]
+        H5[(NISAR .h5 granules<br/>on local disk)]
     end
+    ASF[(NASA ASF / Earthdata)]
 
-    subgraph Temporal Classification
-        D1 & D2 -->|Non-water at both| C0[Class 0: Stable Land<br/>Slate #64748b]
-        D1 & D2 -->|Water at both| C1[Class 1: Stable Water<br/>Cyan #00e5ff]
-        D1 & D2 -->|Land -> Water + Otsu| C24[Class 2-4: Water Gain / Inundation<br/>Crimson #ef4444 / Coral #f97316]
-        D1 & D2 -->|Water -> Land + ΔdB ≥ 3dB| C5[Class 5: Water Loss / Receded<br/>Warm Amber #f59e0b]
-    end
+    User --> Dash
+    Dash -- REST + live logs --> GW
+    GW -- starts as a child process --> Eng
+    H5 --> Eng
+    Eng -- PNG, GeoTIFF, GeoJSON, JSON --> Res
+    Res -- /results/* --> GW
+    GW -- search and download --> ASF
 ```
 
-Every area statistic generated by the processor and rendered by the dashboard provides **dual units**:
-- **Metric**: $\text{km}^2$
-- **Imperial**: Acres ($1\text{ ac} = 0.004046856\text{ km}^2$).
+All heavy work runs on the local computer. The radar files never leave it unless the user
+sends them somewhere.
 
 ---
 
-## 5. Gateway & Dashboard Integration Contract
+## 2. Science engine (`sar_science_processor`)
 
-1. **`sar-gateway` (Port 3000)**:
-   - Hosts the REST API (`/jobs`, `/search/nisar`, `/upload`) and SSE streams (`/jobs/:id/logs`).
-   - Preloads completed historical jobs from disk on startup, extracting exact WGS84 bounding boxes (`georef_bbox`).
-   - Serves the compiled production frontend (`sar-dashboard-v3/dist/`) via SPA fallback.
-2. **`sar-dashboard-v3`**:
-   - `FloodInsightPanel`: Displays the 4-class temporal partition, Otsu threshold metrics, and interactive cluster drill-down.
-   - `FloodEventReplay`: Manages the 3-phase temporal animation (`baseline` $\to$ `active` $\to$ `detected`), ensuring high-contrast SAR previews render without duplicate layer conflicts.
-   - `AnalysisReportModal`: Provides the executive disaster briefing and PDF export view.
+A command-line program. The gateway and the hackathon scripts both call it the same way.
+
+| Mode | Flag | What it does |
+|---|---|---|
+| Flood / water change | `--mode flood` | Two GCOV dates → water and change classes (the InGARSS method) |
+| GCOV image | `--mode gcov` | One GCOV date → a radar image |
+| InSAR | `--mode insar` | Two SLC dates → interferogram, coherence, phase, ground movement |
+
+Main source files:
+
+| File | Job |
+|---|---|
+| `main.rs` | Reads the command-line flags and runs the chosen mode |
+| `nisar_parser.rs` | Opens NISAR HDF5 files (pure-Rust `rustyhdf5` crate) and reads the grid and coordinates |
+| `windowed.rs` | Reads a part of a big dataset without loading all of it |
+| `multilook.rs` | Averages blocks of pixels |
+| `flood_detect.rs` | The 7-stage water change method and Otsu |
+| `io.rs` | Writes PNG, GeoTIFF (EPSG:32645), GeoJSON and the result JSON |
+| `insar.rs`, `coregister.rs`, `deramp.rs`, `phase_filter.rs`, `unwrap.rs`, `topo_phase.rs`, `infra_health.rs` | InSAR path |
+| `crash_journal.rs`, `sha256.rs`, `errors.rs` | Crash log, file hashes, error types |
+| `src/bin/gcov_*.rs` | Small test tools that compare our HDF5 reads with h5py byte for byte (`scripts/nisar_probe.py`) |
+
+### 2.1 How a full scene fits in memory
+
+One GCOV layer is about 33,696 × 34,344 pixels (1.16 billion values, 4.63 GB as `f32`).
+Loading two dates at once would need far more memory than a normal laptop has. So the
+engine never loads a full layer.
+
+```mermaid
+graph TD
+    A[GCOV layer on disk<br/>~33,696 × 34,344 at 10 m] -->|read 1,024 rows at a time| B[One strip in memory]
+    B -->|average each 8 × 8 block<br/>at least 32 of 64 pixels valid| C[One strip of the 80 m grid]
+    C -->|append| D[80 m grid<br/>4,212 × 4,293 ≈ 72 MB]
+    B -->|strip dropped| X((freed))
+```
+
+Measured on a 4-core workstation: each date pair takes 44–65 s with 1.87–2.32 GB peak memory.
+
+### 2.2 The flood path, step by step
+
+```mermaid
+graph TD
+    P[1 · Pair<br/>same band, same term HHHH, same grid] --> D[2 · dB<br/>10·log10 power, below −40 dB = no data, 40-pixel edge cut]
+    D --> M[3 · Speckle<br/>3 × 3 median of valid neighbours]
+    M --> C[4 · Change<br/>Δ = dB after − dB before]
+    C --> S[5 · Stable water<br/>below −13.0 dB on both dates]
+    C --> N[6 · New water<br/>seeds Δ < −5.0, grow into neighbours Δ < −2.5,<br/>opening, min 8 pixels]
+    S --> K[7 · Classes<br/>0 land · 1 stable water · 2/3 new water · 5 water loss]
+    N --> K
+    K --> O[Outputs<br/>class GeoTIFF, valid-support GeoTIFF, GeoJSON, PNG, JSON with areas]
+```
+
+S-band uses slightly different numbers (−12.5 dB stable water, −4.8 / −2.2 dB seed and
+growth). Otsu is computed and reported, but the seed stays at −5 dB because
+`seed = min(−5, Otsu, −3)`. Full details are in `ingarss_2026/TECHNICAL_NOTE.md`.
+
+---
+
+## 3. Gateway (`sar-gateway`)
+
+An Axum web server on `0.0.0.0:3000`.
+
+```mermaid
+graph TD
+    R[HTTP request] --> RL[Rate limit<br/>120 requests/min per IP<br/>6 new jobs/min per IP]
+    RL --> API{Route}
+    API -->|POST /jobs| J[jobs.rs<br/>starts sar_science_processor]
+    API -->|GET /jobs/:id/logs| L[Live log stream SSE]
+    API -->|/search/nisar, /asf/*| N[nasa_client.rs<br/>ASF search and download]
+    API -->|/results/*| F[Files in sar-gateway/results/]
+    API -->|anything else| SPA[Dashboard index.html]
+    J --> Q[Job queue<br/>MAX_CONCURRENT_JOBS, default 1]
+    Q --> E[Engine child process]
+    E -->|stdout lines| L
+    E -->|files| F
+```
+
+| File | Job |
+|---|---|
+| `main.rs` | Routes, CORS, serving the dashboard build, loading finished jobs on start |
+| `handlers.rs` | One function per route |
+| `jobs.rs` | Builds the engine command, runs it, keeps job status, cleans old jobs |
+| `nasa_client.rs`, `esa_client.rs` | Catalogue search and downloads |
+| `rate_limit.rs` | Per-IP request limits |
+| `models.rs` | Request and response types |
+
+Only the flood profile (`processor: "science"`) runs. The older `sar_processor` and the
+Kubernetes operator `sar_operator_v2` were removed from the repository, so the gateway now
+returns a clear error for the old InSAR and infrastructure profiles. The Kubernetes code path
+in `jobs.rs` is only used when `LOCAL_MODE=false`, which no launcher sets.
+
+---
+
+## 4. Dashboard (`sar-dashboard-v3`)
+
+React 19 + Vite. Built once with `npm run build`; the gateway then serves `dist/`, so Node is
+not needed to use it.
+
+| Folder | What is in it |
+|---|---|
+| `src/pages/marketing/` | Landing page |
+| `src/pages/DocsPage.jsx` | Documentation pages |
+| `src/pages/app/` | The working app: map, job form, flood replay, result panels |
+| `src/config/` | Gateway address (`api.js`) |
+
+Flood replay shows three steps: the before image, the after image, then the after image with
+the class map on top.
+
+---
+
+## 5. InGARSS 2026 package (`ingarss_2026/`)
+
+The package does not need the gateway or the dashboard. It calls the engine directly and
+then runs Python scripts.
+
+```mermaid
+graph TD
+    H5[(6 NISAR GCOV granules<br/>L: 26 Jul, 31 Aug, 12 Sep, 18 Oct<br/>S: 31 Aug, 12 Sep)] --> E[bin/sar_science_processor<br/>one run per date pair and band]
+    E --> R1[results/L_*, results/S_*<br/>class GeoTIFF + JSON]
+    H5 --> FU[scripts/run_ls_fusion_and_pol_assessment.py]
+    R1 --> FU
+    FU --> R2[results/LS_fused_aug31_sep12]
+    S2[(Sentinel-2 L2A<br/>29 Aug, 13 Sep)] --> V[scripts/validate_sentinel2.py<br/>scripts/check_sand_rule.py<br/>scripts/score_polarization_features.py]
+    R1 --> V
+    R2 --> V
+    V --> R3[results/validation/]
+    R1 --> MP[scripts/make_maps.py → maps/]
+    R2 --> MP
+    R1 --> WK[scripts/make_walkthrough.py<br/>scripts/build_walkthrough_doc.py → explainer/]
+    R1 & R2 & R3 --> MF[scripts/build_provenance_manifest.py<br/>SHA-256 of every file]
+    MF --> CK[run_bihar_analysis.py<br/>checks hashes, prints Tasks A–H,<br/>ends with ALL CHECKS PASSED]
+```
+
+A reviewer only needs Python 3 and `python3 run_bihar_analysis.py`. No granules or downloads.
+
+---
+
+## 6. Release builds
+
+```mermaid
+graph LR
+    GL[GitLab main] -->|.gitlab-ci.yml| LX[Linux build<br/>tar.gz + install.sh]
+    GL -->|mirror| GH[GitHub main]
+    GH -->|.github/workflows/deploy-dashboard.yml| WB[Windows build]
+    GH --> PG[Dashboard on GitHub Pages]
+    WB --> SETUP[NISAR-Pro-Setup-1.0.0.exe<br/>Inno Setup installer]
+    WB --> ZIP[Portable ZIP]
+```
+
+The Windows app is installed per user (no admin needed) into
+`%LOCALAPPDATA%\Programs\NISAR Pro`. It adds a Start Menu entry, an optional desktop icon and
+an uninstaller. `NISAR Pro.exe` (from `installer/launcher.rs`) starts the gateway in the
+background, waits for it, opens the dashboard, and shows a message box if something fails.
+See `installer/README.md`.
+
+---
+
+## 7. Folder map
+
+```
+sar_analyzer/
+├── sar_science_processor/   Rust science engine
+├── sar-gateway/             Rust web server (port 3000)
+├── sar-dashboard-v3/        React dashboard
+├── ingarss_2026/            InGARSS 2026 submission package
+├── installer/               Linux and Windows launchers, Windows installer script
+├── scripts/                 Helper scripts (note PDF, tunnel, data download, h5py check)
+├── Docs/                    Documentation
+└── Download/                ASF bulk download script (no stored login)
+```

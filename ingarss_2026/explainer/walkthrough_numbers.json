@@ -1,0 +1,214 @@
+{
+ "zoom_window": {
+  "row": 1036,
+  "col": 2659,
+  "size_km": 40,
+  "centre_lat": 25.35,
+  "centre_lon": 86.777
+ },
+ "example_pixels": {
+  "new_high": {
+   "lat": 25.3276,
+   "lon": 86.7683,
+   "class": 2,
+   "power_31aug": 0.0923,
+   "power_12sep": 0.0394,
+   "db_31aug": -10.35,
+   "db_12sep": -14.05,
+   "median_31aug": -10.35,
+   "median_12sep": -15.46,
+   "delta": -5.12
+  },
+  "new_medium": {
+   "lat": 25.329,
+   "lon": 86.7699,
+   "class": 3,
+   "power_31aug": 0.1069,
+   "power_12sep": 0.0369,
+   "db_31aug": -9.71,
+   "db_12sep": -14.33,
+   "median_31aug": -8.61,
+   "median_12sep": -12.81,
+   "delta": -4.2
+  },
+  "stable_water": {
+   "lat": 25.3485,
+   "lon": 86.7841,
+   "class": 1,
+   "power_31aug": 0.0369,
+   "power_12sep": 0.0194,
+   "db_31aug": -14.33,
+   "db_12sep": -17.13,
+   "median_31aug": -13.76,
+   "median_12sep": -15.67,
+   "delta": -1.92
+  },
+  "water_loss": {
+   "lat": 25.389,
+   "lon": 86.7674,
+   "class": 5,
+   "power_31aug": 0.0177,
+   "power_12sep": 0.025,
+   "db_31aug": -17.51,
+   "db_12sep": -16.01,
+   "median_31aug": -13.44,
+   "median_12sep": -10.02,
+   "delta": 3.41
+  },
+  "land": {
+   "lat": 25.35,
+   "lon": 86.777,
+   "class": 0,
+   "power_31aug": 0.2772,
+   "power_12sep": 0.1958,
+   "db_31aug": -5.57,
+   "db_12sep": -7.08,
+   "median_31aug": -6.09,
+   "median_12sep": -6.54,
+   "delta": -0.46
+  }
+ },
+ "otsu_db": {
+  "l": -3.26,
+  "s": -3.47
+ },
+ "stage_check": {
+  "engine_high_conf_px_in_window": 16289,
+  "share_with_recomputed_delta_below_minus5": 1.0
+ },
+ "pairs": {
+  "B1_L_jul26_aug31": {
+   "stable_water_km2": 2218.35,
+   "new_water_km2": 1695.81,
+   "new_high_km2": 922.73,
+   "new_medium_km2": 773.08,
+   "water_loss_km2": 1471.24,
+   "water_before_km2": 3689.59,
+   "water_after_km2": 3914.16,
+   "zoom_new_water_km2": 425.29,
+   "zoom_loss_km2": 9.17
+  },
+  "B2_L_aug31_sep12": {
+   "stable_water_km2": 3355.07,
+   "new_water_km2": 1166.21,
+   "new_high_km2": 713.74,
+   "new_medium_km2": 452.47,
+   "water_loss_km2": 889.96,
+   "water_before_km2": 4245.03,
+   "water_after_km2": 4521.28,
+   "zoom_new_water_km2": 162.76,
+   "zoom_loss_km2": 9.8
+  },
+  "B3_L_sep12_oct18": {
+   "stable_water_km2": 2046.59,
+   "new_water_km2": 239.6,
+   "new_high_km2": 43.48,
+   "new_medium_km2": 196.12,
+   "water_loss_km2": 2551.94,
+   "water_before_km2": 4598.52,
+   "water_after_km2": 2286.19,
+   "zoom_new_water_km2": 11.46,
+   "zoom_loss_km2": 514.5
+  },
+  "B4_S_aug31_sep12": {
+   "stable_water_km2": 2577.39,
+   "new_water_km2": 1174.89,
+   "new_high_km2": 749.43,
+   "new_medium_km2": 425.46,
+   "water_loss_km2": 217.17,
+   "water_before_km2": 2794.56,
+   "water_after_km2": 3752.28,
+   "zoom_new_water_km2": 167.55,
+   "zoom_loss_km2": 4.54
+  }
+ },
+ "fusion_vs_L_water_12sep": {
+  "kept_km2": 3542.31,
+  "removed_km2": 847.43,
+  "added_km2": 362.24
+ },
+ "dark_water_series_km2": {
+  "26 Jul": 4681.79,
+  "31 Aug": 4856.31,
+  "12 Sep": 4772.75,
+  "18 Oct": 2261.85
+ },
+ "dark_water_zoom_window_km2": {
+  "26 Jul": 212.9,
+  "31 Aug": 616.74,
+  "12 Sep": 811.83,
+  "18 Oct": 298.95
+ },
+ "dark_water_outside_zoom_km2": {
+  "26 Jul": 4468.89,
+  "31 Aug": 4239.57,
+  "12 Sep": 3960.92,
+  "18 Oct": 1962.9
+ },
+ "dark_water_footprint_km2": 55807.39,
+ "fused_common_footprint": {
+  "l_band_only": {
+   "stable_water_px": 517942,
+   "stable_water_km2": 3314.83,
+   "stable_water_acres": 819109.7,
+   "new_inundation_high_px": 110060,
+   "new_inundation_high_km2": 704.38,
+   "new_inundation_high_acres": 174056.6,
+   "new_inundation_med_px": 67618,
+   "new_inundation_med_km2": 432.76,
+   "new_inundation_med_acres": 106935.8,
+   "total_flood_px": 177678,
+   "total_flood_km2": 1137.14,
+   "total_flood_acres": 280992.4,
+   "receded_water_px": 138881,
+   "receded_water_km2": 888.84,
+   "receded_water_acres": 219636.1,
+   "stable_non_water_px": 8397305,
+   "stable_non_water_km2": 53742.75,
+   "stable_non_water_acres": 13280085.9,
+   "total_valid_km2": 59083.56
+  },
+  "s_band_only": {
+   "stable_water_px": 397871,
+   "stable_water_km2": 2546.37,
+   "stable_water_acres": 629221.1,
+   "new_inundation_high_px": 117098,
+   "new_inundation_high_km2": 749.43,
+   "new_inundation_high_acres": 185187.0,
+   "new_inundation_med_px": 66478,
+   "new_inundation_med_km2": 425.46,
+   "new_inundation_med_acres": 105133.0,
+   "total_flood_px": 183576,
+   "total_flood_km2": 1174.89,
+   "total_flood_acres": 290319.9,
+   "receded_water_px": 33591,
+   "receded_water_km2": 214.98,
+   "receded_water_acres": 53123.2,
+   "stable_non_water_px": 8616768,
+   "stable_non_water_km2": 55147.32,
+   "stable_non_water_acres": 13627160.1,
+   "total_valid_km2": 59083.56
+  },
+  "ls_fused": {
+   "stable_water_px": 414420,
+   "stable_water_km2": 2652.29,
+   "stable_water_acres": 655392.8,
+   "new_inundation_high_px": 147595,
+   "new_inundation_high_km2": 944.61,
+   "new_inundation_high_acres": 233417.1,
+   "new_inundation_med_px": 61334,
+   "new_inundation_med_km2": 392.54,
+   "new_inundation_med_acres": 96997.9,
+   "total_flood_px": 208929,
+   "total_flood_km2": 1337.15,
+   "total_flood_acres": 330414.9,
+   "receded_water_px": 113026,
+   "receded_water_km2": 723.37,
+   "receded_water_acres": 178747.2,
+   "stable_non_water_px": 8495431,
+   "stable_non_water_km2": 54370.76,
+   "stable_non_water_acres": 13435269.3,
+   "total_valid_km2": 59083.56
+  }
+ }
+}

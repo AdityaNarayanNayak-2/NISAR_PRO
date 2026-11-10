@@ -32,9 +32,10 @@ def git_value(root: Path, *args: str) -> str | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repository", type=Path, default=Path("."))
-    parser.add_argument("--package", type=Path, default=Path("ingarss_2026"))
-    parser.add_argument("--output", type=Path, default=Path("ingarss_2026/provenance_manifest.json"))
+    package_dir = Path(__file__).resolve().parent.parent
+    parser.add_argument("--repository", type=Path, default=package_dir.parent)
+    parser.add_argument("--package", type=Path, default=package_dir)
+    parser.add_argument("--output", type=Path, default=package_dir / "provenance_manifest.json")
     args = parser.parse_args()
 
     repository = args.repository.resolve()
@@ -45,6 +46,9 @@ def main() -> None:
     files = []
     for path in sorted(package.rglob("*")):
         if not path.is_file() or path.resolve() == output:
+            continue
+        if (path.name == "benchmarks.json" or path.name.endswith(".pyc") or "__pycache__" in path.parts
+                or path.name.startswith(".")):
             continue
         relative = path.relative_to(repository).as_posix()
         files.append({

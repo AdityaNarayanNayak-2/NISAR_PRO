@@ -659,6 +659,34 @@ fn main() -> Result<()> {
                 nisar_parser::parse_nisar_cropped(input, &cli.polarization, &crop_region)?
             };
             crash_journal::checkpoint_after_free("Active GCOV parsed");
+
+            // Full-scene products keep the exact granule UTM grid for GIS outputs.
+            // crop_origin_* holds the centre of the first native pixel here.
+            let utm_grid = if is_full_scene {
+                match (
+                    active_product.crs.strip_prefix("EPSG:326").and_then(|z| z.parse::<i32>().ok()),
+                    active_product.crop_origin_lon,
+                    active_product.crop_origin_lat,
+                    active_product.pixel_spacing_x_m,
+                    active_product.pixel_spacing_y_m,
+                ) {
+                    (Some(zone), Some(x0), Some(y0), Some(dx), Some(dy)) => {
+                        let (dx, dy) = (dx.abs(), dy.abs());
+                        Some(sar_science_processor::io::UtmGrid {
+                            epsg: 32600 + zone as u16,
+                            zone,
+                            northern: true,
+                            x_ul: x0 - dx / 16.0,
+                            y_ul: y0 + dy / 16.0,
+                            dx,
+                            dy,
+                        })
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            };
             let mut bbox = active_product.bbox.clone();
             let mut active_slc = active_product.slc;
 
@@ -942,11 +970,11 @@ fn main() -> Result<()> {
 
             // Save GeoTIFF classification raster (using compact 8-bit unsigned integer layout)
             let tif_path = format!("{}_flood_class.tif", base);
-            sar_science_processor::io::save_geotiff_u8(
-                class_map.view(),
-                &tif_path,
-                bbox_opt,
-            )?;
+            if let Some(grid) = utm_grid.as_ref() {
+                sar_science_processor::io::save_geotiff_u8_utm(class_map.view(), &tif_path, grid)?;
+            } else {
+                sar_science_processor::io::save_geotiff_u8(class_map.view(), &tif_path, bbox_opt)?;
+            }
 
             // Save RGBA colormapped PNG
             let png_path = format!("{}_flood.png", base);
@@ -969,11 +997,20 @@ fn main() -> Result<()> {
             // Save GeoJSON flood polygons
             let geojson_path = format!("{}_flood.geo.json", base);
             if let Some(bbox_val) = bbox_opt {
-                sar_science_processor::io::save_flood_geojson(
-                    class_map.view(),
-                    bbox_val,
-                    &geojson_path,
-                )?;
+                if let Some(grid) = utm_grid.as_ref() {
+                    sar_science_processor::io::save_flood_geojson_utm(
+                        class_map.view(),
+                        bbox_val,
+                        grid,
+                        &geojson_path,
+                    )?;
+                } else {
+                    sar_science_processor::io::save_flood_geojson(
+                        class_map.view(),
+                        bbox_val,
+                        &geojson_path,
+                    )?;
+                }
             }
 
             // Save Reproducible JSON Report

@@ -328,17 +328,30 @@ async fn spawn_local_job(
     // BINARY DISPATCH: SAR Science Processor vs Standard Processor
     // ═══════════════════════════════════════════════════════════════════
     let use_science = processor.as_deref() == Some("science");
-    let binary = if use_science {
-        find_science_processor_binary()
-    } else {
-        find_processor_binary()
-    };
+    if !use_science {
+        // The old sar_processor (InSAR / infrastructure modes) was removed from the repo.
+        let msg = "This mode needs the old sar_processor, which has been removed. Use the flood profile (sar_science_processor).";
+        error!("Job {}: {}", job_id, msg);
+        let mut m = metadata.write().await;
+        m.status = JobStatus::Failed(msg.to_string());
+        let _ = m.tx.send(format!("[ERROR] {}", msg));
+        return;
+    }
+    let binary = find_science_processor_binary();
     info!("Local Mode: Using binary at {:?} (science={})", binary, use_science);
 
     let mut cmd = Command::new(&binary);
     cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("RUST_LOG", "info");
+
+    // On Windows the gateway runs without a console, so stop each engine run
+    // from opening its own black console window.
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
 
     if use_science {
         // ── SAR Science Processor args ────────────────────────────────
@@ -577,29 +590,6 @@ async fn spawn_local_job(
             let _ = m.tx.send(format!("[SYSTEM] PROCESS_FAILED: {}", err));
         }
     }
-}
-
-/// Find the sar_processor binary, trying release then debug build
-fn find_processor_binary() -> String {
-    let possible_paths = [
-        "../sar_processor/target/release/sar_processor",
-        "../sar_processor/target/debug/sar_processor",
-        "./sar_processor",
-    ];
-
-    for p in &possible_paths {
-        if std::path::Path::new(p).exists() {
-            return p.to_string();
-        }
-        // Windows builds produce <name>.exe
-        let exe = format!("{}.exe", p);
-        if std::path::Path::new(&exe).exists() {
-            return exe;
-        }
-    }
-
-    // Fallback: assume it's in PATH (Command resolves the .exe there automatically)
-    "sar_processor".to_string()
 }
 
 /// Locate the sar_science_processor binary (SAR Science InSAR/GCOV engine)

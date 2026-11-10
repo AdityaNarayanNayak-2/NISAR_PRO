@@ -26,6 +26,7 @@ SarScienceFrontendExample/
 .vscode/
 .idea/
 .agents/
+.antigravity_brain
 # ══════════════════════════════════════════════
 # DOWNLOADED DATA — ASF granules are licensed, huge, and regenerable
 # ══════════════════════════════════════════════
@@ -58,3 +59,6 @@ tunnel_url.txt
 
 # Benchmarks
 benchmarks/
+
+# Generated walkthrough figures (rebuild with ingarss_2026/scripts/make_walkthrough.py)
+Docs/walkthrough_build/

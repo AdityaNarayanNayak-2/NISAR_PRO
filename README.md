@@ -214,12 +214,10 @@ sar_analyzer/
 ├── sar-gateway/                  Async Axum HTTP/SSE gateway, job supervisor & DAAC clients
 ├── sar-dashboard-v3/             React 19 + Leaflet + Vite interactive web application
 ├── installer/                    Windows launcher and Linux launcher/installer
-├── ingarss_2026/                 Official IEEE InGARSS 2026 submission artifacts & notebooks
-│   ├── notebooks/                Jupyter notebooks (NISAR_Bihar_Flood_Lifecycle.ipynb)
-│   ├── results/                  Full-scene GeoTIFF, PNG, and GeoJSON outputs
+├── ingarss_2026/                 Official IEEE InGARSS 2026 submission artifacts
+│   ├── results/                  Full-scene GeoTIFF, JSON and GeoJSON outputs
 │   └── provenance_manifest.json  SHA-256 integrity and execution provenance
-├── scripts/                      Scientific verification & fusion automation scripts
-│   ├── run_ls_fusion_and_pol_assessment.py
+├── scripts/                      Utility scripts
 │   └── nisar_probe.py
 ├── results/                      Generated GeoTIFFs, telemetry JSONs, and PNG figures
 ├── Docs/                         Comprehensive user & architecture documentation

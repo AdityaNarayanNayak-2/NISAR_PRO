@@ -1,0 +1,15 @@
+{
+  "runs": [
+    {
+      "label": "--mode flood --input NISAR_L2_PR_GCOV_030_098_A_014_4005_DHDH_A_20260912T233810_20260912T233845_P05023_N_F_J_001.h5 --slave NISAR_L2_PR_GCOV_029_098_A_014_4005_DHDH_A_20260831T233810_20260831T233845_P05023_N_F_J_001.h5 --crop-preset full --swath-edge-erosion 40 --radar-band l --output L",
+      "seconds": 50.062,
+      "returncode": 0
+    },
+    {
+      "label": "--mode flood --input NISAR_S2_UR_GCOV_030_098_A_014_3700_DHNA_A_20260912T233809_20260912T233846_P00500_N_F_I_001.h5 --slave NISAR_S2_UR_GCOV_029_098_A_014_3700_DHNA_A_20260831T233810_20260831T233846_P00500_M_F_I_001.h5 --crop-preset full --swath-edge-erosion 40 --radar-band s --output S",
+      "seconds": 64.839,
+      "returncode": 0
+    }
+  ],
+  "note": "Wall-clock seconds measured with run_bihar_analysis.py --run-engine on a 4-core, 15 GB Linux workstation. File names only; folders removed."
+}

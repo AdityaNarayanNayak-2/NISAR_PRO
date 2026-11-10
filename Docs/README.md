@@ -54,11 +54,11 @@ For reference, the source code components are laid out as follows:
 
 ```
 nisar_pro/
-├── sar_science_processor/  → Pure-Rust SAR science engine (RDA / InSAR / flood detection)
-├── sar_processor/          → SAR processing engine builds (CLI worker)
+├── sar_science_processor/  → Rust SAR science engine (GCOV flood detection, InSAR)
 ├── sar-gateway/            → Async Axum REST/SSE API gateway (tokio, kube-rs)
 ├── sar-dashboard-v3/       → React client, Leaflet viewer, /docs route
-├── sar_operator_v2/        → Kubernetes operator (job CRDs)
+├── ingarss_2026/           → InGARSS 2026 submission package
+├── installer/              → Linux and Windows launchers, Windows installer
 ├── Docs/                   → Comprehensive documentation (You are here!)
 └── .github/                → Workflow automation
 ```

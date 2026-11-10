@@ -84,7 +84,12 @@ async fn main() {
         }
     };
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    // NISAR_BIND=127.0.0.1 keeps the server on this computer only (the desktop launchers set it).
+    let host: std::net::IpAddr = std::env::var("NISAR_BIND")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| std::net::IpAddr::from([0, 0, 0, 0]));
+    let addr = SocketAddr::new(host, 3000);
     info!("🚀 SAR Gateway listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
