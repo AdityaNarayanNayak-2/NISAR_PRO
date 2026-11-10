@@ -1,8 +1,8 @@
 {
   "manifest_version": 1,
-  "created_utc": "2026-11-10T11:50:49.453610+00:00",
+  "created_utc": "2026-11-10T13:03:35.718109+00:00",
   "git": {
-    "commit": "7c39958f5ae22b721ddcf5c7057cd1b8478a1b92",
+    "commit": "cd54502c2dfafe3e72ddbeb0ce9a4dde3a1cd25b",
     "branch": "dev"
   },
   "runtime": {
@@ -19,8 +19,8 @@
     },
     {
       "path": "ingarss_2026/README.md",
-      "bytes": 19979,
-      "sha256": "95888e5a064118cb1743e028796483f19b1fc09e1d9788eb80406840621d3d73"
+      "bytes": 20245,
+      "sha256": "dc3cc0d81f539c04380b456d10253959b46c87cfeffdc80303226f3140431bb1"
     },
     {
       "path": "ingarss_2026/TECHNICAL_NOTE.md",
@@ -104,8 +104,13 @@
     },
     {
       "path": "ingarss_2026/presentation.pdf",
-      "bytes": 2014296,
-      "sha256": "7e9a105dadcf1ef012dbf5edfc3b5f32b257e7a018029522c8502bc2256cb395"
+      "bytes": 2420095,
+      "sha256": "c89cbe859d63843b6040d0f4b519bf333adf2e218b44a80b6b10135dfd09af6e"
+    },
+    {
+      "path": "ingarss_2026/presentation.pptx",
+      "bytes": 2223383,
+      "sha256": "05ddc0a2aadc77d578a346acb581355b92217a1e904b5b14cec8a2ba277f36d4"
     },
     {
       "path": "ingarss_2026/results/LS_fused_aug31_sep12/fusion_diagnostics.json",

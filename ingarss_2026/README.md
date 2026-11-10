@@ -50,7 +50,7 @@ folder that contains `ingarss_2026`.
 **4. Read the output.** In order:
 
 1. **File check.** Every file in this folder is compared with its SHA-256 fingerprint in
-   `provenance_manifest.json`. You should see `49 of 49 files match their SHA-256 hash.` A changed file is
+   `provenance_manifest.json`. You should see `50 of 50 files match their SHA-256 hash.` A changed file is
    listed by name.
 2. **Results for Tasks A to H** of the problem statement, in the same order. Every number is read
    from the JSON files in `results/`; none is typed into the script.
@@ -74,7 +74,8 @@ The checker only reads files. It writes nothing unless you add `--run-engine`, w
 
 ## Step 2: look at the maps and data (optional)
 
-- Open `TECHNICAL_NOTE.pdf`, `presentation.pdf` and the `maps/` PNGs in any viewer.
+- Open `TECHNICAL_NOTE.pdf`, `presentation.pdf` and the `maps/` PNGs in any viewer. `presentation.pptx`
+  opens in PowerPoint, LibreOffice Impress or ONLYOFFICE.
 - Open the GeoTIFFs in `results/*/` in QGIS: *Layer → Add Layer → Add Raster Layer*. They are
   EPSG:32645 with 80 m pixels. To colour them by class, use *Symbology → Paletted/Unique values*
   with the class codes listed further down.
@@ -87,7 +88,7 @@ The checker only reads files. It writes nothing unless you add `--run-engine`, w
 | File | What it is |
 |---|---|
 | `TECHNICAL_NOTE.pdf` | The technical note, 4 pages, IEEE two-column layout with 3 figures (source text: `TECHNICAL_NOTE.md`) |
-| `presentation.pdf` | 8 slides, built by `scripts/build_presentation.py` in the GitLab repo |
+| `presentation.pdf` | 8 slides. `presentation.pptx` is the same deck as a PowerPoint file |
 | `explainer/NISAR_Pro_Visual_Walkthrough.pdf` | 13 pages: each processing stage with real pixels, before/after images for every date pair, and a time-lapse |
 | `explainer/timelapse_L_band.gif` | The four L-band dates as an animation |
 | `maps/fig0` to `fig5` | AOI map, change maps, water masks, new water, the season, Sentinel-2 scores. Each shows dates, legend, CRS, 80 m and data source |
@@ -120,7 +121,8 @@ The checker only reads files. It writes nothing unless you add `--run-engine`, w
 | `note_figures/` | `scripts/make_note_figures.py`. The 3 figures of the technical note: two compressed walkthrough figures (the 7 stages and the time-lapse) and the L-band vs S-band comparison |
 | `provenance_manifest.json` | `scripts/build_provenance_manifest.py`. A SHA-256 fingerprint of every file, so anyone can check nothing changed |
 | `benchmarks.json` | `run_bihar_analysis.py --run-engine`. Measured engine run times |
-| `presentation.pdf`, `TECHNICAL_NOTE.pdf` | `scripts/build_presentation.py` and `scripts/build_note_pdf.sh` in the GitLab repository (printed with Chrome) |
+| `presentation.pptx`, `presentation.pdf` | `scripts/build_presentation_pptx.py` in the GitLab repository (python-pptx); the PDF is the PPTX exported with LibreOffice |
+| `TECHNICAL_NOTE.pdf` | `scripts/build_note_pdf.sh` in the GitLab repository (printed with Chrome) |
 
 All GeoTIFFs are EPSG:32645 (UTM zone 45N) with 80 m pixels. They open in QGIS or any GIS.
 Class codes: 0 land or outside the scene, 1 stable water, 2 new water (high confidence),
@@ -222,11 +224,11 @@ Steps c and d read the packaged `results/` folder, so they check the packaged ma
 on your own outputs from steps a and b, copy those files over the packaged ones first. After that,
 Step 1 reports those files as changed, which is expected.
 
-The PDFs are printed with Chrome. For the walkthrough, run `make_walkthrough.py` with `--out explainer`,
+The walkthrough and the technical note are printed with Chrome. For the walkthrough, run `make_walkthrough.py` with `--out explainer`,
 then `python3 scripts/build_walkthrough_doc.py`, print `explainer/walkthrough.html` with the Chrome
 command at the top of that script, and delete the `walk_*.png` and `walkthrough.html` working files
-from `explainer/`. The technical note and slides are built by `scripts/build_note_pdf.sh` and
-`scripts/build_presentation.py` in the GitLab repository.
+from `explainer/`. The technical note is built by `scripts/build_note_pdf.sh` and the slides by
+`scripts/build_presentation_pptx.py` (needs `pip install python-pptx`), both in the GitLab repository.
 After any change inside this folder, run `python3 scripts/build_provenance_manifest.py` so Step 1
 passes again.
 

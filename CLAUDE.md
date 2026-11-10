@@ -174,7 +174,7 @@ npm run build
 
 Package files, how each was made and how to check them are listed in `ingarss_2026/README.md`.
 
-1. **Presentation**: `presentation.pdf` (8 slides), built by `python3 scripts/build_presentation.py` (also rebuilds the manifest). A designed PPTX version is being finalised from `~/Downloads/NISAR Pro - InGARSS 2026 Presentation (fixed).pptx`.
+1. **Presentation**: `presentation.pptx` (8 slides, plain Office theme, native chart and tables) built by `python3 scripts/build_presentation_pptx.py` (python-pptx), and `presentation.pdf` exported from it with LibreOffice. Rebuild the manifest after changing either.
 2. **Maps**: `maps/` and `results/`. Class GeoTIFFs are EPSG:32645.
 3. **Code**: `run_bihar_analysis.py` plus `scripts/`. The notebook was removed by Aditya's decision; do not reintroduce it.
 4. **README**: `README.md`.
