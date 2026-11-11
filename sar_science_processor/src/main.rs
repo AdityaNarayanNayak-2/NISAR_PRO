@@ -89,25 +89,28 @@ struct Cli {
     #[arg(long, value_name = "GUNW_FILE")]
     gunw: Option<PathBuf>,
 
-    /// Minimum dB change threshold required for flood candidates (default: -3.0 dB)
-    #[arg(long, default_value = "-3.0", allow_hyphen_values = true)]
-    min_change_db: f32,
+    // Detection settings. When a flag is omitted the radar-band default is used
+    // (FloodDetectionOptions::for_band); when given, it is applied as is, on any band.
 
-    /// Seed dB threshold for region growing (default: -5.0 dB)
-    #[arg(long, default_value = "-5.0", allow_hyphen_values = true)]
-    seed_threshold_db: f32,
+    /// Minimum dB change for flood candidates (band default: L -3.0, S -2.7)
+    #[arg(long, allow_hyphen_values = true)]
+    min_change_db: Option<f32>,
 
-    /// Growth dB threshold for region growing (default: -2.5 dB)
-    #[arg(long, default_value = "-2.5", allow_hyphen_values = true)]
-    growth_threshold_db: f32,
+    /// Seed dB threshold for region growing (band default: L -5.0, S -4.8)
+    #[arg(long, allow_hyphen_values = true)]
+    seed_threshold_db: Option<f32>,
 
-    /// Minimum connected component area in pixels (default: 8)
-    #[arg(long, default_value = "8")]
-    min_area_pixels: usize,
+    /// Growth dB threshold for region growing (band default: L -2.5, S -2.2)
+    #[arg(long, allow_hyphen_values = true)]
+    growth_threshold_db: Option<f32>,
 
-    /// Swath boundary erosion in pixels to eliminate edge roll-off artifacts (default: 3)
-    #[arg(long, default_value = "3")]
-    swath_edge_erosion: usize,
+    /// Minimum connected component area in pixels (band default: 8)
+    #[arg(long)]
+    min_area_pixels: Option<usize>,
+
+    /// Swath boundary erosion in pixels to remove edge roll-off (band default: 3)
+    #[arg(long)]
+    swath_edge_erosion: Option<usize>,
 
     /// Permanent-water floor in dB; omitted uses the calibrated radar-band default
     #[arg(long, allow_hyphen_values = true)]
@@ -910,21 +913,21 @@ fn main() -> Result<()> {
             };
             let mut pipeline_opts = sar_science_processor::flood_detect::FloodDetectionOptions::for_band(band);
 
-            // Apply overrides only if explicitly specified by user via CLI
-            if cli.min_change_db != -3.0 {
-                pipeline_opts.min_change_db = cli.min_change_db;
+            // Flags given on the command line replace the band defaults, on every band.
+            if let Some(v) = cli.min_change_db {
+                pipeline_opts.min_change_db = v;
             }
-            if cli.seed_threshold_db != -5.0 {
-                pipeline_opts.seed_threshold_db = cli.seed_threshold_db;
+            if let Some(v) = cli.seed_threshold_db {
+                pipeline_opts.seed_threshold_db = v;
             }
-            if cli.growth_threshold_db != -2.5 {
-                pipeline_opts.growth_threshold_db = cli.growth_threshold_db;
+            if let Some(v) = cli.growth_threshold_db {
+                pipeline_opts.growth_threshold_db = v;
             }
-            if cli.min_area_pixels != 8 {
-                pipeline_opts.min_area_pixels = cli.min_area_pixels;
+            if let Some(v) = cli.min_area_pixels {
+                pipeline_opts.min_area_pixels = v;
             }
-            if cli.swath_edge_erosion != 3 {
-                pipeline_opts.swath_edge_erosion_pixels = cli.swath_edge_erosion;
+            if let Some(v) = cli.swath_edge_erosion {
+                pipeline_opts.swath_edge_erosion_pixels = v;
             }
             if let Some(threshold) = cli.permanent_water_thresh_db {
                 pipeline_opts.permanent_water_thresh_db = threshold;
@@ -993,6 +996,24 @@ fn main() -> Result<()> {
             } else {
                 None
             };
+
+            // Web maps draw images on Web Mercator. Re-grid the three PNGs from the
+            // UTM grid so they line up exactly; the GeoTIFF stays on its native grid.
+            let mut overlay_bbox: Option<[f64; 4]> = None;
+            if let Some(grid) = utm_grid.as_ref() {
+                let (rows, cols) = (class_map.nrows(), class_map.ncols());
+                overlay_bbox = Some(sar_science_processor::io::warp_png_to_web_mercator(&png_path, grid, cols, rows)?);
+                sar_science_processor::io::warp_png_to_web_mercator(&active_preview_path, grid, cols, rows)?;
+                if let Some(ref p) = baseline_preview_path {
+                    sar_science_processor::io::warp_png_to_web_mercator(p, grid, cols, rows)?;
+                }
+                if let Some([w, s, e, n]) = overlay_bbox {
+                    println!(
+                        "{}",
+                        serde_json::json!({"event": "georef", "bbox": {"south": s, "north": n, "west": w, "east": e}})
+                    );
+                }
+            }
 
             // Save GeoJSON flood polygons
             let geojson_path = format!("{}_flood.geo.json", base);
@@ -1064,12 +1085,16 @@ fn main() -> Result<()> {
                     "threshold_method": "otsu_on_change_image",
                     "threshold_db": report.otsu_threshold_db,
                     "raw_otsu_db": report.raw_otsu_threshold_db,
-                    "min_change_db": cli.min_change_db,
-                    "seed_threshold_db": cli.seed_threshold_db,
-                    "growth_threshold_db": cli.growth_threshold_db,
+                    // Values the pipeline really used (band defaults included).
+                    "min_change_db": pipeline_opts.min_change_db,
+                    "seed_threshold_db": pipeline_opts.seed_threshold_db,
+                    "growth_threshold_db": pipeline_opts.growth_threshold_db,
+                    "permanent_water_thresh_db": pipeline_opts.permanent_water_thresh_db,
+                    "swath_edge_erosion_px": pipeline_opts.swath_edge_erosion_pixels,
+                    "min_area_pixels": pipeline_opts.min_area_pixels,
                     "speckle_filter": "median_3x3",
                     "region_growing": true,
-                    "morphology": format!("open_3x3 + close_3x3 + cc_filter_{}px", cli.min_area_pixels),
+                    "morphology": format!("open_3x3 + close_3x3 + cc_filter_{}px", pipeline_opts.min_area_pixels),
                     "coherence_used": coherence.is_some()
                 },
                 "crop": {
@@ -1077,12 +1102,17 @@ fn main() -> Result<()> {
                     "center_lon": crop_lon,
                     "preset": cli.crop_preset
                 },
-                "georef_bbox": bbox.as_ref().map(|bb| serde_json::json!({
-                    "south": bb.south,
-                    "north": bb.north,
-                    "west": bb.west,
-                    "east": bb.east
-                })),
+                // Bounds of the PNG overlays as drawn on a web map.
+                "georef_bbox": match overlay_bbox {
+                    Some([w, s, e, n]) => Some(serde_json::json!({"south": s, "north": n, "west": w, "east": e})),
+                    None => bbox.as_ref().map(|bb| serde_json::json!({
+                        "south": bb.south,
+                        "north": bb.north,
+                        "west": bb.west,
+                        "east": bb.east
+                    })),
+                },
+                "overlay_crs": if overlay_bbox.is_some() { "EPSG:3857" } else { "EPSG:4326" },
                 "replay": {
                     "available": baseline_preview_path.is_some(),
                     "baseline_preview": baseline_preview_path,
@@ -1110,7 +1140,11 @@ fn main() -> Result<()> {
                     "receded_water_acres": receded_water_acres,
                     "receded_water_km2": receded_water_acres * acres_to_km2,
                     "stable_non_water_acres": stable_non_water_acres,
-                    "stable_non_water_km2": stable_non_water_acres * acres_to_km2
+                    "stable_non_water_km2": stable_non_water_acres * acres_to_km2,
+                    // Pixels with data on both dates: use this, not total_area, for percentages.
+                    "valid_pixels": report.valid_pixels,
+                    "valid_area_acres": report.valid_pixels as f64 * pixel_area_acres,
+                    "valid_area_km2": report.valid_pixels as f64 * pixel_area_acres * acres_to_km2
                 },
                 "flood_regions": report.flood_regions_count,
                 "confidence_reasons": report.confidence_reasons,

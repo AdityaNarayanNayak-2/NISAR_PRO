@@ -13,7 +13,7 @@ NISAR Pro is split into three high-performance tiers:
 sar_analyzer/
 ├── sar_science_processor/   # [Tier 1] Pure Rust SAR scientific engine (Rayon, chunked HDF5, Otsu, 4-class flood detection)
 ├── sar-gateway/             # [Tier 2] Axum + Tokio backend (0.0.0.0:3000), SSE log streaming, persistent job preloading
-├── sar-dashboard-v3/        # [Tier 3] React 19 + Vite + Leaflet web dashboard, dark-mode geospatial UI
+├── sar-dashboard-v3/        # [Tier 3] React 19 + Vite + MapLibre GL web dashboard
 ├── Docs/                    # Full technical documentation, research briefs, and blog drafts
 └── sar-gateway/results/     # Canonical storage for preloaded showcase runs
 ```
@@ -50,12 +50,12 @@ The flood engine (`sar_science_processor/src/flood_detect.rs`) does NOT just do 
 
 | Class | Category | Condition | UI Color & Hex |
 |---|---|---|---|
-| **0** | **Stable Non-Water Land** | Non-water at both dates | Slate `#64748b` |
-| **1** | **Stable Water Body** | Water at both dates | Cyan `#00e5ff` |
-| **2** | **Newly Inundated (High Conf)** | Region-grown pixel with change below the seed threshold (Otsu is reported; it does not bind unless below the seed) | Crimson `#ef4444` |
-| **3** | **Newly Inundated (Med Conf)** | Region-grown pixel between the growth and seed thresholds | Coral `#f97316` |
-| **4** | **Newly Inundated (Low Conf)** | Secondary water classification | Orange `#fb923c` |
-| **5** | **Water Loss / Receded Water** | Baseline $< -15\text{dB}$, Active $\ge -15\text{dB}$, $\Delta\text{dB} \ge +3.0\text{dB}$ | Warm Amber `#f59e0b` |
+| **0** | **Stable Non-Water Land** | Non-water at both dates | Slate `#64748b` (not painted on the map) |
+| **1** | **Stable Water Body** | Water at both dates | Deep blue `#2f5aa6` |
+| **2** | **Newly Inundated (High Conf)** | Region-grown pixel with change below the seed threshold (Otsu is reported; it does not bind unless below the seed) | Blue `#3d8df0` |
+| **3** | **Newly Inundated (Med Conf)** | Region-grown pixel between the growth and seed thresholds | Light blue `#82b8f4` |
+| **4** | **Newly Inundated (Low Conf)** | Secondary water classification | Pale blue `#c2dbf7` |
+| **5** | **Water Loss / Receded Water** | Baseline $< -15\text{dB}$, Active $\ge -15\text{dB}$, $\Delta\text{dB} \ge +3.0\text{dB}$ | Amber `#d4892f` |
 
 ### Measurement Units Rule
 - Every metric in UI panels, reports, and logs MUST provide **dual units**:
@@ -67,43 +67,58 @@ The flood engine (`sar_science_processor/src/flood_detect.rs`) does NOT just do 
 
 ## 4. Visual & UI System Rules
 
-### A. Flood Event Replay (`FloodEventReplay.jsx`)
-- Supports 3 sequential timeline phases:
-  1. `baseline`: Renders pre-flood radar observation (`*_flood_baseline.png`).
-  2. `active`: Renders post-flood radar observation (`*_flood_active.png`).
-  3. `detected`: Renders active SAR background at 0.65 opacity with the derived flood detection mask (`*_flood.png`) overlaid on top.
-- **De-duplication**: When `viewingResult.floodReplayAvailable` is true, `AppDashboard.jsx` delegates image overlay rendering **exclusively** to `FloodEventReplay`. Do NOT render duplicate `ImageOverlay` elements in `AppDashboard.jsx`.
-- **Playback**: Pressing `PLAY` at the end (`phaseIndex === 2`) rewinds to `baseline` and plays. `REPLAY` rewinds to index 0 and immediately triggers playback.
+The colours above are what the dashboard paints (`CLASSES` in
+`sar-dashboard-v3/src/pages/app/lib/report.js`). The engine writes separate key colours per class
+into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the class back from those
+(`FLOOD_PNG_COLORS`) and repaints it. Change the keys in both files together.
 
-### B. SAR Radar Imagery & Transparency (`io.rs`)
-- In `save_sar_image`:
-  - NISAR GCOV pixel values are **real linear powers** ($\sigma^0$ or $\gamma^0$). Do NOT square them again.
-  - Zero / no-data pixels outside the rotated satellite swath MUST be excluded from percentile contrast calculations ($p_2$ and $p_{98}$).
-  - SAR preview images MUST be saved as **transparent RGBA PNGs**:
-    - Valid swath: Crisp grayscale $0\text{–}255$, $\text{alpha} = 255$.
-    - No-data / border: $\text{alpha} = 0$ (transparent).
+### A. Dashboard (`/app`)
+- Structure and data flow: `Docs/Architecture/sar_dashboard_internals.md`. Design: `Docs/Dashboard_Design_Spec.md` §13 (v3).
+- Obsidian, achromatic chrome: no cyan, teal or neon in the UI. Colour only on data (map classes,
+  charts, status dots). Panels `rgba(18,19,22,.84)` blur 28 px, radius 24; porcelain `#f3f4f6`
+  primary button; Plus Jakarta Sans, sentence case.
+- Full-screen dark satellite map (Esri World Imagery, desaturated in MapLibre paint, Esri places on
+  top). Floating nav pill top left (Live Map, Time Series, Regions, Reports, Processing, Evaluation
+  Hub), command pill top right (place or lat, lon search, engine state), left bento stack (system
+  status with the flood extent of the run in focus, latest four run cards), one 380 px right panel
+  for the tab. Each fact has one owner tab; never show it twice. Nothing is tied to one region.
+- `/app` opens on Live Map with no run (no result numbers). A result shows only after a run is opened.
+- Dashboard wording: "Flood extent" plus the note "Water detected by radar … Not confirmed on
+  the ground." The InGARSS package keeps "newly detected water" (§10.4).
+- Sentinel-2 scores appear only in Validation, only for runs whose track/frame/dates match the
+  study (`public/reference/sentinel2_validation.json`, a copy), labelled as agreement.
+- `method.threshold_db` is Otsu capped at the minimum change, not the applied threshold. The seed
+  used is `min(seed, threshold_db)`; label it that way.
+- Replay phases: `baseline`, `active`, `detected` (active at 0.65 + classes). Only `map/MapView.jsx`
+  adds map layers. Every area through `<Area>`/`formatArea` (km² + acres). Missing value prints "—".
+- Place names: gateway `GET /geocode/reverse` (OpenStreetMap Nominatim, 1 request/s, cached in
+  `results/geocode_cache.json`). Demo data stores them per run. Place search for the command pill:
+  `GET /geocode/search?q=` (same limits, cached in memory).
 
-### C. API Client (`api.js`)
-- `api(path)` MUST check if `path` is already an absolute URL (`http://`, `https://`, `blob:`, `data:`). Never prepend gateway base if it is already absolute.
+### B. Map rendering (`io.rs`)
+- Full-scene PNGs (class overlay + both radar previews) are re-gridded to Web Mercator by
+  `warp_png_to_web_mercator`; `georef_bbox` in the report is their bounds. GeoTIFFs stay on UTM.
+- Radar previews are real linear power (do not square), percentile stretch on valid pixels only,
+  transparent outside the swath. A full scene is drawn at full 80 m resolution (no downsampling
+  below 4,800 px) and written as grey + alpha. The map draws image pixels sharp (nearest) from
+  zoom 10 and smoothed below it.
 
----
+## 5. Gateway runs (`sar-gateway/results/jobs/<id>/`)
 
-## 5. Showcase Datasets (Preserved & Organised)
-
-The repository keeps two clean, canonical showcases in `sar-gateway/results/`:
-1. **`sar-bihar-lband-full` (Primary Hackathon Showcase)**:
-   - Location: Ganga Alluvial Plain (Begusarai–Khagaria), Bihar, India.
-   - Products: `2026-09-12` (Active) vs `2026-07-26` (Baseline) LSAR GCOV.
-   - Total Area: $115,725.5\text{ km}^2$ ($28.6\text{M}$ acres).
-   - Inundated: $2,501.63\text{ km}^2$ ($618,165\text{ ac}$).
-   - Receded: $2,184.10\text{ km}^2$ ($539,702\text{ ac}$).
-2. **`assam_flood_pair` (Secondary Showcase)**:
-   - Location: Brahmaputra Valley (Dibrugarh–Dhemaji Sector), Assam, India.
-   - $20\text{ km} \times 20\text{ km}$ crop preset.
-
-**Note**: Do NOT reintroduce Kundra test files or arbitrary multi-hundred MB scratch `.tif` dumps into `results/`.
-
----
+- Each run folder holds `job.json`, `run.log`, the report, PNGs, GeoJSON and class GeoTIFF.
+  Startup loads every folder; runs with the same fingerprint (files + crop + thresholds) are
+  duplicates and only the newest is kept. A request identical to a finished run returns it
+  (`reused: true`) unless `force: true`. Details at the top of `sar-gateway/src/jobs.rs`.
+- The four Bihar full-scene runs (L 26 Jul→31 Aug, L 31 Aug→12 Sep, L 12 Sep→18 Oct,
+  S 31 Aug→12 Sep, `--crop-preset full --swath-edge-erosion 40`) reproduce the package numbers
+  on their own grids (e.g. L Aug→Sep new water 1,166.21 km², 288,178 ac).
+- Website demo data: `python3 sar-dashboard-v3/scripts/build_demo_data.py` with the gateway running.
+- Only the flood pipeline runs; the Kubernetes job path was removed.
+- NASA catalog: `GET /search/nisar` (ASF search, no login) and `GET /asf/download-stream` (needs
+  `EARTHDATA_TOKEN` in `sar-gateway/.env`); downloads land in `sar-gateway/data/`, which `/scenes` reads.
+- Engine detection flags (`--seed-threshold-db`, `--growth-threshold-db`, `--min-change-db`,
+  `--min-area-pixels`, `--swath-edge-erosion`) are optional: omitted means the band default
+  (`FloodDetectionOptions::for_band`), given means applied on any band.
 
 ## 6. How to Build & Verify
 
@@ -111,7 +126,7 @@ The repository keeps two clean, canonical showcases in `sar-gateway/results/`:
 ```bash
 cd sar_science_processor
 cargo test
-# All 70 unit tests must pass: 70 passed; 0 failed
+# All unit tests must pass (74 passed; 0 failed on 2026-11-11)
 ```
 
 ### Compiling & Running Backend

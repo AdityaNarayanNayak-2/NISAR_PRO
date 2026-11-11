@@ -7,7 +7,8 @@ INSTALL_ROOT="${NISAR_PRO_HOME:-$HOME/.local/share/nisar-pro/$VERSION}"
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 ARCHIVE_URL="${NISAR_PRO_ARCHIVE_URL:-__NISAR_PRO_ARCHIVE_URL__}"
 
-if [[ "$ARCHIVE_URL" == __NISAR_PRO_ARCHIVE_URL__ ]]; then
+# CI fills in the URL with sed, so test for "not a URL" rather than for the placeholder text.
+if [[ "$ARCHIVE_URL" != http* ]]; then
   echo "Set NISAR_PRO_ARCHIVE_URL to the Linux release archive URL." >&2
   exit 1
 fi

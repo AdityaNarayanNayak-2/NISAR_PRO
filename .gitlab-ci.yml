@@ -68,6 +68,11 @@ build_linux_release:
     sed "s|__NISAR_PRO_ARCHIVE_URL__|${ARCHIVE_URL}|" installer/install.sh > "release/install.sh"
     chmod +x "release/install.sh"
     curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file release/install.sh "${PACKAGE_BASE_URL}/install.sh"
+    # Same two files under the fixed version "latest", so README links never go stale.
+    # GitLab serves the newest upload when a file name repeats.
+    export LATEST_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/nisar-pro/latest"
+    curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz" "${LATEST_URL}/NISAR-Pro-${RELEASE_VERSION}-linux-x86_64.tar.gz"
+    curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file release/install.sh "${LATEST_URL}/install.sh"
   artifacts:
     name: "NISAR-Pro-${RELEASE_VERSION}-linux-x86_64"
     paths:

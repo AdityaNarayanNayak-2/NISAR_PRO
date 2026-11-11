@@ -6,8 +6,9 @@ import Footer from './components/Footer'
 
 const HomePage = lazy(() => import('./pages/marketing/LandingPage'))
 const DocsPage = lazy(() => import('./pages/DocsPage'))
-const AppLayout = lazy(() => import('./pages/app/AppLayout'))
-const AppDashboard = lazy(() => import('./pages/app/AppDashboard'))
+const Workspace = lazy(() => import('./pages/app/Workspace'))
+const InsarPaused = lazy(() => import('./pages/app/InsarPaused'))
+const ReportPage = lazy(() => import('./pages/app/ReportPage'))
 
 import './App.css'
 
@@ -29,9 +30,9 @@ function App() {
 <Route path="/docs" element={<DocsPage />} />
 
             {/* App */}
-            <Route path="/app" element={<AppLayout />}>
-              <Route index element={<AppDashboard />} />
-            </Route>
+            <Route path="/app" element={<Workspace />} />
+            <Route path="/app/insar" element={<InsarPaused />} />
+            <Route path="/app/report/:id" element={<ReportPage />} />
           </Routes>
         </AnimatePresence>
       </Suspense>

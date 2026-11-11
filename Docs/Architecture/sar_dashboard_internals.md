@@ -1,196 +1,119 @@
-# React Dashboard Component Internals & Architecture (Phase 1 & Phase 2)
+# Dashboard internals (`/app`)
 
-> Location: `sar-dashboard-v3/` — High-performance tactical control plane built with React 19, Vite, Leaflet, Zustand, Framer Motion, and Vanilla CSS.
+Location: `sar-dashboard-v3/src/pages/app/`. React 19, Vite, MapLibre GL, zustand, plain CSS.
+Design rules and the reasons behind them: `Docs/Dashboard_Design_Spec.md` §13 (look) and §12 (content).
 
-This document serves as the comprehensive architectural and developer reference for the NISAR Pro web application. Following the Phase 1 and Phase 2 refactoring, the dashboard transitioned from an unwieldy single-file state monolith into a decoupled, store-driven, multi-profile command center.
+## Layout
 
----
-
-## 1. Directory Structure & File Map
-
-```
-sar-dashboard-v3/src/
-├── main.jsx                       → React DOM bootstrap & global stylesheet mounting
-├── App.jsx                        → Route orchestrator (Home, /app dashboard, /preview)
-├── config/
-│   └── api.js                     → Centralized API URL resolver (configurable backend host/port)
-├── components/
-│   ├── Navbar.jsx                 → Public landing page navigation bar
-│   └── ProcessingPipeline.jsx     → Animated terminal log stream visualizer
-└── pages/
-    └── app/
-        ├── AppDashboard.jsx       → Central orchestrator, Leaflet map view & layout grid
-        ├── InfrastructurePanel.jsx→ Dam stability, PS-InSAR telemetry & sensor context (Gold Theme)
-        ├── constants.js           → Typography (`MONO`, `SANS`), profile tokens, and tactical colors (`C`, `TM`)
-        ├── helpers.js             → SAR filename parser, metric formatters, severity colors
-        │
-        ├── stores/                → Zustand Stores (Phase 1: State Unification)
-        │   ├── useGatewayStore.js → Gateway online health checks & ping intervals
-        │   ├── useMapStore.js     → Map coordinates, bounds, viewingResult, layer opacity & toggles
-        │   └── useJobStore.js     → Job queue, live SSE logs, terminal visibility, pipeline stages
-        │
-        ├── layout/                → Modular Tactical UI Components (Phases 1 & 2)
-        │   ├── TopBar.jsx         → Profile switcher, metadata ribbon, live UTC clock, report trigger
-        │   ├── BottomStrip.jsx    → Processing summary strip (flood detection algorithm & metrics)
-        │   ├── CoordinatesHud.jsx → Floating cursor latitude/longitude & radar metadata pill
-        │   ├── TerminalDrawer.jsx → Slide-up terminal drawer with live pulse and log parsing
-        │   ├── ProcessingProgressBar.jsx → Real-time 5-stage pipeline progress bar (Phase 2A)
-        │   ├── MapLayerControls.jsx      → Floating opacity slider & 4-tier classification toggles (Phase 2B)
-        │   └── RunHistorySidebar.jsx     → Collapsible recent runs sidebar with instant map loading (Phase 2C)
-        │
-        ├── hooks/                 → Custom React Hooks (Phase 2D)
-        │   └── useKeyboardShortcuts.js   → Tactical hotkeys (T, Esc, N, R, 1-5) with input guards
-        │
-        └── flood/                 → Flood & Inundation Subsystem
-            ├── FloodConfigPanel.jsx   → File inputs, geographic crop presets, threshold sliders
-            ├── FloodInsightPanel.jsx  → Flood analytics, area breakdowns, and polygon inspection
-            ├── AnalysisReportModal.jsx→ Full-screen multi-page mission report generator
-            ├── WorkspaceSidebar.jsx   → 5-tab workspace navigation (Map, TimeSeries, Regions, etc.)
-            ├── TimeSeriesView.jsx     → Inundation progression charts over time
-            ├── RegionsView.jsx        → Tabular polygon explorer sorted by confidence and acreage
-            ├── ProcessingView.jsx     → Algorithm parameter audit & pipeline telemetry
-            ├── DataExportsView.jsx    → GeoJSON, GeoTIFF, and report download manager
-            ├── SettingsView.jsx       → Algorithm tuning & baseline configuration
-            └── floodReportHelpers.js  → Robust JSON report parsing and metric calculations
-```
-
----
-
-## 2. Store-Driven Architecture (Phase 1 Decomposition)
-
-Prior to Phase 1, `AppDashboard.jsx` was a 1,620-line monolith containing over 50 individual `useState` declarations. State is now cleanly segregated across 3 specialized Zustand stores, decoupling state management from JSX rendering:
+The map fills the screen. Everything else floats on it as obsidian glass with a 20 px gap
+(`workspace.css`, `.ws`). `--L`, `--R`, `--B` mark the free map area between the panels; map
+controls, the timeline and the log stay inside it, and camera fits use it too
+(`freePadding()` in `map/mapHandle.js`).
 
 ```
-                          ┌───────────────────────┐
-                          │   AppDashboard.jsx    │
-                          │  (Layout Coordinator) │
-                          └───────────┬───────────┘
-                                      │
-          ┌───────────────────────────┼───────────────────────────┐
-          ▼                           ▼                           ▼
-┌───────────────────┐       ┌───────────────────┐       ┌───────────────────┐
-│  useGatewayStore  │       │    useMapStore    │       │    useJobStore    │
-├───────────────────┤       ├───────────────────┤       ├───────────────────┤
-│ • gatewayOnline   │       │ • mouseCoords     │       │ • jobs (map)      │
-│ • checkHealth()   │       │ • mapBounds       │       │ • activeJobId     │
-│                   │       │ • flyToCenter     │       │ • logs (by jobId) │
-│                   │       │ • drawnAoi        │       │ • activeJobStage  │
-│                   │       │ • viewingResult   │       │ • terminalOpen    │
-│                   │       │ • layerOpacity    │       │ • elapsed timers  │
-│                   │       │ • showPermWater   │       │ • appendLog()     │
-│                   │       │ • showHighConf    │       │                   │
-│                   │       │ • showMedConf     │       │                   │
-│                   │       │ • showLowConf     │       │                   │
-└───────────────────┘       └───────────────────┘       └───────────────────┘
+┌ /// NISAR Pro · Flood ▾ · Live Map  Time Series  Regions  Reports  Processing  Evaluation Hub ┐  ┌ ⌕ place or lat, lon · ● Online ┐  ┌ right panel 380 px ┐
+┌ System status ─────────┐  ┌ Layers ┐                                  zoom, basemap         │ tab content        │
+│ Sensor · Runs          │                                                                    │                    │
+│ Scenes · Earthdata     │                                                                    │                    │
+│ Flood extent 1,166.21  │                                                                    │                    │
+│ ╲__ sparkline          │                                                                    │                    │
+├ Runs ─────── All runs ─┤                    replay pill                                     │                    │
+│ [L 31 Aug→12 Sep ↗] …  │        ┌ timeline: ●26 Jul ──L── ●31 Aug ═L/S═ ●12 Sep ──L── ●18 Oct ┐                    │
 ```
 
-### 2.1. Store Descriptions
-* **`useGatewayStore`**: Continuously monitors backend API health (`/health` or `/status`), setting the operational status pill in the TopBar and HUD.
-* **`useMapStore`**: Single source of truth for GIS operations. Tracks crosshair coordinates, bounding boxes, active raster overlay payloads (`viewingResult`), layer opacity, and individual confidence classification layer toggles.
-* **`useJobStore`**: Manages the life cycle of analysis tasks. Receives real-time streaming output via Server-Sent Events (SSE), parses stage transitions, tracks execution timers, and controls the terminal drawer state.
+- Keys: `1`–`6` tabs, `[` left stack, `]` right panel, `L` log, `N` processing, `Ctrl+Shift+F`
+  search, `Esc` cancels map picking or selection.
+- Below 1480 px the command pill moves to the top right of the free map. Below 1024 px the tabs
+  become a select, the left stack starts hidden and the panel floats over the map. Below 768 px the
+  panel is a bottom sheet.
 
----
+## Who owns what (no fact twice)
 
-## 3. Extracted Layout Components (Phase 1)
+| Place | Shows |
+|---|---|
+| Left: System status | sensor bands with runs, finished runs, scenes on disk, Earthdata login; flood extent of the open run (or the latest) with a sparkline of its frame's periods |
+| Left: Runs | latest four runs as cards; "All runs" opens every run grouped by track·frame (delete, cancel) |
+| Command pill | place search (`/geocode/search`) or lat, lon; engine state |
+| Live Map | no run: what NISAR Pro does, how a run works. Run: honest note, radar and pass time, "in this view" / drawn-area sum, confidence split, warnings |
+| Time Series | flood extent per period on this frame (chart), periods as rows, water on each date |
+| Regions | 10 largest areas with OSM place names, areas by size |
+| Reports | situation report, CSV and files, class table, threshold ruler and method, product facts |
+| Processing | scenes (this computer or NASA catalog), area, polarization, all detection settings with a live dB ruler, optional GUNW and water mask, exact command; progress of a running run |
+| Evaluation Hub | Sentinel-2 agreement (InGARSS study) when track/frame/dates match; else an empty state |
+| Timeline (map) | acquisitions of the frame; runs as spans, L lane and S lane; click to open |
 
-### 3.1. `TopBar.jsx`
-* **Role**: Fixed 42px header providing global context.
-* **Features**:
-  * Profile dropdown switcher (Infrastructure vs. Flood Monitoring vs. SAR Science).
-  * Dynamic metadata ribbon when viewing flood results (showing location, acquisition dates, flood acreage, UTM grid, EPSG code).
-  * Real-time UTC digital clock updated each second.
-  * Trigger for opening the deep-dive Analysis Report Modal.
+## Files
 
-### 3.2. `BottomStrip.jsx`
-* **Role**: Tactical footer status strip docked between the left sidebar and right panel.
-* **Features**: Displays detection methodology (e.g., Log-ratio + Otsu threshold in dB), detected polygon counts, and total elapsed runtime.
+```
+pages/app/
+├── Workspace.jsx          shell, keyboard shortcuts, starts the store
+├── ReportPage.jsx         /app/report/:id — A4 situation report (print / PDF), report.css
+├── InsarPaused.jsx        /app/insar
+├── workspace.css          tokens + all workspace styles
+├── shell/                 NavPill, CommandBar, LeftStack, RunSwitcher, LogDrawer, Toasts
+├── inspector/             Inspector (tab switch), Views (one per tab), Home, Brief and Analysis
+│                          (sections used by Views), useRunAreas, TrendChart, Validation
+├── form/                  ProcessPanel, CatalogSearch, validateRun.js
+├── map/                   MapView (only file that adds map layers), MapControls, Timeline, mapHandle.js
+├── ui/                    Area, DbRuler, Icon, Menu, Dialog
+├── lib/
+│   ├── gateway.js         data source (local / demo / offline), fetch helpers
+│   ├── report.js          parses <id>_flood.json; class display colours and PNG key colours
+│   ├── regions.js         region list, hotspots, sums in a box, size histogram, periods, CSV
+│   ├── places.js          nearest place (gateway /geocode/reverse, or demo data)
+│   ├── validation.js      matches a run to the Sentinel-2 study tests
+│   └── runInfo.js, units.js, classRaster.js
+└── stores/
+    ├── useRunStore.js     runs, open run, view, reports, regions, scenes, logs (SSE), toasts
+    └── useMapStore.js     replay, layers, selection, view bounds, drawn area, map picking, preview outline
+```
 
-### 3.3. `CoordinatesHud.jsx`
-* **Role**: Semi-transparent floating HUD positioned at the bottom left of the map viewport.
-* **Features**: Displays dynamic cursor latitude and longitude to 4 decimal places, radar frequency band (L-Band), flight direction (Ascending/Descending), and gateway connection status.
+## Data sources
 
-### 3.4. `TerminalDrawer.jsx`
-* **Role**: Slide-up execution terminal log viewer with event-stream parsing.
-* **Features**:
-  * Real-time SSE line consumption from `/jobs/:id/logs`.
-  * JSON event parser identifying `[progress]`, `[georef]`, `[flood_report]`, and `[output]` packets.
-  * Color-coded logs (Red for errors, Green for complete, Cyan for system events, Gold for CFAR, Purple for InSAR).
-  * Docked `SHOW LOG` minimized button when the drawer is closed.
+| Mode | When | Data |
+|---|---|---|
+| `local` | `GET /jobs/health-ping` returns `{status: "ok"}` | live gateway |
+| `demo` | public site, or no gateway and `/demo/runs.json` exists | `public/demo/`, read-only |
+| `offline` | neither | nothing; Retry |
 
-### 3.5. `FloodConfigPanel.jsx`
-* **Role**: Left-hand configuration sidebar for flood analysis.
-* **Features**:
-  * Local file selection and NASA ASF catalog search integration.
-  * Quick geographic crop presets (`Bihar Ganga (InGARSS Full Scene)`, `Brahmaputra Valley`, `Upper Kolab Dam`) and custom lat/lon bounding.
-  * Presets for full-scene ingestion (`--crop-preset full`), `20x20km`, `10x10km`, `5x5km`, and `1x1km`.
-  * Dual-threshold sliders for minimum backscatter drop, seed threshold, and region growing limits.
+Demo data: `python3 sar-dashboard-v3/scripts/build_demo_data.py` with the gateway running. It takes
+only full-scene runs without setting overrides, converts images to WebP, and stores OpenStreetMap
+names for each run's ten largest areas.
 
-### 3.6. `FloodEventReplay.jsx`
-* **Role**: Bottom-docked acquisition timeline and flood progression player.
-* **Features**:
-  * Scans across 3 distinct observation states:
-    1. **BASELINE**: Renders the pre-flood radar observation (`*_flood_baseline.png`) with transparent background.
-    2. **ACTIVE**: Renders the monsoon / peak-flood radar observation (`*_flood_active.png`).
-    3. **RESULT**: Overlays the derived 4-class flood detection mask atop the active radar terrain.
-  * Tactical playback controls (`PLAY` / `PAUSE` at 1.8s cadence, `REPLAY` with instant rewind to baseline).
-  * Layer de-duplication: Delegates overlay rendering exclusively to the replay viewport when replay assets are available, preventing black flicker and z-index collisions.
+## Gateway contract
 
----
+- `GET /jobs` → runs, newest first: `id`, `status`, `created_at`, `bbox` (overlay bounds),
+  `summary` (band, dates, crop, areas in km² and acres), `artifacts`, `fingerprint`, `request`.
+- `POST /jobs` → `{job_id, reused}`; 400 `{error}` on a bad request. Accepts `polarization`,
+  `gunw_file`, `water_mask` and every detection setting. Identical request → existing run unless
+  `force: true`.
+- `GET /jobs/:id/logs` → SSE. Saved runs replay `run.log` (or `crash_journal.log` for old folders).
+- `GET /scenes` → GCOV files in `NISAR_DATA_DIRS`, or `sar-gateway/data`, `~/nisar_data`,
+  `~/Desktop/nisar_data`, `~/Downloads`.
+- `GET /search/nisar?bbox=&start_date=&end_date=&relative_orbit=&asfframe=` → ASF catalog results.
+- `GET /asf/download-stream?granule_id=&url=` → SSE progress; file saved in `sar-gateway/data/`.
+- `GET /asf/auth-status` → whether an Earthdata token or login is set.
+- `GET /geocode/reverse?lat=&lon=` → `{name, area, country}` from Nominatim, cached on disk.
+- `GET /geocode/search?q=` → up to 5 `{label, lat, lon, bbox}` from Nominatim, cached in memory.
+- `DELETE /jobs/:id`, `POST /jobs/:id/cancel`.
 
-## 4. Tactical Command Center Enhancements (Phase 2)
+## Map rendering
 
-Phase 2 transformed the dashboard into a professional, command-center-grade operations deck (similar to tactical aerospace and defense SAR interfaces like ICEYE):
+- Basemap: Esri World Imagery as a MapLibre raster with `raster-saturation -0.72`,
+  `raster-brightness-max 0.55`, `raster-contrast 0.22`; Esri boundaries and places on top at 0.65.
+  The globe button hides the imagery (plain dark). Run layers sit between the two.
+- The engine writes the PNGs on Web Mercator and reports their bounds in `georef_bbox`.
+  The GeoTIFF stays on UTM. Radar previews are full 80 m resolution (grey + alpha).
+- Image layers use `nearest` resampling from zoom 10 (sharp pixels) and `linear` below.
+- `classRaster.js` reads each class back from the engine's key colour (`FLOOD_PNG_COLORS`) and
+  repaints only the switched-on classes in the display colours (`CLASSES`).
+- Region polygons are invisible hit areas with hover and selection outlines, plus class-coloured
+  edges from zoom 9 so flood areas read like crisp polygons. Hotspot rows set the same hover state.
+- Shapes source: crop box, catalog footprint, drawn area and box being drawn, all white dashed.
 
-### 4.1. Phase 2A — Real-Time 5-Stage Progress Bar (`ProcessingProgressBar.jsx`)
-* **Location**: Docked below TopBar across the map area (`top: 42px`, `left: 196px`, `right: 340px`, height `40px`).
-* **Conditional Visibility**: Automatically activates when `activeJob.status === 'running'`.
-* **5 Monitored Stages**:
-  ```
-  [1: LOADING ACTIVE] → [2: LOADING BASELINE] → [3: DETECTING] → [4: OUTPUTS] → [5: COMPLETE]
-  ```
-* **Telemetry**: Synchronized with Rust engine SSE progress events. Current and completed stages light up in tactical cyan (`#0F969C`), with active pulsing indicators on the currently executing stage.
+## Rules
 
-### 4.2. Phase 2B — Map Layer Toggle Controls (`MapLayerControls.jsx`)
-* **Location**: Floating glassmorphism panel at `top: 90px`, `left: 216px`, `width: 200px`.
-* **Custom Opacity Slider**:
-  * Styled with a dark `#2A2A2A` track and an accent cyan thumb.
-  * Dynamically controls `<ImageOverlay opacity={layerOpacity} />` between 0% and 100%.
-* **Custom Tactical Toggles (No Default Checkboxes)**:
-  * 5 custom tactical sliding switches with colored status dots matching the InGARSS Section 6 spec:
-    * 🔵 **Stable Water Body** (`#00e5ff` / Cyan) — Class 1
-    * 🔴 **Water Gain (High Confidence)** (`#ef4444` / Crimson) — Class 2
-    * 🟠 **Water Gain (Moderate Confidence)** (`#f97316` / Coral) — Class 3
-    * 🟡 **Water Gain (Low Confidence)** (`#fb923c` / Orange) — Class 4
-    * 🟠 **Water Loss / Receded Water** (`#f59e0b` / Warm Amber) — Class 5
-  * When a layer is toggled off, `<GeoJSON>` renders matching features with `fillOpacity: 0, opacity: 0, stroke: false`. Automatic key invalidation guarantees zero-latency visual updates.
-
-### 4.3. Phase 2C — Run History Sidebar (`RunHistorySidebar.jsx`)
-* **Location**: Floating collapsible panel below layer controls (`top: 254px`, `left: 216px`, `width: 200px`).
-* **Features**:
-  * Sorted chronologically with newest runs at the top.
-  * Status indicator dots: 🟢 Completed (`C.stable`), 🟡 Running (`#E6A817` with glow pulse), 🔴 Failed (`C.critical`).
-  * Hover highlights and active job borders in `C.accent.flood`.
-  * **One-Click Viewing**: Clicking a finished run instantly loads its GeoTIFF overlay, GeoJSON polygons, and analysis report onto the map, auto-panning the camera to its geographic centroid. Clicking a running job opens the terminal.
-
-### 4.4. Phase 2D — Tactical Keyboard Shortcuts (`useKeyboardShortcuts.js`)
-* **Form-Control Safeguards**: Automatically disabled when user focus is inside any `<input>`, `<textarea>`, `<select>`, or `contentEditable` element. Ignores system hotkey combinations (`Ctrl`, `Alt`, `Meta`).
-* **Hotkeys Reference**:
-  | Key | Action | Description |
-  |:---:|---|---|
-  | <kbd>T</kbd> | Toggle Terminal | Opens or closes the real-time processing log drawer. |
-  | <kbd>Escape</kbd> | Dismiss Overlays | Closes open modals and collapses the terminal drawer. |
-  | <kbd>N</kbd> | New Run | Clears active viewing result and switches to the map configuration view. |
-  | <kbd>R</kbd> | View Report | Opens the comprehensive flood analysis report modal. |
-  | <kbd>1</kbd> | Map View | Switches flood workspace view to Map View. |
-  | <kbd>2</kbd> | Time Series | Switches flood workspace view to Inundation Time Series. |
-  | <kbd>3</kbd> | Regions View | Switches flood workspace view to Flood Regions table. |
-  | <kbd>4</kbd> | Processing View | Switches flood workspace view to Processing Audit telemetry. |
-  | <kbd>5</kbd> | Data Exports | Switches flood workspace view to GeoTIFF & GeoJSON downloads. |
-
----
-
-## 5. Development Guidelines & Best Practices
-
-1. **Strict Store Usage**: Never re-introduce local state in `AppDashboard.jsx` for features needed across multiple layout components. Add state properties and setters to the appropriate store in `src/pages/app/stores/`.
-2. **Typography & Styling**: Always use `MONO` for telemetry, tabular numbers, and tactical labels. Use `SANS` for long-form descriptions and narrative reports. Never use system default fonts or default browser form inputs.
-3. **Map Performance**: When rendering high-density GeoJSON features, ensure unique, cache-invalidating `key` strings are utilized so Leaflet updates layer styles without forcing an entire map remount.
+- Every area through `<Area>` or `formatArea` (km² and acres from one value).
+- No number that is not in the run's files. Sums and shares are labelled "computed".
+- `threshold_db` is Otsu capped at the minimum change; the seed used is `min(seed, threshold_db)`.
+- Sentinel-2 numbers are "agreement", never "accuracy", and only for matching study dates.

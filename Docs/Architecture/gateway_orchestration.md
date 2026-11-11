@@ -67,7 +67,7 @@ The heavy lifting happens in `sar-gateway/src/jobs.rs`.
 ### Job Initialization
 `spawn_processing_job()` generates a UUID. It creates a `tokio::sync::broadcast::channel` for streaming logs and registers a `JobMetadata` object into the global `state.jobs` map.
 
-It checks the `LOCAL_MODE` environment variable. If true (the default for the desktop app), it spawns an asynchronous Tokio task to run `spawn_local_job`. (If false, it uses the Kubernetes API to deploy a CRD `SarJob` to a Flux-managed cluster).
+It checks the `LOCAL_MODE` environment variable. If true (the default for the desktop app), it spawns an asynchronous Tokio task to run `spawn_local_job`. (The Kubernetes job path was removed on 2026-11-11; only local runs exist.)
 
 ### Binary Resolution & Subprocess Execution
 Inside `spawn_local_job`, the gateway dynamically locates the compiled scientific compute binary. It prioritizes the modern SAR science engine:

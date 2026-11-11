@@ -1,0 +1,20 @@
+{
+  "name": "nisar-pro-intro",
+  "private": true,
+  "description": "NISAR Pro intro video (Remotion). Pictures come from scripts/make_assets.py.",
+  "scripts": {
+    "assets": "python3 scripts/make_assets.py",
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Intro out/nisar-pro-intro-16x9.mp4 && remotion render src/index.ts IntroSquare out/nisar-pro-intro-1x1.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.542",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.542"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}

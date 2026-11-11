@@ -8,30 +8,35 @@ pub struct SearchQuery {
     pub end_date: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+/// Body of `POST /jobs`. Unknown fields sent by older dashboards are ignored.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct ProcessRequest {
+    /// Later ("active") GCOV granule path.
     pub input_file: Option<String>,
+    /// Earlier ("baseline") GCOV granule path.
     pub slave_file: Option<String>,
-    pub synthetic: Option<bool>,
+    /// Only "flood" is supported by the science processor.
     pub pipeline: Option<String>,
     pub crop_lat: Option<f64>,
     pub crop_lon: Option<f64>,
-    pub crop_radius_km: Option<f64>,
-    /// Which binary to use: "standard" (sar_processor) or "science" (sar_science_processor)
-    pub processor: Option<String>,
-    /// Crop preset for SAR Science: "1x1km", "5x5km", "1x2km"
+    /// "full", "20x20km", "10x10km", "5x5km", "1x1km"
     pub crop_preset: Option<String>,
-    // ── Flood Mapping Parameters ─────────────────────────────────────────
     pub gunw_file: Option<String>,
+    /// Optional reference water mask (GeoTIFF) passed as --water-mask.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub water_mask: Option<String>,
     pub min_change_db: Option<f32>,
     pub seed_threshold_db: Option<f32>,
     pub growth_threshold_db: Option<f32>,
     pub min_area_pixels: Option<usize>,
+    /// "l" or "s"
     pub radar_band: Option<String>,
     pub permanent_water_thresh_db: Option<f32>,
     pub swath_edge_erosion: Option<usize>,
     pub polarization: Option<String>,
-    pub multilook_factor: Option<usize>,
+    /// Run again even if an identical finished run exists.
+    #[serde(default)]
+    pub force: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

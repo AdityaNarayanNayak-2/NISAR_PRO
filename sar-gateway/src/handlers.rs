@@ -38,49 +38,37 @@ pub async fn search_nisar_handler(Query(params): Query<NisarSearchQuery>) -> Jso
     }
 }
 
+/// Start a water-change run. Returns 400 with a message if the request is invalid.
+/// If an identical finished run exists, its id is returned with `reused: true`.
 pub async fn start_job_handler(
     State(state): State<crate::AppState>,
     Json(payload): Json<ProcessRequest>,
-) -> Json<serde_json::Value> {
-    let is_synthetic = payload.synthetic.unwrap_or(false);
-    let job_id = crate::jobs::spawn_processing_job(
-        state.clone(), 
-        payload.input_file, 
-        payload.slave_file,
-        is_synthetic,
-        payload.pipeline,
-        payload.crop_lat,
-        payload.crop_lon,
-        payload.crop_radius_km,
-        payload.processor,
-        payload.crop_preset,
-        payload.gunw_file,
-        payload.min_change_db,
-        payload.seed_threshold_db,
-        payload.growth_threshold_db,
-        payload.min_area_pixels,
-        payload.radar_band,
-        payload.permanent_water_thresh_db,
-        payload.swath_edge_erosion,
-        payload.polarization,
-        payload.multilook_factor,
-    ).await;
-    
-    Json(json!({
-        "job_id": job_id,
-        "status": "queued"
-    }))
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match crate::jobs::start_job(state, payload).await {
+        Ok(r) => Ok(Json(json!({
+            "job_id": r.job_id,
+            "status": if r.reused { "completed" } else { "queued" },
+            "reused": r.reused
+        }))),
+        Err(msg) => Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg })))),
+    }
 }
 
+/// GCOV scenes found on this computer, for the run form.
+pub async fn list_scenes_handler() -> Json<Vec<crate::jobs::SceneFile>> {
+    Json(tokio::task::spawn_blocking(crate::jobs::list_scenes).await.unwrap_or_default())
+}
+
+/// All runs, newest first.
 pub async fn list_jobs_handler(
     State(state): State<crate::AppState>,
 ) -> Json<Vec<crate::jobs::JobResponse>> {
     let jobs = state.jobs.read().await;
-    let mut list = Vec::new();
+    let mut list = Vec::with_capacity(jobs.len());
     for metadata_lock in jobs.values() {
-        let metadata = metadata_lock.read().await;
-        list.push(metadata.to_response());
+        list.push(metadata_lock.read().await.to_response());
     }
+    list.sort_by(|a, b| b.created_at.cmp(&a.created_at).then_with(|| a.id.cmp(&b.id)));
     Json(list)
 }
 
@@ -141,8 +129,7 @@ pub async fn prune_jobs_handler(
         Ok(summary) => Ok(Json(json!({
             "status": "pruned",
             "jobs_deleted": summary.jobs_deleted,
-            "files_deleted": summary.files_deleted,
-            "freed_bytes": summary.freed_bytes
+            "files_deleted": summary.files_deleted
         }))),
         Err(e) => {
             log::error!("Prune jobs error: {}", e);

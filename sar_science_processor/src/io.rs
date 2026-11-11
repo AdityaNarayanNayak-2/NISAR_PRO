@@ -11,7 +11,7 @@ const GAMMA: f32 = 0.5;
 ///
 /// Applies industry-standard SAR display processing:
 /// 1. Calculate intensity (magnitude squared)
-/// 2. Spatial Multilooking (block averaging) to reduce dimensions and speckle
+/// 2. Spatial Multilooking (block averaging) only when larger than 4,800 px
 /// 3. Log10 scaling (dB-like, adds 1e-10 to avoid log(0))
 /// 4. Percentile-based contrast stretch (2nd–98th percentile)
 /// 5. Gamma correction (γ = 0.6) to brighten mid-tones
@@ -23,7 +23,10 @@ pub fn save_sar_image(
     let cols = complex_image.ncols();
 
     // ── 1. Determine Downsampling (Multilooking) Factor ──────────────────
-    let max_dimension = 2048;
+    // A full GCOV scene is already averaged to an 80 m grid (about 4,300 px a side),
+    // so it is drawn at full resolution and stays sharp when the map zooms in.
+    // Only larger arrays (raw SLC) are averaged down.
+    let max_dimension = 4800;
     let factor = (rows.max(cols) as f32 / max_dimension as f32)
         .ceil()
         .max(1.0) as usize;
@@ -815,6 +818,91 @@ impl UtmGrid {
     }
 }
 
+/// Re-grid a PNG rendered on a UTM grid onto Web Mercator (EPSG:3857), in place.
+///
+/// Web maps (Leaflet, MapLibre) place an image by stretching it linearly between
+/// two corner points in Web Mercator. A UTM raster is rotated relative to that, so
+/// drawing it directly misplaces pixels by up to several km at the scene corners.
+/// This resamples (nearest neighbour, so class colours stay exact) onto a regular
+/// Mercator grid and returns its bounds as `[west, south, east, north]` degrees.
+///
+/// `full_cols`/`full_rows` are the size of `grid`; the PNG may be an integer
+/// downsample of it (the radar previews are).
+pub fn warp_png_to_web_mercator(
+    path: &str,
+    grid: &UtmGrid,
+    full_cols: usize,
+    full_rows: usize,
+) -> Result<[f64; 4]> {
+    let src = image::open(path)
+        .map_err(|e| crate::errors::ProcessorError::ProcessingError(format!("read {}: {}", path, e)))?
+        .to_rgba8();
+    let (w, h) = (src.width() as usize, src.height() as usize);
+    let fx = (full_cols / w.max(1)).max(1) as f64;
+    let fy = (full_rows / h.max(1)).max(1) as f64;
+    let (pdx, pdy) = (grid.dx * fx, grid.dy * fy);
+
+    // Bounds: walk the edge of the PNG's footprint.
+    let (mut west, mut east, mut south, mut north) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+    let steps = 64;
+    for i in 0..=steps {
+        let t = i as f64 / steps as f64;
+        for (c, r) in [(t * w as f64, 0.0), (t * w as f64, h as f64), (0.0, t * h as f64), (w as f64, t * h as f64)] {
+            let (lat, lon) = crate::nisar_parser::utm_to_latlon(
+                grid.x_ul + c * pdx,
+                grid.y_ul - r * pdy,
+                grid.zone,
+                grid.northern,
+            );
+            west = west.min(lon);
+            east = east.max(lon);
+            south = south.min(lat);
+            north = north.max(lat);
+        }
+    }
+
+    let merc = |lat: f64| (std::f64::consts::FRAC_PI_4 + lat.to_radians() / 2.0).tan().ln();
+    let (y_top, y_bot) = (merc(north), merc(south));
+    let x_span = (east - west).to_radians();
+    let out_w = w;
+    let out_h = ((out_w as f64) * (y_top - y_bot) / x_span).round().max(1.0) as usize;
+
+    let src_raw = src.as_raw();
+    let mut out = vec![0u8; out_w * out_h * 4];
+    out.par_chunks_mut(out_w * 4).enumerate().for_each(|(r, row)| {
+        let y = y_top - (r as f64 + 0.5) / out_h as f64 * (y_top - y_bot);
+        let lat = (2.0 * y.exp().atan() - std::f64::consts::FRAC_PI_2).to_degrees();
+        for c in 0..out_w {
+            let lon = west + (c as f64 + 0.5) / out_w as f64 * (east - west);
+            let (e, n) = crate::nisar_parser::latlon_to_utm(lat, lon, grid.zone);
+            let sc = ((e - grid.x_ul) / pdx).floor();
+            let sr = ((grid.y_ul - n) / pdy).floor();
+            if sc >= 0.0 && sr >= 0.0 && (sc as usize) < w && (sr as usize) < h {
+                let si = (sr as usize * w + sc as usize) * 4;
+                row[c * 4..c * 4 + 4].copy_from_slice(&src_raw[si..si + 4]);
+            }
+        }
+    });
+
+    // Grey images (the radar previews) are written as grey + alpha: half the bytes of RGBA.
+    let grey = out.chunks_exact(4).all(|p| p[0] == p[1] && p[1] == p[2]);
+    if grey {
+        let la: Vec<u8> = out.chunks_exact(4).flat_map(|p| [p[0], p[3]]).collect();
+        let img: ImageBuffer<image::LumaA<u8>, Vec<u8>> = ImageBuffer::from_raw(out_w as u32, out_h as u32, la)
+            .ok_or_else(|| crate::errors::ProcessorError::ProcessingError("warp buffer".to_string()))?;
+        img.save(path)?;
+    } else {
+        let img: ImageBuffer<image::Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(out_w as u32, out_h as u32, out)
+            .ok_or_else(|| crate::errors::ProcessorError::ProcessingError("warp buffer".to_string()))?;
+        img.save(path)?;
+    }
+    info!(
+        "  ✓ Web Mercator overlay: {} ({}×{}) bounds W{:.5} S{:.5} E{:.5} N{:.5}",
+        path, out_w, out_h, west, south, east, north
+    );
+    Ok([west, south, east, north])
+}
+
 /// Save a 2D u8 array as a GeoTIFF on its native projected UTM grid.
 ///
 /// Use this for full-scene products: a UTM grid is rotated relative to
@@ -1412,27 +1500,22 @@ pub fn save_flood_map_png(
         for c in 0..cols {
             let class = flood_map[[r, c]];
             let idx = (r * cols + c) * 4;
-            match class {
-                1 => {
-                    // Permanent water (stable-water layer). New flood (2..=4) is
-                    // exported as GeoJSON vectors and toggled independently, so it
-                    // is intentionally left transparent here.
-                    img_buf[idx] = 33;
-                    img_buf[idx + 1] = 102;
-                    img_buf[idx + 2] = 193;
-                    img_buf[idx + 3] = 180;
-                }
-                5 => {
-                    // Receded Water / Water Loss (Class 5) - warm amber/orange
-                    img_buf[idx] = 245;
-                    img_buf[idx + 1] = 158;
-                    img_buf[idx + 2] = 11;
-                    img_buf[idx + 3] = 200;
-                }
-                _ => {
-                    // Dry land and new flood: transparent.
-                    img_buf[idx + 3] = 0;
-                }
+            // One opaque colour per class; land and no-data stay transparent.
+            // The dashboard reads these exact colours back to toggle classes,
+            // so keep them in sync with FLOOD_PNG_COLORS in the dashboard.
+            let rgb: Option<[u8; 3]> = match class {
+                1 => Some([0, 229, 255]),   // stable water
+                2 => Some([216, 27, 96]),   // new water, high confidence
+                3 => Some([255, 138, 61]),  // new water, medium confidence
+                4 => Some([255, 224, 184]), // new water, low confidence
+                5 => Some([139, 108, 255]), // water loss
+                _ => None,
+            };
+            if let Some([r_, g_, b_]) = rgb {
+                img_buf[idx] = r_;
+                img_buf[idx + 1] = g_;
+                img_buf[idx + 2] = b_;
+                img_buf[idx + 3] = 255;
             }
         }
     }

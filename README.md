@@ -10,6 +10,19 @@ It is not only a Bihar flood demo. Bihar is one documented case study used to
 demonstrate the platform's L-band, S-band, temporal-change, and fusion
 capabilities.
 
+**Get it:** [Windows installer](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe) ·
+[Linux package](#linux) · [Build from source](#build-from-source) · [Try the web demo](https://main.nisar-pro.pages.dev/)
+
+## Where this project comes from
+
+I have been building NISAR Pro for about two years. It started as an
+infrastructure project: watching bridges and dams for ground movement with
+InSAR. That was the main goal for about six months. The results were not good
+enough to publish, so in June 2026 I paused that part and moved to surface
+water and flood mapping, where NISAR's L-band and S-band could be tested on
+real data. The Bihar study for IEEE InGARSS 2026 came out of that work. The
+InSAR code is still in the repository, but treat it as experimental.
+
 <div align="center">
 
 [![License](https://img.shields.io/badge/License-Apache%202.0%20%2F%20MIT-blue.svg)](LICENSE)
@@ -70,7 +83,8 @@ processing modules include:
 - Log-ratio change detection, adaptive thresholding, seeded region growing,
   morphology, and connected-component filtering.
 - InSAR building blocks including coregistration, coherence, phase filtering,
-  unwrapping, deramping, and deformation-oriented outputs.
+  unwrapping, deramping, and deformation-oriented outputs (experimental,
+  paused since June 2026).
 - GeoTIFF, PNG, GeoJSON, and JSON report generation.
 
 ### Local gateway
@@ -92,7 +106,8 @@ The React/Leaflet dashboard provides a visual workspace for:
 - Scene footprints, baseline vs. event comparison, and timeline scrubbers.
 - Inundation summaries, persistence metrics, and area accounting.
 - Interactive threshold adjustments with immediate preview where supported.
-- InSAR deformation inspection with point-level coherence and displacement.
+- InSAR deformation inspection with point-level coherence and displacement
+  (experimental).
 - JSON report inspection and artifact downloads.
 
 ### InGARSS 2026 case study: Bihar flood lifecycle
@@ -152,56 +167,123 @@ The project includes illustrative visual and video assets:
 These assets demonstrate the workflow without requiring large data downloads
 convenient for reports and presentations.
 
-## Running locally from source
+## Install and run
 
-### Full local stack
+NISAR Pro runs on your own computer. The app starts a small local server and
+opens the dashboard in your browser at `http://localhost:3000`. Your NISAR files
+stay on your machine. The installed app needs no Rust, Node.js or Python.
 
-Requirements: Rust toolchain, Node.js 20+, and a supported operating system.
+### Windows
+
+1. Download [NISAR-Pro-Setup-1.0.0.exe](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe).
+2. Run it. No admin rights are needed.
+3. Start "NISAR Pro" from the Start Menu. The dashboard opens in your browser.
+4. To close it, use "Stop NISAR Pro" from the Start Menu.
+
+Windows may show "Windows protected your PC" because the installer is not
+code-signed. Click "More info", then "Run anyway".
+
+If you don't want to install anything, download
+[NISAR-Pro-1.0.0-windows-x64-portable.zip](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-windows-x64-portable.zip),
+extract it and double-click `NISAR Pro.exe`.
+
+### Linux
+
+Tested on RHEL 10. It needs glibc 2.39 or newer, so RHEL 10, Fedora 40+,
+Ubuntu 24.04+ or Debian 13. Older systems (RHEL 9, Ubuntu 22.04) should
+[build from source](#build-from-source).
+
+One command installs it into your home folder (no `sudo`):
 
 ```bash
-# Build the science engine
-cd sar_science_processor
-cargo build --release
-
-# Start the local gateway
-cd ../sar-gateway
-LOCAL_MODE=true RUST_LOG=info cargo run
-
-# In another terminal, start the dashboard during development
-cd ../sar-dashboard-v3
-npm ci
-npm run dev
+curl -fsSL https://gitlab.com/api/v4/projects/76194026/packages/generic/nisar-pro/latest/install.sh | bash
+nisar-pro
 ```
 
-For a built dashboard served by the gateway, build the frontend first and use
-the packaged/local launcher described below.
+If `nisar-pro` is not found, add `~/.local/bin` to your PATH:
+`echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc`, then open a new terminal.
 
-### Windows and Linux release packages
-
-The release pipeline produces platform packages that do not require users to
-install Rust, Cargo, Node.js, or Python.
-
-Windows (all files on the [v1.0.0 release page](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/tag/v1.0.0)):
-
-- Installer: [NISAR-Pro-Setup-1.0.0.exe](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe).
-  Run it, then start "NISAR Pro" from the Start Menu. No admin rights needed.
-- Without installing: [NISAR-Pro-1.0.0-windows-x64-portable.zip](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-windows-x64-portable.zip).
-  Extract it and double-click `NISAR Pro.exe`.
-
-Windows may show "Windows protected your PC" because the installer is not code-signed.
-Click "More info", then "Run anyway".
-
-Linux x86_64:
+Or do it by hand without installing:
 
 ```bash
+curl -fLO https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-linux-x86_64.tar.gz
 tar -xzf NISAR-Pro-1.0.0-linux-x86_64.tar.gz
 cd NISAR-Pro-1.0.0-linux-x86_64
 ./nisar-pro
 ```
 
-The packaged application starts the gateway, opens `http://localhost:3000`,
-and keeps raw NISAR files on the local machine. Original `.h5` granules are
-not included in releases.
+Press Ctrl+C in the terminal to stop it. Logs are in `sar-gateway/logs/gateway.log`.
+
+### First steps in the dashboard
+
+- **Search** NISAR products in the ASF catalogue. Searching needs no account.
+- **Download** needs a free [NASA Earthdata](https://urs.earthdata.nasa.gov/)
+  account. Create a token on that site and start the app with
+  `EARTHDATA_TOKEN=<your token> nisar-pro`. On Windows, add `EARTHDATA_TOKEN`
+  as a user environment variable (Start → "Edit environment variables for
+  your account"), then start NISAR Pro.
+- **Or use a local file**: pick an `.h5` GCOV product already on your disk.
+- Run a job and watch the live log. Results (GeoTIFF, GeoJSON, PNG, JSON) are
+  saved in `sar-gateway/results`.
+
+A full L-band scene is about 7 GB and an S-band scene about 12.6 GB, so keep
+enough free disk. 8 GB RAM is enough: one pair of full scenes peaks at about
+2.3 GB.
+
+### Common problems
+
+| What you see | What to do |
+|---|---|
+| "port 3000 is in use" or the gateway exits at once | Another program (or an old NISAR Pro) uses port 3000. Close it, or on Linux run `ss -ltnp \| grep :3000` to find it. |
+| Linux: `GLIBC_2.39 not found` | Your system is older than the package. Build from source. |
+| Browser does not open | Open `http://localhost:3000` yourself. |
+| Download fails with 401 | The Earthdata token is missing or expired. Make a new one. |
+
+## Build from source
+
+You need Git, the [Rust toolchain](https://rustup.rs/) (stable) and Node.js 20+.
+
+RHEL / Fedora:
+
+```bash
+sudo dnf install -y git gcc pkgconf-pkg-config nodejs npm
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Ubuntu / Debian: `sudo apt install -y git build-essential pkg-config nodejs npm`,
+then the same `rustup` line. Windows: install Rust from rustup.rs, Node.js 20
+LTS and Git, then follow the [Windows local run guide](Docs/UserGuide/windows-local-run.md).
+
+Build and start:
+
+```bash
+git clone https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro.git
+cd nisar_pro
+
+cargo build --release --manifest-path sar_science_processor/Cargo.toml
+cargo build --release --manifest-path sar-gateway/Cargo.toml
+
+cd sar-dashboard-v3 && npm ci && npm run build && cd ..
+
+cd sar-gateway
+LOCAL_MODE=true ./target/release/sar-gateway
+```
+
+Open `http://localhost:3000`. The gateway serves the built dashboard and starts
+the science engine for each job, so there is nothing else to run.
+
+The first Rust build takes a few minutes. To work on the dashboard with live
+reload, keep the gateway running and in another terminal run
+`cd sar-dashboard-v3 && npm run dev`, then open `http://localhost:5173`.
+
+Run the engine tests with `cd sar_science_processor && cargo test`.
+
+### Use the engine without the dashboard
+
+The science engine is a normal command-line program. The exact commands for
+the Bihar runs are in [ingarss_2026/README.md](ingarss_2026/README.md), Step 3.
+Run `./sar_science_processor/target/release/sar_science_processor --help` to see
+all options.
 
 ## Repository layout
 
@@ -258,6 +340,9 @@ reported as uncertainty instead.
 
 ## Roadmap
 
+- Return to bridge and dam monitoring with InSAR once the method is reliable.
+- An Earthdata login screen in the dashboard, so no environment variable is
+  needed for downloads.
 - Broader NISAR product coverage and validated metadata adapters.
 - More complete polarimetric feature inventories by acquisition mode.
 - Quantitative reference-label validation workflows.
