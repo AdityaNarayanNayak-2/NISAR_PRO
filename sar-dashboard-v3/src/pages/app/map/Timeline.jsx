@@ -8,11 +8,13 @@ import { frameKey } from '../lib/regions'
 import { formatShortDate } from '../lib/units'
 
 const DAY = 86400000
+const REPEAT_DAYS = 12
 const t = (iso) => Date.parse(`${iso}T00:00:00Z`)
 
 export default function Timeline() {
   const { runs, openId, open, scenes } = useRunStore()
   const [tip, setTip] = useState(null)
+  const [now] = useState(() => Date.now())
   const run = runs.find((r) => r.id === openId)
 
   // The frame shown: the open run's, else the frame with the most runs.
@@ -47,7 +49,10 @@ export default function Timeline() {
     const shown = spans
       .sort((a, b) => (a.id === openId ? -1 : b.id === openId ? 1 : (b.preset === 'full') - (a.preset === 'full')))
       .filter((s) => { const k = `${s.band}|${s.from}|${s.to}`; if (seen.has(k)) return false; seen.add(k); return true })
-    return { dates: list, spans: shown }
+    // Expected next pass on this frame: NISAR repeats each track every 12 days. Not a NASA schedule.
+    const last = list[list.length - 1][0]
+    const next = new Date(t(last) + REPEAT_DAYS * DAY).toISOString().slice(0, 10)
+    return { dates: [...list, [next, null]], spans: shown, next }
   }, [key, runs, scenes, openId])
 
   if (!data) return null
@@ -71,9 +76,9 @@ export default function Timeline() {
 
   return (
     <div className="timeline mctl" data-map-ctl>
-      <div className="tl-head">Track {track} · Frame {frame}<span className="muted">{data.dates.length} acquisitions</span></div>
+      <div className="tl-head">Track {track} · Frame {frame}<span className="muted">{data.dates.length - 1} acquisitions</span><span className="tl-next" title="From the 12-day repeat of the last acquisition. Not a NASA schedule; check the NASA catalog in Processing.">next pass expected {formatShortDate(data.next)}{Date.parse(data.next) < now ? ', check catalog' : ''}</span></div>
       <svg viewBox={`0 0 ${W} 70`} width="100%" height="70" role="group" aria-label="Acquisitions and runs">
-        <line x1={PAD - 12} x2={W - PAD + 12} y1={AXIS} y2={AXIS} className="tl-axis" />
+        <line x1={PAD - 12} x2={X[data.dates[data.dates.length - 2][0]] + 6} y1={AXIS} y2={AXIS} className="tl-axis" />
         {data.spans.map((s) => {
           const x1 = X[s.from], x2 = X[s.to]
           const y = LANE[s.band] ?? LANE.L
@@ -88,7 +93,14 @@ export default function Timeline() {
             </g>
           )
         })}
-        {data.dates.map(([iso, bands]) => (
+        {data.dates.map(([iso, bands]) => bands === null ? (
+          <g key={iso} className="tl-next-g">
+            <line x1={X[data.dates[data.dates.length - 2][0]] + 6} x2={X[iso] - 6} y1={AXIS} y2={AXIS} className="tl-next-line" />
+            <circle cx={X[iso]} cy={AXIS} r={4} className="tl-dot next" />
+            <text x={X[iso]} y={AXIS + 14} className="tl-date" textAnchor="middle">{formatShortDate(iso)}</text>
+            <text x={X[iso]} y={AXIS + 24} className="tl-band" textAnchor="middle">expected</text>
+          </g>
+        ) : (
           <g key={iso}>
             <circle cx={X[iso]} cy={AXIS} r={4} className={`tl-dot ${hasRun(iso) ? '' : 'hollow'} ${run && (runInfo(run).baselineDate === iso || runInfo(run).activeDate === iso) ? 'sel' : ''}`} />
             <text x={X[iso]} y={AXIS + 14} className="tl-date" textAnchor="middle">{formatShortDate(iso)}</text>
@@ -97,7 +109,7 @@ export default function Timeline() {
         ))}
         {tip && <text x={tip.x} y={8} className="tl-tip" textAnchor="middle">{tip.text}</text>}
       </svg>
-      {data.dates.length === 1 && <div className="muted tl-empty">A run needs two dates.</div>}
+      {data.dates.length === 2 && <div className="muted tl-empty">A run needs two dates.</div>}
     </div>
   )
 }

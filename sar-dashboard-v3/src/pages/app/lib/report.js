@@ -29,6 +29,12 @@ export function granuleDate(name) {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : null
 }
 
+/** Acquisition start (UTC) from a NISAR file name, e.g. ..._20260912T233810_... → Date. */
+export function granuleTime(name) {
+  const m = /_(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})_/.exec(name || '')
+  return m ? new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6])) : null
+}
+
 /** Track / frame from a NISAR GCOV name: ..._GCOV_<cycle>_<track>_<dir>_<frame>_... */
 export function granuleTrackFrame(name) {
   const m = /_GCOV_(\d{3})_(\d{3})_([AD])_(\d{3})_/.exec(name || '')

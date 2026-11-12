@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useRunStore } from '../stores/useRunStore'
 import { useMapStore } from '../stores/useMapStore'
 import { gatewayUrl } from '../lib/gateway'
-import { sumInBox, hotspotsCsv } from '../lib/regions'
+import { sumInBox, hotspotsCsv, hotspotsKml, hotspotsGpx } from '../lib/regions'
 import { placeLabel } from '../lib/places'
 import { formatArea, formatNumber } from '../lib/units'
 import { mapHandle, freePadding } from '../map/mapHandle'
@@ -24,9 +24,10 @@ export function InView({ regions }) {
       </div>
     )
   }
+  const whole = v && v.count === regions.length
   return (
     <div className="sec">
-      {row('In this view', v)}
+      {whole ? <div className="inview-row"><span className="k">In this view</span><span className="v muted" style={{ fontWeight: 400 }}>All {formatNumber(regions.length)} areas. Zoom in to sum a part.</span></div> : row('In this view', v)}
       {aoi
         ? row('In drawn area', d, <button type="button" className="link" onClick={() => setAoi(null)}>Clear</button>)
         : (
@@ -78,14 +79,16 @@ function HotspotRow({ r, rank, place, onCopy }) {
   )
 }
 
-export function Hotspots({ list, places, mode }) {
+export function Hotspots({ list, places, mode, title = 'Largest areas', note, children }) {
   const toast = useRunStore((s) => s.toast)
   const copy = (t) => navigator.clipboard?.writeText(t).then(() => toast('Coordinates copied.', 'ok'))
   return (
     <div className="sec">
-      <h3>Largest areas <span className="muted">top {list.length}</span></h3>
+      <h3>{title} <span className="muted">top {list.length}</span></h3>
       {list.length === 0 && <div className="muted">No areas above the minimum size.</div>}
       {list.map((r, i) => <HotspotRow key={r.id} r={r} rank={i + 1} place={places[r.id]} onCopy={copy} />)}
+      {note && <div className="foot">{note}</div>}
+      {children}
       {mode === 'local' && <div className="foot">Place names: © OpenStreetMap contributors (nearest named place to the area centre).</div>}
     </div>
   )
@@ -132,6 +135,8 @@ export function TakeAway({ run, mode, list, places }) {
       <div className="take">
         <a className="btn btn-accent" href={`/app/report/${run.id}`} target="_blank" rel="noreferrer"><Icon name="report" size={14} />Situation report</a>
         <button type="button" className="btn" disabled={!list.length} onClick={() => download(`${run.id}_hotspots.csv`, hotspotsCsv(list, places), 'text/csv')}>Hotspots CSV</button>
+        <button type="button" className="btn" disabled={!list.length} onClick={() => download(`${run.id}_hotspots.kml`, hotspotsKml(list, places, `NISAR Pro ${run.id}`), 'application/vnd.google-earth.kml+xml')}>Waypoints · KML</button>
+        <button type="button" className="btn" disabled={!list.length} onClick={() => download(`${run.id}_hotspots.gpx`, hotspotsGpx(list, places), 'application/gpx+xml')}>Waypoints · GPX</button>
         {file('Areas · GeoJSON', a.geojson)}
         {file('Classes · GeoTIFF', a.class_tif)}
       </div>

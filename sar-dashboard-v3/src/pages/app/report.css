@@ -6,7 +6,7 @@
 .rp { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 16mm; background: #fff; box-shadow: 0 4px 24px rgba(0, 0, 0, .12); display: flex; flex-direction: column; gap: 5mm; }
 .rp .mono { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; }
 .rp-head { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #ddd; padding-bottom: 4mm; }
-.rp-brand { font-weight: 700; font-size: 9pt; letter-spacing: .04em; color: #0a7f8c; }
+.rp-brand { font-weight: 700; font-size: 9pt; letter-spacing: .04em; color: #4b5563; }
 .rp h1 { margin: 2px 0 2px; font-size: 16pt; font-weight: 600; letter-spacing: -.01em; }
 .rp-sub { font-size: 9pt; color: #444; }
 .rp-meta { text-align: right; font-size: 8pt; color: #666; }
@@ -36,3 +36,9 @@
   .noprint { display: none !important; }
   .rp { box-shadow: none; margin: 0; }
 }
+
+.rp-page2 { margin-top: 8mm; break-before: page; page-break-before: always; }
+.rp-map.tall { height: 170mm; }
+.grid-lbl { padding: 1px 3px; background: rgba(255, 255, 255, .85); font: 600 7pt/1 'Inter Variable', sans-serif; color: #374151; }
+.rp-note { margin: 2mm 0 0; font-size: 7.5pt; color: #666; }
+@media print { .rp-page2 { margin-top: 0; box-shadow: none; } }

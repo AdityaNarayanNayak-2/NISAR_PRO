@@ -1,368 +1,154 @@
-# NISAR Pro
-
-NISAR Pro is an open-source, local-first platform for processing and explaining
-NISAR Earth-observation data. It combines a memory-efficient Rust science
-engine, a local Axum gateway, and a geospatial React dashboard so researchers
-can move from a large satellite product to inspectable maps, reports, and
-reproducible analysis.
-
-It is not only a Bihar flood demo. Bihar is one documented case study used to
-demonstrate the platform's L-band, S-band, temporal-change, and fusion
-capabilities.
-
-**Get it:** [Windows installer](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe) ·
-[Linux package](#linux) · [Build from source](#build-from-source) · [Try the web demo](https://main.nisar-pro.pages.dev/)
-
-## Where this project comes from
-
-I have been building NISAR Pro for about two years. It started as an
-infrastructure project: watching bridges and dams for ground movement with
-InSAR. That was the main goal for about six months. The results were not good
-enough to publish, so in June 2026 I paused that part and moved to surface
-water and flood mapping, where NISAR's L-band and S-band could be tested on
-real data. The Bihar study for IEEE InGARSS 2026 came out of that work. The
-InSAR code is still in the repository, but treat it as experimental.
-
 <div align="center">
 
-[![License](https://img.shields.io/badge/License-Apache%202.0%20%2F%20MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/Engine-Pure%20Rust%201.75%2B-orange.svg)](https://www.rust-lang.org/)
-[![Mission](https://img.shields.io/badge/Mission-NASA--ISRO%20NISAR-green.svg)](https://nisar.jpl.nasa.gov/)
-[![Hackathon](https://img.shields.io/badge/IEEE%20InGARSS%202026-Young%20Professionals%20Hackathon-purple.svg)](https://ingarss2026.org/)
-[![Live Demo](https://img.shields.io/badge/Web%20App-Live%20Demo-emerald.svg)](https://main.nisar-pro.pages.dev/)
+# NISAR Pro
 
-[Live Dashboard](https://main.nisar-pro.pages.dev/) ·
-[Architecture](Docs/Architecture/) ·
-[User Guides](Docs/UserGuide/) ·
-[IEEE InGARSS 2026 Package](ingarss_2026/)
+**Flood maps from NISAR radar. Through cloud, day and night.**
+
+NISAR Pro compares two NISAR radar passes and maps flood extent, stable water and water loss at 80 m,
+with every area in km² and acres, place names, field waypoints and a printable situation report.
+It runs on an ordinary laptop.
+
+[Website](https://main.nisar-pro.pages.dev/) ·
+[Live demo](https://main.nisar-pro.pages.dev/app) ·
+[Windows installer](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe) ·
+[Linux](#linux) ·
+[Documentation](Docs/README.md) ·
+[Work with us](#work-with-runlayer-lab)
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-lightgrey.svg)](LICENSE)
+![Rust](https://img.shields.io/badge/engine-Rust-lightgrey.svg)
+![React](https://img.shields.io/badge/dashboard-React%2019%20·%20MapLibre-lightgrey.svg)
+![IEEE InGARSS 2026](https://img.shields.io/badge/IEEE-InGARSS%202026-lightgrey.svg)
+
+![NISAR Pro dashboard: flood extent over the Ganga plain, Bihar, with numbered areas and an area card](sar-dashboard-v3/public/landing/shots/live.webp)
 
 </div>
 
----
+## Why
 
-## What NISAR Pro is for
+During a flood, cloud cover can hide the ground from optical satellites for days. Radar sees through it.
+NISAR (NASA–ISRO) images every place every 12 days in L-band, and over India also in S-band, and the data is free.
+NISAR Pro turns two of those passes into answers a control room needs:
 
-NISAR Pro is built for engineers, remote-sensing researchers, and teams who
-need to process large NISAR products on infrastructure they control.
+- **Where is the water?** Flood extent at 80 m, by confidence, plus water that left.
+- **How much, and is it growing?** km² and acres, compared with the previous pass.
+- **Where do we send teams first?** Largest areas ranked, with village and district names and coordinates.
 
-The platform focuses on four things:
+## Results: Bihar, monsoon 2026
 
-- **Efficient ingestion** of large HDF5-based NISAR products without loading an
-  entire scene into memory.
-- **Explainable SAR processing** with visible parameters, intermediate
-  telemetry, and geospatial outputs instead of opaque black-box results.
-- **Local execution and data sovereignty** so raw granules can remain on the
-  operator's workstation or internal server.
-- **A reusable platform** for GCOV surface-water analysis, L/S comparison,
-  temporal change detection, and InSAR/infrastructure workflows.
+One NISAR scene over the Ganga plain (track 98, frame 14), processed in full on a laptop. Areas are on each
+band's own valid grid; the InGARSS package compares L and S on their common grid, so its numbers differ slightly.
 
-![NISAR Pro dashboard](Docs/assets/Dashboard.jpeg)
+| Period | Band | Flood extent | Water loss |
+|---|---|---|---|
+| 26 Jul → 31 Aug 2026 | L | 1,695.81 km² (419,043 ac) | 1,471.24 km² |
+| 31 Aug → 12 Sep 2026 | L | 1,166.21 km² (288,178 ac) | 889.96 km² |
+| 31 Aug → 12 Sep 2026 | S | 1,174.89 km² (290,321 ac) | 217.17 km² |
 
-## Platform capabilities
+Flood extent is water detected by radar that was not there on the earlier pass. It is not confirmed on the ground.
+Water maps were checked against Sentinel-2 optical images on cloud-free pixels; see the
+[InGARSS 2026 package](ingarss_2026/README.md) for the method, scores and limits.
 
-### NISAR product access and ingestion
+## What it does
 
-- NASA ASF / Earthdata catalogue integration for supported NISAR products.
-- Local HDF5 product selection for offline or controlled environments.
-- Instrument and band identification from product metadata.
-- Coordinate, footprint, acquisition-date, CRS, and channel inspection.
-- Windowed and row-strip reading for products that are too large for naive
-  in-memory workflows.
+| | |
+|---|---|
+| **Engine** | Rust. Streams a full GCOV scene (33,696 × 34,344 px) in 1,024-row strips, averages it to an 80 m grid, and classes the change in backscatter: log-ratio change detection, Otsu reported, region growing, clean-up. A full scene pair (2 × 1.157 billion samples) takes 44–65 s on 4 cores with under 2.5 GB RAM. |
+| **Gateway** | Axum. Runs jobs, streams logs live, reuses identical runs, searches and downloads from the NASA ASF catalog, and looks up place names (OpenStreetMap). |
+| **Dashboard** | React and MapLibre on a dark satellite basemap. Replay of both passes, numbered areas with coordinates in decimal, DMS and UTM, flood extent per district, change since the last pass, quality checks, and every engine parameter for engineers. |
+| **Outputs** | 2-page situation report (PDF via print), class GeoTIFF (UTM), areas GeoJSON, hotspots CSV, KML and GPX waypoints, report JSON. |
 
-### Rust science engine
+## Install
 
-The `sar_science_processor` crate contains the computational core. Current
-processing modules include:
-
-- GCOV backscatter and covariance-channel handling.
-- L-band and S-band product support where the selected product metadata
-  provides the required channels.
-- Block multilooking and calibrated linear-power to dB conversion.
-- Speckle filtering, nodata protection, swath-edge conditioning, and memory
-  guards.
-- Log-ratio change detection, adaptive thresholding, seeded region growing,
-  morphology, and connected-component filtering.
-- InSAR building blocks including coregistration, coherence, phase filtering,
-  unwrapping, deramping, and deformation-oriented outputs (experimental,
-  paused since June 2026).
-- GeoTIFF, PNG, GeoJSON, and JSON report generation.
-
-### Local gateway
-
-The Axum gateway is the operational boundary around the processor. It provides:
-
-- Local job creation and supervision.
-- Server-Sent Events for live processing progress.
-- Local result history and artifact discovery.
-- NASA catalogue/search proxy functions.
-- Safe subprocess execution of the science processor.
-- Static serving of the built dashboard on port `3000`.
-
-### Geospatial dashboard
-
-The React/Leaflet dashboard provides a visual workspace for:
-
-- Side-by-side or layered inspection of flood rasters and vector masks.
-- Scene footprints, baseline vs. event comparison, and timeline scrubbers.
-- Inundation summaries, persistence metrics, and area accounting.
-- Interactive threshold adjustments with immediate preview where supported.
-- InSAR deformation inspection with point-level coherence and displacement
-  (experimental).
-- JSON report inspection and artifact downloads.
-
-### InGARSS 2026 case study: Bihar flood lifecycle
-
-The repository preserves the documented 2026 Bihar monsoon flood case study
-developed for the IEEE InGARSS 2026 Young Professionals Hackathon:
-
-- Full-scene dual-epoch L-band flood mapping (2026-08-31 to 2026-09-12).
-- S-band comparison for the same acquisition window.
-- Common-support L+S comparison and cross-frequency agreement.
-- Post-monsoon recession observation through 2026-10-18.
-- Independent validation workflow against public high-resolution references.
-- Offline and reproducible deliverables in `ingarss_2026/`.
-
-![NISAR Bihar flood analysis](Docs/assets/zommed.jpeg)
-
-## Architecture overview
-
-```text
-               ┌──────────────────────────────────────────────────┐
-               │              Web Browser / Dashboard             │
-               │         React 19 · Leaflet · Vite · UI           │
-               └─────────────────────────┬────────────────────────┘
-                                         │ HTTP / SSE (Port 3000)
-                                         ▼
-               ┌──────────────────────────────────────────────────┐
-               │                 Local SAR Gateway                │
-               │          Rust Axum · Supervisor · Proxies        │
-               └──────────────┬───────────────────┬───────────────┘
-                              │                   │
-               Spawns CLI jobs│                   │ Proxies search
-                              ▼                   ▼
-    ┌───────────────────────────────┐   ┌──────────────────────────┐
-    │     sar_science_processor     │   │ NASA ASF / CMR Search    │
-    │  Pure Rust · SIMD · HDF5/GCOV │   │ Remote granule discovery │
-    └──────────────┬────────────────┘   └──────────────────────────┘
-                   │
-                   ▼
-    ┌───────────────────────────────┐
-    │       Output Artifacts        │
-    │ GeoTIFF · GeoJSON · JSON · PNG│
-    └───────────────────────────────┘
-```
-
-See [Docs/Architecture/](Docs/Architecture/) for deep-dive pipeline descriptions,
-data flows, and telemetry formats.
-
-## Demonstration media
-
-The project includes illustrative visual and video assets:
-
-- [Platform dashboard overview](Docs/assets/Dashboard.jpeg)
-- [System architecture diagram](Docs/assets/architecture_overview.svg)
-- [Demonstration walkthrough video](Docs/assets/nisar-s-band-demo.mp4)
-- [Example analysis output](Docs/assets/output.jpeg)
-
-These assets demonstrate the workflow without requiring large data downloads
-convenient for reports and presentations.
-
-## Install and run
-
-NISAR Pro runs on your own computer. The app starts a small local server and
-opens the dashboard in your browser at `http://localhost:3000`. Your NISAR files
-stay on your machine. The installed app needs no Rust, Node.js or Python.
+The app runs a local server and opens the dashboard at `http://localhost:3000`. Your data stays on your machine.
+No Rust, Node.js or Python needed.
 
 ### Windows
 
-1. Download [NISAR-Pro-Setup-1.0.0.exe](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe).
-2. Run it. No admin rights are needed.
-3. Start "NISAR Pro" from the Start Menu. The dashboard opens in your browser.
-4. To close it, use "Stop NISAR Pro" from the Start Menu.
+1. Download [NISAR-Pro-Setup-1.0.0.exe](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe) and run it (no admin rights needed).
+2. Start **NISAR Pro** from the Start Menu.
 
-Windows may show "Windows protected your PC" because the installer is not
-code-signed. Click "More info", then "Run anyway".
-
-If you don't want to install anything, download
-[NISAR-Pro-1.0.0-windows-x64-portable.zip](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-windows-x64-portable.zip),
-extract it and double-click `NISAR Pro.exe`.
+The installer is not code-signed: on "Windows protected your PC", choose **More info → Run anyway**.
+A [portable zip](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-windows-x64-portable.zip) is also available.
 
 ### Linux
 
-Tested on RHEL 10. It needs glibc 2.39 or newer, so RHEL 10, Fedora 40+,
-Ubuntu 24.04+ or Debian 13. Older systems (RHEL 9, Ubuntu 22.04) should
-[build from source](#build-from-source).
-
-One command installs it into your home folder (no `sudo`):
+Needs glibc 2.39+ (RHEL 10, Fedora 40+, Ubuntu 24.04+, Debian 13). Installs into your home folder, no `sudo`:
 
 ```bash
 curl -fsSL https://gitlab.com/api/v4/projects/76194026/packages/generic/nisar-pro/latest/install.sh | bash
 nisar-pro
 ```
 
-If `nisar-pro` is not found, add `~/.local/bin` to your PATH:
-`echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc`, then open a new terminal.
+Or the [tarball](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-linux-x86_64.tar.gz): extract it and run `./nisar-pro`.
 
-Or do it by hand without installing:
+### NASA data
 
-```bash
-curl -fLO https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-linux-x86_64.tar.gz
-tar -xzf NISAR-Pro-1.0.0-linux-x86_64.tar.gz
-cd NISAR-Pro-1.0.0-linux-x86_64
-./nisar-pro
-```
+Catalog search needs no account. To download, create a free [NASA Earthdata](https://urs.earthdata.nasa.gov/) token
+and start the app with `EARTHDATA_TOKEN=<token> nisar-pro` (on Windows, set it as a user environment variable).
+A full L-band scene is about 7 GB, S-band about 12.6 GB. 8 GB RAM is enough.
 
-Press Ctrl+C in the terminal to stop it. Logs are in `sar-gateway/logs/gateway.log`.
-
-### First steps in the dashboard
-
-- **Search** NISAR products in the ASF catalogue. Searching needs no account.
-- **Download** needs a free [NASA Earthdata](https://urs.earthdata.nasa.gov/)
-  account. Create a token on that site and start the app with
-  `EARTHDATA_TOKEN=<your token> nisar-pro`. On Windows, add `EARTHDATA_TOKEN`
-  as a user environment variable (Start → "Edit environment variables for
-  your account"), then start NISAR Pro.
-- **Or use a local file**: pick an `.h5` GCOV product already on your disk.
-- Run a job and watch the live log. Results (GeoTIFF, GeoJSON, PNG, JSON) are
-  saved in `sar-gateway/results`.
-
-A full L-band scene is about 7 GB and an S-band scene about 12.6 GB, so keep
-enough free disk. 8 GB RAM is enough: one pair of full scenes peaks at about
-2.3 GB.
-
-### Common problems
-
-| What you see | What to do |
+| Problem | Fix |
 |---|---|
-| "port 3000 is in use" or the gateway exits at once | Another program (or an old NISAR Pro) uses port 3000. Close it, or on Linux run `ss -ltnp \| grep :3000` to find it. |
-| Linux: `GLIBC_2.39 not found` | Your system is older than the package. Build from source. |
-| Browser does not open | Open `http://localhost:3000` yourself. |
-| Download fails with 401 | The Earthdata token is missing or expired. Make a new one. |
+| Port 3000 in use | Close the other program or old NISAR Pro (`ss -ltnp \| grep :3000`). |
+| `GLIBC_2.39 not found` | Older Linux: build from source. |
+| Download fails with 401 | Earthdata token missing or expired. |
 
 ## Build from source
 
-You need Git, the [Rust toolchain](https://rustup.rs/) (stable) and Node.js 20+.
-
-RHEL / Fedora:
+Requires Git, [Rust](https://rustup.rs/) (stable) and Node.js 20+.
 
 ```bash
-sudo dnf install -y git gcc pkgconf-pkg-config nodejs npm
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Ubuntu / Debian: `sudo apt install -y git build-essential pkg-config nodejs npm`,
-then the same `rustup` line. Windows: install Rust from rustup.rs, Node.js 20
-LTS and Git, then follow the [Windows local run guide](Docs/UserGuide/windows-local-run.md).
-
-Build and start:
-
-```bash
-git clone https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro.git
-cd nisar_pro
-
+git clone https://gitlab.com/Aditya-Narayan-Nayak/nisar_pro.git && cd nisar_pro
 cargo build --release --manifest-path sar_science_processor/Cargo.toml
 cargo build --release --manifest-path sar-gateway/Cargo.toml
-
-cd sar-dashboard-v3 && npm ci && npm run build && cd ..
-
-cd sar-gateway
-LOCAL_MODE=true ./target/release/sar-gateway
+(cd sar-dashboard-v3 && npm ci && npm run build)
+cd sar-gateway && LOCAL_MODE=true ./target/release/sar-gateway   # http://localhost:3000
 ```
 
-Open `http://localhost:3000`. The gateway serves the built dashboard and starts
-the science engine for each job, so there is nothing else to run.
+- Dashboard with live reload: `cd sar-dashboard-v3 && npm run dev` (port 5173, gateway running).
+- Engine tests: `cd sar_science_processor && cargo test` (74 pass).
+- Engine on its own: `sar_science_processor --help`; the exact Bihar commands are in [ingarss_2026/README.md](ingarss_2026/README.md).
 
-The first Rust build takes a few minutes. To work on the dashboard with live
-reload, keep the gateway running and in another terminal run
-`cd sar-dashboard-v3 && npm run dev`, then open `http://localhost:5173`.
-
-Run the engine tests with `cd sar_science_processor && cargo test`.
-
-### Use the engine without the dashboard
-
-The science engine is a normal command-line program. The exact commands for
-the Bihar runs are in [ingarss_2026/README.md](ingarss_2026/README.md), Step 3.
-Run `./sar_science_processor/target/release/sar_science_processor --help` to see
-all options.
-
-## Repository layout
+## Repository
 
 ```text
-sar_analyzer/
-├── sar_science_processor/        Pure-Rust compute engine (GCOV flood, GUNW InSAR, 8x8 multilook)
-│   ├── src/
-│   │   ├── flood_detect.rs       7-stage flood detection & region growing
-│   │   ├── nisar_parser.rs       Streaming HDF5 reader & coordinate extraction
-│   │   ├── multilook.rs          SIMD block-multilooking
-│   │   └── windowed.rs           Zero-copy row-strip reader
-│   └── Cargo.toml
-├── sar-gateway/                  Async Axum HTTP/SSE gateway, job supervisor & DAAC clients
-├── sar-dashboard-v3/             React 19 + Leaflet + Vite interactive web application
-├── installer/                    Windows launcher and Linux launcher/installer
-├── ingarss_2026/                 Official IEEE InGARSS 2026 submission artifacts
-│   ├── results/                  Full-scene GeoTIFF, JSON and GeoJSON outputs
-│   └── provenance_manifest.json  SHA-256 integrity and execution provenance
-├── scripts/                      Utility scripts
-│   └── nisar_probe.py
-├── results/                      Generated GeoTIFFs, telemetry JSONs, and PNG figures
-├── Docs/                         Comprehensive user & architecture documentation
-│   ├── Architecture/             System internals, pipeline diagrams, API specifications
-│   └── UserGuide/                Step-by-step setup, Windows runbook, InSAR verification
-└── benchmarks/                   Automated 12-benchmark performance validation suite
+sar_science_processor/   Rust engine: streaming HDF5 reader, 80 m multilook, flood detection, GeoTIFF/PNG/GeoJSON
+sar-gateway/             Axum server: jobs, live logs, ASF catalog, downloads, geocoding; serves the dashboard
+sar-dashboard-v3/        React 19 + MapLibre dashboard, situation report and website
+ingarss_2026/            IEEE InGARSS 2026 package: results, validation, technical note, checker script
+Docs/                    Architecture, design spec, user guides
 ```
 
-## Reproducibility and scientific boundaries
+## Scientific boundaries
 
-NISAR Pro records the selected product IDs, dates, channels, CRS, resolution,
-thresholds, and output paths in reports where available. The processing
-documentation distinguishes:
+- Every number is read from the engine's output files; nothing is estimated in the interface.
+- Flood extent is radar-detected change. Wet soil, shadow and some crops can look like water.
+- Sentinel-2 scores are agreement with optical labels on cloud-free pixels, not accuracy.
+- In the Bihar study, fusing L and S improves on L alone but does not beat S alone.
 
-- measured outputs from interpretation;
-- common-support comparisons from standalone runs;
-- full-scene results from reference-box inspection;
-- quantitative validation from qualitative assessment.
+## Work with RunLayer Lab
 
-When independent reference labels are unavailable, the project does not invent
-accuracy scores. The likely effects of temporal mismatch, viewing geometry,
-vegetation, rough soil, wind-roughened water, mixed pixels, and nodata are
-reported as uncertainty instead.
+NISAR Pro is built and run by **RunLayer Lab**. For disaster management authorities and districts we offer:
 
-## Documentation
+- **Monsoon pilot**: one district, a map and report after every pass, review at the end.
+- **Managed monitoring**: your areas all year, hosted and run by us.
+- **On your servers**: installed in your data centre, maintained by us, with staff training.
 
-- [Architecture documentation](Docs/Architecture/)
-- [Flood detection pipeline](Docs/Architecture/flood_detection_pipeline.md)
-- [Gateway orchestration](Docs/Architecture/gateway_orchestration.md)
-- [Frontend architecture](Docs/Architecture/frontend-dashboard-architecture.md)
-- [Windows local run guide](Docs/UserGuide/windows-local-run.md)
-- [Release packaging guide](Docs/UserGuide/release-packaging.md)
-- [API reference](Docs/UserGuide/api-reference.md)
-- [InGARSS 2026 submission package](ingarss_2026/)
-
-## Roadmap
-
-- Return to bridge and dam monitoring with InSAR once the method is reliable.
-- An Earthdata login screen in the dashboard, so no environment variable is
-  needed for downloads.
-- Broader NISAR product coverage and validated metadata adapters.
-- More complete polarimetric feature inventories by acquisition mode.
-- Quantitative reference-label validation workflows.
-- Native Linux package formats (`.deb` and `.rpm`) after the portable package
-  is stable.
-- Additional local and hosted collaboration workflows without moving raw
-  granules off the operator's machine.
+The first map of a past flood over your area is free. Contact **Aditya Narayan Nayak**, ishaan4488@gmail.com.
 
 ## Citation
 
 ```bibtex
 @software{nisar_pro_2026,
-  author = {Nayak, Aditya Narayan},
-  title = {NISAR Pro: Open-source local-first processing and analysis for NISAR Earth-observation products},
-  year = {2026},
-  publisher = {GitHub},
-  url = {https://github.com/AdityaNarayanNayak-2/NISAR_PRO}
+  author    = {Nayak, Aditya Narayan},
+  title     = {NISAR Pro: flood mapping from NISAR L- and S-band radar},
+  year      = {2026},
+  publisher = {RunLayer Lab},
+  url       = {https://github.com/AdityaNarayanNayak-2/NISAR_PRO}
 }
 ```
 
 ## License
 
-Distributed under the Apache-2.0 or MIT License. See [LICENSE](LICENSE).
+[Apache-2.0](LICENSE). Data: NASA–ISRO NISAR via ASF DAAC. Basemap imagery © Esri. Place names © OpenStreetMap contributors.

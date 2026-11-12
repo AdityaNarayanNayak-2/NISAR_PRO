@@ -31,16 +31,18 @@ controls, the timeline and the log stay inside it, and camera fits use it too
 
 | Place | Shows |
 |---|---|
-| Left: System status | sensor bands with runs, finished runs, scenes on disk, Earthdata login; flood extent of the open run (or the latest) with a sparkline of its frame's periods |
-| Left: Runs | latest four runs as cards; "All runs" opens every run grouped by track·frame (delete, cancel) |
+| Left: Flood extent | flood extent of the open run (or the latest) in km² and acres, change from the previous period on the frame (computed), the caveat line, water loss, area count, sparkline of the frame's periods |
+| Left: System status | sensor bands with runs, finished runs, scenes on disk, Earthdata login (compact list) |
+| Left: Runs | latest four runs as rows; "All runs" opens every run grouped by track·frame (delete, cancel) |
 | Command pill | place search (`/geocode/search`) or lat, lon; engine state |
-| Live Map | no run: what NISAR Pro does, how a run works. Run: honest note, radar and pass time, "in this view" / drawn-area sum, confidence split, warnings |
-| Time Series | flood extent per period on this frame (chart), periods as rows, water on each date |
-| Regions | 10 largest areas with OSM place names, areas by size |
-| Reports | situation report, CSV and files, class table, threshold ruler and method, product facts |
+| Live Map | no run: what NISAR Pro does, how a run works. Run: "Send teams first" (top 5 areas, share held by the 10 largest), copy summary, "in this view" / drawn-area sum (whole scene in view: no repeat of the total), confidence split, notes and warnings |
+| Time Series | since the last period (flood extent, water loss, stable water: before, now, change, period lengths), flood extent per period (chart), periods as rows, water on each date |
+| Regions | flood extent by district (largest areas named until 95% of the summed area or 250 areas, by centre, OSM districts, share named shown), 10 largest areas, areas by size |
+| Reports | situation report (page 2: A4 map with lat/lon grid, scale bar, pins, district table), CSV, KML and GPX waypoints, files, quality checks (7 checks from report fields, no single score), class table, threshold ruler and method, product facts |
 | Processing | scenes (this computer or NASA catalog), area, polarization, all detection settings with a live dB ruler, optional GUNW and water mask, exact command; progress of a running run |
 | Evaluation Hub | Sentinel-2 agreement (InGARSS study) when track/frame/dates match; else an empty state |
-| Timeline (map) | acquisitions of the frame; runs as spans, L lane and S lane; click to open |
+| Timeline (map) | acquisitions of the frame; runs as spans, L lane and S lane; click to open; expected next pass (last date + 12 days, labelled expected, not a NASA schedule) |
+| Map | numbered pins on the 10 largest areas; click a pin or area for the area card (place, km² and acres, confidence, centre in decimal, DMS and UTM); pass chip (date, UTC, age, amber after 7 days); legend presets All / Flood only / Water loss only; buttons for satellite and place names |
 
 ## Files
 
@@ -54,7 +56,7 @@ pages/app/
 ├── inspector/             Inspector (tab switch), Views (one per tab), Home, Brief and Analysis
 │                          (sections used by Views), useRunAreas, TrendChart, Validation
 ├── form/                  ProcessPanel, CatalogSearch, validateRun.js
-├── map/                   MapView (only file that adds map layers), MapControls, Timeline, mapHandle.js
+├── map/                   MapView (only file that adds map layers and pins), AreaCard, MapControls, Timeline, mapHandle.js
 ├── ui/                    Area, DbRuler, Icon, Menu, Dialog
 ├── lib/
 │   ├── gateway.js         data source (local / demo / offline), fetch helpers
@@ -62,6 +64,7 @@ pages/app/
 │   ├── regions.js         region list, hotspots, sums in a box, size histogram, periods, CSV
 │   ├── places.js          nearest place (gateway /geocode/reverse, or demo data)
 │   ├── validation.js      matches a run to the Sentinel-2 study tests
+│   ├── coords.js          decimal, DMS and UTM (WGS84) for field teams
 │   └── runInfo.js, units.js, classRaster.js
 └── stores/
     ├── useRunStore.js     runs, open run, view, reports, regions, scenes, logs (SSE), toasts

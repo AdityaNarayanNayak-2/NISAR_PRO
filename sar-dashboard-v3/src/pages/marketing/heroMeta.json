@@ -1,0 +1,50 @@
+{
+ "crop": {
+  "west": 85.55,
+  "east": 87.45,
+  "south": 24.95,
+  "north": 25.75
+ },
+ "size": [
+  1800,
+  839
+ ],
+ "pins": [
+  {
+   "x": 16.51,
+   "y": 47.04,
+   "name": "Ghoswari, Patna",
+   "acres": 26641.52,
+   "km2": 107.81
+  },
+  {
+   "x": 21.58,
+   "y": 67.62,
+   "name": "Barahiya, Lakhisarai",
+   "acres": 24626.72,
+   "km2": 99.66
+  },
+  {
+   "x": 33.96,
+   "y": 59.95,
+   "name": "Shamho Akha Kurha, Begusarai",
+   "acres": 12093.54,
+   "km2": 48.94
+  }
+ ],
+ "run": "bihar-l-2026-08-31-2026-09-12",
+ "summary": {
+  "band": "L",
+  "baseline_date": "2026-08-31",
+  "active_date": "2026-09-12",
+  "new_water": {
+   "acres": 288177.8842637346,
+   "km2": 1166.2144
+  },
+  "water_loss": {
+   "acres": 219915.11435049825,
+   "km2": 889.9647999999999
+  },
+  "regions": 1725
+ }
+}

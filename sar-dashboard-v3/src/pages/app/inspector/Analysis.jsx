@@ -8,13 +8,17 @@ import Area from '../ui/Area'
 import Icon from '../ui/Icon'
 import DbRuler from '../ui/DbRuler'
 
+// Swath coverage is scene geometry (a rotated track inside a square grid), not a fault:
+// it is shown as a neutral note. Other engine warnings keep the warning style.
+const isNote = (w) => /swath coverage/i.test(w)
+
 export function Warnings({ warnings }) {
   if (!warnings.length) return null
   return (
     <div className="sec">
-      {warnings.map((w, i) => (
-        <div key={i} className="warn-row"><span style={{ color: 'var(--warn)', flex: 'none' }}><Icon name="warn" size={14} /></span>{w}</div>
-      ))}
+      {warnings.map((w, i) => isNote(w)
+        ? <div key={i} className="note-row"><span style={{ color: 'var(--text-lo)', flex: 'none' }}><Icon name="globe" size={14} /></span>{w}</div>
+        : <div key={i} className="warn-row"><span style={{ color: 'var(--warn)', flex: 'none' }}><Icon name="warn" size={14} /></span>{w}</div>)}
     </div>
   )
 }

@@ -5,6 +5,7 @@ export const DEFAULT_LAYERS = { 1: true, 2: true, 3: true, 4: true, 5: true, rad
 export const useMapStore = create((set) => ({
   phase: 'detected', // baseline | active | detected
   basemap: 'satellite', // satellite | plain
+  labels: true, // place names and boundaries on the basemap
   playing: false,
   layers: { ...DEFAULT_LAYERS },
   opacity: 0.85,
@@ -19,7 +20,9 @@ export const useMapStore = create((set) => ({
   preview: null, // GeoJSON geometry outlined on the map (crop box, catalog footprint)
   setPhase: (phase) => set({ phase }),
   setBasemap: (basemap) => set({ basemap }),
+  toggleLabels: () => set((s) => ({ labels: !s.labels })),
   setPlaying: (playing) => set({ playing }),
+  setLayers: (patch) => set((s) => ({ layers: { ...s.layers, ...patch } })),
   toggleLayer: (key) => set((s) => ({ layers: { ...s.layers, [key]: !s.layers[key] } })),
   setOpacity: (opacity) => set({ opacity }),
   selectRegion: (selectedRegionId) => set({ selectedRegionId }),

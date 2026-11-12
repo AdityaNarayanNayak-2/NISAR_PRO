@@ -110,3 +110,27 @@ export function hotspotsCsv(list, places = {}) {
   })
   return [head, ...rows].join('\n')
 }
+
+const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const CAVEAT = 'Radar-detected flood area. Not confirmed on the ground. Point is the centre of the area, not its edge.'
+const placeText = (p) => (p ? [p.name, p.area, p.country].filter(Boolean).join(', ') : '')
+const waypointName = (r, i, places) => `${i + 1}. ${places[r.id]?.name || r.id} (${r.km2.toFixed(2)} km2)`
+const waypointDesc = (r, places) => `${r.id}. ${r.km2.toFixed(2)} km2, ${Math.round(r.acres)} acres. ${placeText(places[r.id])}. ${CAVEAT}`
+
+/** Ranked areas as KML placemarks (Google Earth, phones). */
+export function hotspotsKml(list, places = {}, title = 'NISAR Pro flood areas') {
+  const marks = list.map((r, i) => `  <Placemark><name>${esc(waypointName(r, i, places))}</name><description>${esc(waypointDesc(r, places))}</description><Point><coordinates>${r.lon.toFixed(6)},${r.lat.toFixed(6)},0</coordinates></Point></Placemark>`)
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${esc(title)}</name>\n${marks.join('\n')}\n</Document></kml>\n`
+}
+
+/** Ranked areas as GPX waypoints (handheld GPS units). */
+export function hotspotsGpx(list, places = {}) {
+  const wpts = list.map((r, i) => `  <wpt lat="${r.lat.toFixed(6)}" lon="${r.lon.toFixed(6)}"><name>${esc(waypointName(r, i, places))}</name><desc>${esc(waypointDesc(r, places))}</desc></wpt>`)
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="NISAR Pro" xmlns="http://www.topografix.com/GPX/1/1">\n${wpts.join('\n')}\n</gpx>\n`
+}
+
+/** Share of the summed region area held by the given list (e.g. the 10 largest). Computed. */
+export function shareOf(list, regions) {
+  const total = regions.reduce((s, r) => s + r.acres, 0)
+  return total > 0 ? list.reduce((s, r) => s + r.acres, 0) / total : null
+}

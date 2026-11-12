@@ -7,6 +7,8 @@ import { gatewayUrl } from '../lib/gateway'
 import { paintClasses } from '../lib/classRaster'
 import { formatArea, KM2_PER_ACRE } from '../lib/units'
 import MapControls from './MapControls'
+import AreaCard from './AreaCard'
+import { regionList, hotspots } from '../lib/regions'
 import { mapHandle, fitBbox, freePadding } from './mapHandle'
 import { granuleTrackFrame } from '../lib/report'
 import { runStatus } from '../lib/gateway'
@@ -24,7 +26,7 @@ const STYLE = {
   layers: [
     { id: 'background', type: 'background', paint: { 'background-color': '#0b0c0e' } },
     { id: 'imagery', type: 'raster', source: 'imagery', paint: { 'raster-brightness-max': 0.55, 'raster-contrast': 0.22, 'raster-saturation': -0.72, 'raster-fade-duration': 150 } },
-    { id: 'labels', type: 'raster', source: 'labels', paint: { 'raster-opacity': 0.65, 'raster-fade-duration': 150 } },
+    { id: 'labels', type: 'raster', source: 'labels', paint: { 'raster-opacity': 0.5, 'raster-fade-duration': 150 } },
   ],
 }
 const BEFORE = 'labels' // run layers sit on the imagery, below boundaries and place names
@@ -69,7 +71,7 @@ export default function MapView() {
   const run = useRunStore((s) => s.runs.find((r) => r.id === s.openId))
   const regions = useRunStore((s) => (s.openId ? s.regions[s.openId] : null))
   const loadRegions = useRunStore((s) => s.loadRegions)
-  const { phase, layers, opacity, selectedRegionId, selectRegion, setCursor, resetForRun, setViewBounds, picking, preview, aoi, basemap } = useMapStore()
+  const { phase, layers, opacity, selectedRegionId, selectRegion, setCursor, resetForRun, setViewBounds, picking, preview, aoi, basemap, labels } = useMapStore()
   const fitted = useRef(null)
   const classUrl = useRef(null)
 
@@ -105,6 +107,9 @@ export default function MapView() {
   useEffect(() => {
     if (map?.getLayer('imagery')) map.setLayoutProperty('imagery', 'visibility', basemap === 'plain' ? 'none' : 'visible')
   }, [map, basemap])
+  useEffect(() => {
+    if (map?.getLayer('labels')) map.setLayoutProperty('labels', 'visibility', labels ? 'visible' : 'none')
+  }, [map, labels])
 
   // New run: reset view state, fetch regions, fit bounds once.
   useEffect(() => {
@@ -293,6 +298,26 @@ export default function MapView() {
     map.setFilter('regions-selected-halo', f)
   }, [map, selectedRegionId, regions])
 
+  // Numbered pins at the centres of the 10 largest areas (same ranking as the panel lists).
+  const regionRows = useMemo(() => (regions?.status === 'ok' ? regionList(regions.data) : []), [regions])
+  const top = useMemo(() => hotspots(regionRows, 10), [regionRows])
+  useEffect(() => {
+    const floodOn = layers[2] || layers[3] || layers[4]
+    if (!map || phase !== 'detected' || !top.length || !floodOn) return
+    const markers = top.map((r, i) => {
+      const el = document.createElement('button')
+      el.type = 'button'
+      el.className = 'pin'
+      el.textContent = String(i + 1)
+      el.setAttribute('aria-label', `Area ${i + 1}`)
+      el.addEventListener('click', (e) => { e.stopPropagation(); useMapStore.getState().selectRegion(r.id) })
+      return new maplibregl.Marker({ element: el }).setLngLat([r.lon, r.lat]).addTo(map)
+    })
+    return () => markers.forEach((m) => m.remove())
+  }, [map, top, phase, layers])
+  const selected = useMemo(() => regionRows.find((r) => r.id === selectedRegionId) || null, [regionRows, selectedRegionId])
+  const selectedRank = selected ? top.findIndex((r) => r.id === selected.id) + 1 : 0
+
   // Visible part of the map between the panels, for "In this view" and catalog search.
   useEffect(() => {
     if (!map) return
@@ -377,6 +402,7 @@ export default function MapView() {
       <div ref={el} className="map-canvas" aria-label="Map" />
       {tip && <div className="map-tip" style={{ left: tip.x, top: tip.y }}>{tip.text}</div>}
       {picking && <div className="pick-hint glass">{picking === 'centre' ? 'Click the map to set the centre' : 'Click two corners on the map'} · Esc to cancel</div>}
+      {selected && phase === 'detected' && <AreaCard map={map} region={selected} rank={selectedRank} run={run} />}
       <MapControls />
     </div>
   )
