@@ -109,6 +109,15 @@
 .rl-shots img { display: block; width: 100%; height: 340px; object-fit: cover; object-position: left top; border-radius: 18px; border: 1px solid var(--line); }
 .rl-shots figure:last-child img { object-position: right top; }
 .rl-shots figcaption { margin-top: 10px; color: var(--lo); font-size: 14px; }
+.rl-narrow { max-width: 760px; margin-top: 20px; }
+.rl-impact { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; }
+.rl-impact > div { padding: 28px; border: 1px solid var(--line); border-radius: 24px; background: rgba(255, 255, 255, .02); }
+.rl-impact b { display: block; font-size: 44px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.rl-impact p { margin: 10px 0 0; font-size: 16px; line-height: 1.5; }
+.rl-impact small { display: block; margin-top: 12px; color: var(--lo); font-size: 13px; line-height: 1.5; }
+.rl-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 40px; }
+.rl-code { margin: 32px 0 0; padding: 18px 22px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); color: var(--lo); font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-x: auto; }
+.rl-award { margin-top: 14px; font-size: 14px; color: var(--lo); }
 .rl-grid5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 40px; }
 .rl-item { padding-top: 18px; border-top: 1px solid var(--line); }
 
@@ -152,6 +161,8 @@
 @media (max-width: 1100px) {
   .rl-hero-cards { display: none; }
   .rl-grid5 { grid-template-columns: repeat(2, 1fr); }
+  .rl-impact { grid-template-columns: 1fr; }
+  .rl-grid4 { grid-template-columns: repeat(2, 1fr); }
   .rl-steps { grid-template-columns: repeat(2, 1fr); }
   .rl-final { grid-template-columns: 1fr; margin: 0 16px; }
 }

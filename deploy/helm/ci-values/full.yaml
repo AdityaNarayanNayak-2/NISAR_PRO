@@ -1,0 +1,18 @@
+# Every optional feature on, to render and validate all templates in CI.
+earthdata:
+  token: ci-placeholder
+ingress:
+  enabled: true
+  className: nginx
+  host: nisar.example.org
+  tls:
+    - secretName: nisar-tls
+      hosts: [nisar.example.org]
+metrics:
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+networkPolicy:
+  enabled: true
+maxConcurrentJobs: 2

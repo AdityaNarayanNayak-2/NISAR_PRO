@@ -4,7 +4,7 @@ import { useRunStore, VIEWS } from '../stores/useRunStore'
 import Icon from '../ui/Icon'
 import Menu from '../ui/Menu'
 
-const LABELS = { map: 'Live Map', timeseries: 'Time Series', regions: 'Regions', reports: 'Reports', processing: 'Processing', evaluation: 'Evaluation Hub' }
+const LABELS = { map: 'Live Map', timeseries: 'Time Series', regions: 'Regions', impact: 'Impact', reports: 'Reports', processing: 'Processing', evaluation: 'Evaluation Hub' }
 
 export default function NavPill({ onPick }) {
   const view = useRunStore((s) => s.view)

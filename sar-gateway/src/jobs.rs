@@ -434,6 +434,7 @@ pub async fn start_job(state: crate::AppState, mut req: ProcessRequest) -> Resul
         for lock in jobs.values() {
             let m = lock.read().await;
             if m.status == JobStatus::Completed && m.request.as_ref() == Some(&probe) {
+                crate::metrics::run_reused();
                 return Ok(StartResult { job_id: m.id.clone(), reused: true });
             }
         }
@@ -524,6 +525,8 @@ async fn run_processor(
         Ok(c) => c,
         Err(e) => return fail(&meta, format!("Could not start {binary}: {e}")).await,
     };
+    let started = std::time::Instant::now();
+    crate::metrics::run_started();
     {
         let mut m = meta.write().await;
         m.status = JobStatus::Running;
@@ -564,6 +567,7 @@ async fn run_processor(
     let _ = err_task.await;
 
     if let Err(msg) = result {
+        crate::metrics::run_finished(false, started);
         return fail(&meta, msg).await;
     }
 
@@ -572,8 +576,10 @@ async fn run_processor(
         m.cancel_tx = None;
         if !attach_results(&mut m, &dir) {
             drop(m);
+            crate::metrics::run_finished(false, started);
             return fail(&meta, "Processor finished but wrote no report".into()).await;
         }
+        crate::metrics::run_finished(true, started);
         m.status = JobStatus::Completed;
         write_job_file(&m);
         m.fingerprint.clone()
@@ -589,8 +595,18 @@ async fn run_processor(
     info!("Job {} completed", job_id);
 }
 
-/// The science processor binary next to the gateway (dev tree or packaged app).
+/// True when the engine binary can be found (readiness probe and metrics).
+pub fn processor_found() -> bool {
+    let b = find_science_processor_binary();
+    Path::new(&b).exists() || std::env::var_os("PATH").map(|p| std::env::split_paths(&p).any(|d| d.join(&b).exists())).unwrap_or(false)
+}
+
+/// The science processor binary: NISAR_PROCESSOR if set (containers), else next to the gateway
+/// (dev tree or packaged app), else `sar_science_processor` on PATH.
 fn find_science_processor_binary() -> String {
+    if let Ok(p) = std::env::var("NISAR_PROCESSOR") {
+        if !p.trim().is_empty() { return p; }
+    }
     let candidates = [
         "../sar_science_processor/target/release/sar_science_processor",
         "../sar_science_processor/target/debug/sar_science_processor",

@@ -5,6 +5,7 @@ import { runStatus } from '../lib/gateway'
 import { runInfo } from '../lib/runInfo'
 import { LiveMapView, TimeSeriesView, RegionsView, ReportsView } from './Views'
 import Validation from './Validation'
+import ImpactView from './Impact'
 import ProcessPanel from '../form/ProcessPanel'
 import Home from './Home'
 import Icon from '../ui/Icon'
@@ -54,8 +55,8 @@ function Failed({ run, onShowLog }) {
   )
 }
 
-const TITLES = { map: 'Live map', timeseries: 'Time series', regions: 'Regions', reports: 'Reports', processing: 'Processing', evaluation: 'Evaluation hub' }
-const RUN_BODY = { map: LiveMapView, timeseries: TimeSeriesView, regions: RegionsView, reports: ReportsView, evaluation: Validation }
+const TITLES = { map: 'Live map', timeseries: 'Time series', regions: 'Regions', impact: 'Impact', reports: 'Reports', processing: 'Processing', evaluation: 'Evaluation hub' }
+const RUN_BODY = { map: LiveMapView, timeseries: TimeSeriesView, regions: RegionsView, impact: ImpactView, reports: ReportsView, evaluation: Validation }
 
 function PickRun() {
   return (

@@ -1,0 +1,43 @@
+{
+ "run": "bihar-l-2026-08-31-2026-09-12",
+ "from": "2026-08-31",
+ "to": "2026-09-12",
+ "place": "Ghoswari, Patna",
+ "facilities": {
+  "total": 66,
+  "counts": {
+   "health": 49,
+   "school": 15,
+   "emergency": 2,
+   "shelter": 0
+  },
+  "near_m": 1000,
+  "fetched": "2026-11-22",
+  "closest": [
+   {
+    "name": "SubCentre, Kamla Kund",
+    "amenity": "health_post",
+    "distM": 73
+   },
+   {
+    "name": "State Hospital",
+    "amenity": "hospital",
+    "distM": 95
+   },
+   {
+    "name": "Raghopur",
+    "amenity": "hospital",
+    "distM": 104
+   }
+  ]
+ },
+ "river": {
+  "from": 38814,
+  "to": 47533,
+  "pct": 22,
+  "cellKm": 12.5
+ },
+ "rain": {
+  "between": 114
+ }
+}

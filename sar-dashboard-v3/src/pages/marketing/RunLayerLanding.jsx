@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatArea, formatNumber } from '../app/lib/units'
 import meta from './heroMeta.json'
+import impact from './impactMeta.json'
 import './runlayer.css'
 
 const IMG = '/landing/hero'
@@ -224,6 +225,43 @@ function Receive() {
   )
 }
 
+function Beyond() {
+  const f = impact.facilities
+  const items = [
+    [formatNumber(f.total), `hospitals, health posts, schools and police stations within 1 km of the flood extent`, `OpenStreetMap. Closest: ${f.closest.map((c) => `${c.name} (${formatNumber(c.distM)} m)`).join(', ')}.`],
+    [`${impact.river.pct > 0 ? '+' : ''}${impact.river.pct}%`, `Ganga flow near ${impact.place.split(',')[0]} between the two passes, ${formatNumber(impact.river.from)} to ${formatNumber(impact.river.to)} m³/s`, 'GloFAS river model (Copernicus). An independent check that the river really rose.'],
+    [`${formatNumber(impact.rain.between)} mm`, 'of rain at the largest flooded area between the two passes', 'ERA5 reanalysis. Plus the 7-day rain and 30-day river forecast for planning.'],
+  ]
+  return (
+    <section className="rl-sec" id="impact">
+      <p className="rl-eyebrow">Beyond the flood line</p>
+      <h2>What the water touches, and what comes next.</h2>
+      <p className="rl-lead rl-narrow">Every run is joined with free public data: health and school buildings near the water, river flow on the pass dates, rain between the passes and the forecast. Bihar, 31 Aug to 12 Sep 2026:</p>
+      <div className="rl-impact">
+        {items.map(([b, t, c]) => <div key={t}><b>{b}</b><p>{t}</p><small>{c}</small></div>)}
+      </div>
+    </section>
+  )
+}
+
+function Deploy() {
+  const items = [
+    ['On our servers', 'We host it, run every pass and send the report. You only need a browser.'],
+    ['On your servers', 'One container image, or a Helm chart for Kubernetes. Works without internet once scenes are copied in.'],
+    ['Watched like a service', 'Health checks, Prometheus metrics, alerts and a Grafana board: run time, failures, queue.'],
+    ['Your data stays yours', 'NISAR data is free and public. Results stay on the machine that made them.'],
+  ]
+  return (
+    <section className="rl-sec rl-deploy" id="deploy">
+      <p className="rl-eyebrow">Runs where you need it</p>
+      <h2>A laptop in a control room, or your state data centre.</h2>
+      <div className="rl-grid4">{items.map(([t, c]) => <div key={t} className="rl-item"><h3>{t}</h3><p>{c}</p></div>)}</div>
+      <pre className="rl-code" aria-label="Install commands">{`podman run -p 3000:3000 -v nisar:/var/lib/nisar-pro ghcr.io/adityanarayannayak-2/nisar-pro
+helm install nisar ./deploy/helm/nisar-pro --set persistence.size=200Gi`}</pre>
+    </section>
+  )
+}
+
 function Work() {
   const steps = [
     ['Tell us your area', 'A district, a river reach or a whole state.'],
@@ -311,6 +349,7 @@ function About() {
         <p className="rl-eyebrow">About RunLayer Lab</p>
         <h2>You talk to the person who built it.</h2>
         <p className="rl-lead">I am Aditya Narayan Nayak, from Kundura, Odisha. I built NISAR Pro end to end: the Rust radar engine that maps a full scene pair in about a minute, the processing service and the dashboard. The Bihar 2026 analysis is my IEEE InGARSS 2026 work. RunLayer Lab is small on purpose: one team that answers your call and runs your system.</p>
+        <p className="rl-award">1st prize, Technical Poster Presentation and Coding Ninja · TECHNIRVANA 2K26, GKCET Jeypore</p>
         <p className="rl-contact"><a href={BRIEFING}>{MAIL}</a></p>
       </div>
     </section>
@@ -327,6 +366,8 @@ export default function RunLayerLanding() {
       <FloodDay />
       <LayerStack />
       <Receive />
+      <Beyond />
+      <Deploy />
       <Work />
       <WhyNow />
       <Faq />

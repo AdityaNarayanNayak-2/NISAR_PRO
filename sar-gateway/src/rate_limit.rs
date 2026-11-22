@@ -151,7 +151,7 @@ pub async fn rate_limit_middleware(
     let method = req.method();
 
     // Skip static files, health pings, and log streams from rate limit enforcement
-    if path == "/jobs/health-ping"
+    if path == "/jobs/health-ping" || path == "/metrics" || path == "/healthz" || path == "/readyz"
         || path.starts_with("/results/")
         || path.ends_with("/logs")
     {

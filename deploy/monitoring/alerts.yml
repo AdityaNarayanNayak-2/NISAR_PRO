@@ -1,0 +1,28 @@
+# Same rules as the Helm chart's PrometheusRule (deploy/helm/nisar-pro/templates/prometheusrule.yaml).
+groups:
+  - name: nisar-pro
+    rules:
+      - alert: NisarDown
+        expr: up{job="nisar-pro"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: NISAR Pro gateway is not answering. }
+      - alert: NisarEngineMissing
+        expr: nisar_engine_ready == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: NISAR Pro cannot find the science processor binary. }
+      - alert: NisarRunsFailing
+        expr: increase(nisar_runs_failed_total[1h]) > 2
+        labels: { severity: warning }
+        annotations: { summary: More than 2 engine runs failed in the last hour. }
+      - alert: NisarRunsSlow
+        expr: histogram_quantile(0.9, sum(rate(nisar_run_duration_seconds_bucket[6h])) by (le)) > 300
+        for: 30m
+        labels: { severity: warning }
+        annotations: { summary: 90% of engine runs take longer than 5 minutes. }
+      - alert: NisarQueueBacklog
+        expr: nisar_jobs{status="queued"} > 3
+        for: 15m
+        labels: { severity: warning }
+        annotations: { summary: Runs are waiting for a processor slot. }

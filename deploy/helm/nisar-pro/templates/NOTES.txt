@@ -1,0 +1,9 @@
+NISAR Pro is starting.
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "nisar.fullname" . }} 3000:{{ .Values.service.port }}
+  open http://localhost:3000/app
+
+Copy NISAR GCOV scenes into the volume:
+  kubectl -n {{ .Release.Namespace }} cp <scene>.h5 $(kubectl -n {{ .Release.Namespace }} get pod -l app.kubernetes.io/instance={{ .Release.Name }} -o name | cut -d/ -f2):/var/lib/nisar-pro/data/
+
+Health: /healthz   Ready: /readyz   Metrics: /metrics

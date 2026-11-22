@@ -1,0 +1,77 @@
+# NISAR Pro Helm values.
+#
+# The gateway keeps the run list in memory and runs the engine as a child process, so it runs as
+# ONE replica with a ReadWriteOnce volume (strategy Recreate). Scale up with more CPU and
+# MAX_CONCURRENT_JOBS, not replicas.
+
+image:
+  repository: ghcr.io/adityanarayannayak-2/nisar-pro
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Engine runs at the same time. Each full L-band scene pair needs about 2.5 GB RAM and 4 cores
+# for ~1 minute; raise resources with this.
+maxConcurrentJobs: 1
+logLevel: info
+
+# NASA Earthdata token for downloading scenes (search works without it).
+earthdata:
+  token: ""              # creates a Secret when set
+  existingSecret: ""     # or use your own Secret with key EARTHDATA_TOKEN
+
+persistence:
+  enabled: true
+  size: 100Gi            # one L-band GCOV scene ~7 GB, S-band ~12.6 GB, plus results
+  storageClass: ""
+  accessModes: [ReadWriteOnce]
+  existingClaim: ""
+
+resources:
+  requests:
+    cpu: "2"
+    memory: 3Gi
+  limits:
+    memory: 6Gi
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: nisar.example.org
+  tls: []                # - secretName: nisar-tls
+
+metrics:
+  serviceMonitor:
+    enabled: false       # needs the Prometheus Operator CRDs
+    interval: 30s
+    labels: {}
+  prometheusRule:
+    enabled: false
+    labels: {}
+
+networkPolicy:
+  enabled: false         # allow ingress only from the ingress controller / Prometheus namespaces
+  ingressNamespaces: [ingress-nginx, monitoring]
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

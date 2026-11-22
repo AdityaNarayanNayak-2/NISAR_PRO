@@ -1,0 +1,10 @@
+apiVersion: v2
+name: nisar-pro
+description: Flood mapping from NISAR L- and S-band radar (engine, gateway and dashboard)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://github.com/AdityaNarayanNayak-2/NISAR_PRO
+keywords: [sar, nisar, flood, disaster-management, remote-sensing]
+maintainers:
+  - name: RunLayer Lab

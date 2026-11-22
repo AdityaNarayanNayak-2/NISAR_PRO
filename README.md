@@ -56,6 +56,8 @@ Water maps were checked against Sentinel-2 optical images on cloud-free pixels; 
 | **Engine** | Rust. Streams a full GCOV scene (33,696 × 34,344 px) in 1,024-row strips, averages it to an 80 m grid, and classes the change in backscatter: log-ratio change detection, Otsu reported, region growing, clean-up. A full scene pair (2 × 1.157 billion samples) takes 44–65 s on 4 cores with under 2.5 GB RAM. |
 | **Gateway** | Axum. Runs jobs, streams logs live, reuses identical runs, searches and downloads from the NASA ASF catalog, and looks up place names (OpenStreetMap). |
 | **Dashboard** | React and MapLibre on a dark satellite basemap. Replay of both passes, numbered areas with coordinates in decimal, DMS and UTM, flood extent per district, change since the last pass, quality checks, and every engine parameter for engineers. |
+| **Impact** | Free public data joined to every run: hospitals, schools and police stations within 1 km of the flood extent (OpenStreetMap), river flow on the pass dates and a 30-day river forecast (GloFAS), rain between the passes (ERA5) and the 7-day rain forecast. Each source is named; none of it is NISAR output. |
+| **Operations** | One container image, Helm chart, health and readiness probes, Prometheus metrics, alert rules and a Grafana board, CI with tests, image scan and smoke test. See [deploy/](deploy/README.md). |
 | **Outputs** | 2-page situation report (PDF via print), class GeoTIFF (UTM), areas GeoJSON, hotspots CSV, KML and GPX waypoints, report JSON. |
 
 ## Install
@@ -94,6 +96,17 @@ A full L-band scene is about 7 GB, S-band about 12.6 GB. 8 GB RAM is enough.
 | `GLIBC_2.39 not found` | Older Linux: build from source. |
 | Download fails with 401 | Earthdata token missing or expired. |
 
+## Container and Kubernetes
+
+```bash
+podman build -t nisar-pro .                       # or docker build
+podman run -p 3000:3000 -v nisar:/var/lib/nisar-pro nisar-pro
+podman compose up -d --build                      # with Prometheus and Grafana
+helm install nisar deploy/helm/nisar-pro          # Kubernetes
+```
+
+Configuration, probes, metrics, alerts and a runbook: [deploy/README.md](deploy/README.md).
+
 ## Build from source
 
 Requires Git, [Rust](https://rustup.rs/) (stable) and Node.js 20+.
@@ -117,6 +130,7 @@ sar_science_processor/   Rust engine: streaming HDF5 reader, 80 m multilook, flo
 sar-gateway/             Axum server: jobs, live logs, ASF catalog, downloads, geocoding; serves the dashboard
 sar-dashboard-v3/        React 19 + MapLibre dashboard, situation report and website
 ingarss_2026/            IEEE InGARSS 2026 package: results, validation, technical note, checker script
+deploy/                  Helm chart, Prometheus and Grafana config, operations guide
 Docs/                    Architecture, design spec, user guides
 ```
 
@@ -151,4 +165,4 @@ The first map of a past flood over your area is free. Contact **Aditya Narayan N
 
 ## License
 
-[Apache-2.0](LICENSE). Data: NASA–ISRO NISAR via ASF DAAC. Basemap imagery © Esri. Place names © OpenStreetMap contributors.
+[Apache-2.0](LICENSE). Data: NASA–ISRO NISAR via ASF DAAC. Basemap imagery © Esri. Place names and facilities © OpenStreetMap contributors (ODbL). River flow: GloFAS (Copernicus); rain: ERA5 and forecasts via Open-Meteo (CC BY 4.0).

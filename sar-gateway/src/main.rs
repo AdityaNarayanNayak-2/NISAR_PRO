@@ -5,6 +5,7 @@ pub mod handlers;
 pub mod jobs;
 pub mod rate_limit;
 pub mod geocode;
+pub mod metrics;
 
 use axum::{
     routing::{get, post},
@@ -32,6 +33,7 @@ pub struct AppState {
 async fn main() {
     dotenv().ok();
     env_logger::init();
+    metrics::init();
 
     let max_concurrent_jobs: usize = std::env::var("MAX_CONCURRENT_JOBS")
         .ok()
@@ -63,6 +65,9 @@ async fn main() {
         .route("/geocode/reverse", get(geocode::reverse_handler))
         .route("/geocode/search", get(geocode::search_handler))
         .route("/upload", post(handlers::upload_handler))
+        .route("/metrics", get(metrics::metrics_handler))
+        .route("/healthz", get(metrics::healthz))
+        .route("/readyz", get(metrics::readyz))
         .route("/jobs/health-ping", get(|| async { axum::Json(serde_json::json!({ "status": "ok" })) }))
         .route("/jobs/:id", get(handlers::get_job_handler).delete(handlers::delete_job_handler))
         .route("/jobs/:id/cancel", post(handlers::cancel_job_handler))
@@ -71,6 +76,7 @@ async fn main() {
         .route("/asf/auth-status", get(handlers::auth_status_handler))
         .nest_service("/results", ServeDir::new("results"))
         .layer(axum::middleware::from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
+        .layer(axum::middleware::from_fn(metrics::http_counter))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .with_state(state);
 
@@ -93,14 +99,34 @@ async fn main() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or_else(|| std::net::IpAddr::from([0, 0, 0, 0]));
-    let addr = SocketAddr::new(host, 3000);
+    let port: u16 = std::env::var("NISAR_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(3000);
+    let addr = SocketAddr::new(host, port);
     info!("🚀 SAR Gateway listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()).await.unwrap();
+}
+
+/// Ctrl+C, or SIGTERM from Kubernetes / Docker: stop taking requests and exit cleanly.
+/// Running engine processes are killed with the gateway (kill_on_drop); their runs show as
+/// interrupted on the next start.
+async fn shutdown_signal() {
+    let ctrl_c = async { let _ = tokio::signal::ctrl_c().await; };
+    #[cfg(unix)]
+    let term = async {
+        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) { s.recv().await; }
+    };
+    #[cfg(not(unix))]
+    let term = std::future::pending::<()>();
+    tokio::select! { _ = ctrl_c => {}, _ = term => {} }
+    info!("Shutting down");
 }
 
 fn resolve_dashboard_dir() -> Option<std::path::PathBuf> {
+    if let Ok(d) = std::env::var("NISAR_DASHBOARD_DIR") {
+        let p = std::path::PathBuf::from(d);
+        if p.join("index.html").exists() { return Some(p); }
+    }
     let candidates = [
         "../sar-dashboard-v3/dist",
         "./sar-dashboard-v3/dist",

@@ -1,0 +1,59 @@
+#!/bin/bash
+# Boot script for the NISAR Pro node (rendered by Terraform).
+set -euo pipefail
+
+apt-get update
+apt-get install -y podman
+
+# Wait for the data volume (attached after boot) and mount it at /srv/nisar.
+for i in $(seq 1 60); do
+  DEV=$(lsblk -dpno NAME,SERIAL | awk '$2 == "${volume_serial}" {print $1}')
+  [ -n "$DEV" ] && break
+  sleep 5
+done
+[ -n "$DEV" ] || { echo "data volume not found" >&2; exit 1; }
+blkid "$DEV" || mkfs.ext4 -L nisar-data "$DEV"
+mkdir -p /srv/nisar
+grep -q nisar-data /etc/fstab || echo "LABEL=nisar-data /srv/nisar ext4 defaults,nofail 0 2" >> /etc/fstab
+mount -a
+chown -R 10001:10001 /srv/nisar
+
+ENV_LINE=""
+%{ if token_param != "" ~}
+snap install aws-cli --classic
+TOKEN=$(aws ssm get-parameter --region ${region} --with-decryption --name "${token_param}" --query Parameter.Value --output text)
+install -m 600 /dev/null /etc/nisar-pro.env
+echo "EARTHDATA_TOKEN=$TOKEN" > /etc/nisar-pro.env
+ENV_LINE="EnvironmentFile=/etc/nisar-pro.env"
+%{ endif ~}
+
+mkdir -p /etc/containers/systemd
+cat > /etc/containers/systemd/nisar-pro.container <<UNIT
+[Unit]
+Description=NISAR Pro
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=${image}
+PublishPort=80:3000
+Volume=/srv/nisar:/var/lib/nisar-pro:Z
+ReadOnly=true
+Tmpfs=/tmp
+NoNewPrivileges=true
+DropCapability=ALL
+HealthCmd=none
+AutoUpdate=registry
+$ENV_LINE
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl start nisar-pro.service
+systemctl enable --now podman-auto-update.timer

@@ -1,0 +1,50 @@
+# NISAR Pro with Prometheus and Grafana on one machine.
+#
+#   podman compose up -d --build       (or: docker compose up -d --build)
+#   app        http://localhost:3000/app
+#   grafana    http://localhost:3001   (anonymous viewer; dashboard "NISAR Pro")
+#   prometheus http://localhost:9091
+#
+# Put NISAR GCOV .h5 scenes in ./scenes (mounted read-only). Set EARTHDATA_TOKEN in .env to
+# download from NASA inside the app.
+services:
+  nisar:
+    build: .
+    image: localhost/nisar-pro:dev
+    ports: ["3000:3000"]
+    environment:
+      MAX_CONCURRENT_JOBS: "1"
+      EARTHDATA_TOKEN: ${EARTHDATA_TOKEN:-}
+      NISAR_DATA_DIRS: /var/lib/nisar-pro/data:/scenes
+    volumes:
+      - nisar-data:/var/lib/nisar-pro
+      - ./scenes:/scenes:ro,z
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    restart: unless-stopped
+
+  prometheus:
+    image: docker.io/prom/prometheus:v2.55.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=30d"]
+    ports: ["9091:9090"]    # 9090 is often taken by Cockpit on RHEL/Fedora
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - ./deploy/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro,z
+    restart: unless-stopped
+
+  grafana:
+    image: docker.io/grafana/grafana:11.3.1
+    ports: ["3001:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/nisar-pro.json
+    volumes:
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+    restart: unless-stopped
+
+volumes:
+  nisar-data:

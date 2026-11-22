@@ -18,6 +18,7 @@ export const useMapStore = create((set) => ({
   picking: null,
   picked: null, // last result: {kind: "centre", lat, lon} | {kind: "box", bbox}
   preview: null, // GeoJSON geometry outlined on the map (crop box, catalog footprint)
+  facilities: null, // Impact tab: OpenStreetMap facilities near the flood extent, drawn as dots
   setPhase: (phase) => set({ phase }),
   setBasemap: (basemap) => set({ basemap }),
   toggleLabels: () => set((s) => ({ labels: !s.labels })),
@@ -31,6 +32,7 @@ export const useMapStore = create((set) => ({
   setViewBounds: (viewBounds) => set({ viewBounds }),
   setAoi: (aoi) => set({ aoi }),
   setPreview: (preview) => set({ preview }),
+  setFacilities: (facilities) => set({ facilities }),
   startPicking: (picking) => set({ picking }),
   finishPicking: (picked) => set((s) => (s.picking === 'aoi' ? { picking: null, aoi: picked.bbox } : { picking: null, picked })),
   resetForRun: () => set({ phase: 'detected', playing: false, selectedRegionId: null, hoverClass: null, aoi: null }),

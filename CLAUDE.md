@@ -78,8 +78,8 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
   charts, status dots). Panels `rgba(18,19,22,.84)` blur 28 px, radius 24; porcelain `#f3f4f6`
   primary button; Plus Jakarta Sans, sentence case.
 - Full-screen dark satellite map (Esri World Imagery, desaturated in MapLibre paint, Esri places on
-  top). Floating nav pill top left (Live Map, Time Series, Regions, Reports, Processing, Evaluation
-  Hub), command pill top right (place or lat, lon search, engine state), left bento stack (system
+  top). Floating nav pill top left (Live Map, Time Series, Regions, Impact, Reports, Processing,
+  Evaluation Hub), command pill top right (place or lat, lon search, engine state), left bento stack (system
   status with the flood extent of the run in focus, latest four run cards), one 380 px right panel
   for the tab. Each fact has one owner tab; never show it twice. Nothing is tied to one region.
 - `/app` opens on Live Map with no run (no result numbers). A result shows only after a run is opened.
@@ -91,6 +91,12 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
   used is `min(seed, threshold_db)`; label it that way.
 - Replay phases: `baseline`, `active`, `detected` (active at 0.65 + classes). Only `map/MapView.jsx`
   adds map layers. Every area through `<Area>`/`formatArea` (km² + acres). Missing value prints "—".
+- Impact tab (`inspector/Impact.jsx`, `lib/impact.js`): free public data fetched by the browser,
+  each section labelled with its source, never presented as NISAR output. Facilities within 1 km
+  of the flood areas (OpenStreetMap Overpass; demo runs ship `facilities.json` from
+  `scripts/build_impact_data.mjs`), GloFAS river flow on the largest river cell within ~11 km
+  (Open-Meteo flood API), ERA5 rain, rain and river forecast. Website numbers:
+  `scripts/build_impact_meta.mjs` -> `src/pages/marketing/impactMeta.json`.
 - Place names: gateway `GET /geocode/reverse` (OpenStreetMap Nominatim, 1 request/s, cached in
   `results/geocode_cache.json`). Demo data stores them per run. Place search for the command pill:
   `GET /geocode/search?q=` (same limits, cached in memory).
@@ -113,7 +119,11 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
   S 31 Aug→12 Sep, `--crop-preset full --swath-edge-erosion 40`) reproduce the package numbers
   on their own grids (e.g. L Aug→Sep new water 1,166.21 km², 288,178 ac).
 - Website demo data: `python3 sar-dashboard-v3/scripts/build_demo_data.py` with the gateway running.
-- Only the flood pipeline runs; the Kubernetes job path was removed.
+- Only the flood pipeline runs; the old Kubernetes job path was removed. Deployment now: root
+  `Dockerfile` (engine + gateway + dashboard, non-root), `compose.yaml` (with Prometheus/Grafana),
+  `deploy/helm/nisar-pro` (one replica by design, see `deploy/README.md`), CI in
+  `.github/workflows/ci.yml`. Gateway env: `NISAR_PORT`, `NISAR_PROCESSOR`, `NISAR_DASHBOARD_DIR`,
+  `NISAR_DATA_DIRS`; probes `/healthz`, `/readyz`; Prometheus `/metrics` (`src/metrics.rs`).
 - NASA catalog: `GET /search/nisar` (ASF search, no login) and `GET /asf/download-stream` (needs
   `EARTHDATA_TOKEN` in `sar-gateway/.env`); downloads land in `sar-gateway/data/`, which `/scenes` reads.
 - Engine detection flags (`--seed-threshold-db`, `--growth-threshold-db`, `--min-change-db`,

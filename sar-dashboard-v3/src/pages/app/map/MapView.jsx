@@ -71,7 +71,7 @@ export default function MapView() {
   const run = useRunStore((s) => s.runs.find((r) => r.id === s.openId))
   const regions = useRunStore((s) => (s.openId ? s.regions[s.openId] : null))
   const loadRegions = useRunStore((s) => s.loadRegions)
-  const { phase, layers, opacity, selectedRegionId, selectRegion, setCursor, resetForRun, setViewBounds, picking, preview, aoi, basemap, labels } = useMapStore()
+  const { phase, layers, opacity, selectedRegionId, selectRegion, setCursor, resetForRun, setViewBounds, picking, preview, aoi, basemap, labels, facilities } = useMapStore()
   const fitted = useRef(null)
   const classUrl = useRef(null)
 
@@ -356,6 +356,31 @@ export default function MapView() {
     if (aoi && openId) feats.push({ type: 'Feature', properties: { kind: 'aoi' }, geometry: box(aoi) })
     map.getSource('shapes').setData({ type: 'FeatureCollection', features: feats })
   }, [map, preview, aoi, openId])
+
+  // Impact tab: OpenStreetMap facilities near the flood extent, coloured by group.
+  useEffect(() => {
+    if (!map) return
+    if (!map.getSource('facilities')) {
+      map.addSource('facilities', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({ id: 'facilities', type: 'circle', source: 'facilities', paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 3, 12, 6],
+        'circle-color': ['match', ['get', 'kind'], 'health', '#f87171', 'school', '#fbbf24', 'emergency', '#c4b5fd', '#86efac'],
+        'circle-stroke-color': '#07090d',
+        'circle-stroke-width': 1.5,
+      } })
+      const enter = (e) => {
+        const p = e.features[0].properties
+        map.getCanvas().style.cursor = 'pointer'
+        setTip({ x: e.point.x, y: e.point.y, text: `${p.name || p.amenity} · ${Number(p.distM) === 0 ? 'inside flood area' : `${p.distM} m from water`}` })
+      }
+      const leave = () => { map.getCanvas().style.cursor = ''; setTip(null) }
+      map.on('mousemove', 'facilities', enter)
+      map.on('mouseleave', 'facilities', leave)
+    }
+    const feats = (facilities || []).map((f) => ({ type: 'Feature', properties: { name: f.name, amenity: f.amenity, kind: f.kind, distM: f.distM }, geometry: { type: 'Point', coordinates: [f.lon, f.lat] } }))
+    map.getSource('facilities').setData({ type: 'FeatureCollection', features: feats })
+    if (map.getLayer('facilities')) map.moveLayer('facilities')
+  }, [map, facilities])
 
   // Picking on the map: a centre point, or a box from two clicks.
   useEffect(() => {

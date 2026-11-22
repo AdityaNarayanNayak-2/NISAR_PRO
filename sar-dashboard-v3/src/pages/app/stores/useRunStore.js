@@ -16,8 +16,8 @@ const STAGES = [
 ]
 export { STAGES }
 // Tabs in the nav pill. Run tabs show an empty state until a run is open.
-export const VIEWS = ['map', 'timeseries', 'regions', 'reports', 'processing', 'evaluation']
-export const RUN_VIEWS = ['timeseries', 'regions', 'reports', 'evaluation']
+export const VIEWS = ['map', 'timeseries', 'regions', 'impact', 'reports', 'processing', 'evaluation']
+export const RUN_VIEWS = ['timeseries', 'regions', 'impact', 'reports', 'evaluation']
 
 function stageFromLine(line) {
   if (!line.includes('"event":"progress"')) return null
@@ -48,7 +48,7 @@ export const useRunStore = create((set, get) => ({
   openId: null,
   compareId: null,
   // Tab picked in the nav pill; decides what the right panel shows.
-  view: 'map', // map | timeseries | regions | reports | processing | evaluation
+  view: 'map', // map | timeseries | regions | impact | reports | processing | evaluation
   logOpen: false,
   reports: {}, // id -> { status: 'loading'|'ok'|'error', data, error }
   regions: {}, // id -> { status, data }
