@@ -1,16 +1,18 @@
 ; NISAR Pro Windows installer (Inno Setup 6)
 ;
 ; Build on Windows after the release folder is assembled:
-;   iscc /DSourceDir="C:\path\to\NISAR-Pro-1.0.0" /O"C:\path\to\out" installer\windows\NISAR-Pro.iss
+;   iscc /DSourceDir="C:\path\to\NISAR-Pro" /DAppVersion=1.1.0 /O"C:\path\to\out" installer\windows\NISAR-Pro.iss
 ;
 ; Installs for the current user only (no admin needed) into
 ; %LOCALAPPDATA%\Programs\NISAR Pro, so the app can write its results next to itself.
 
 #define AppName "NISAR Pro"
-#define AppVersion "1.0.0"
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #define AppExe "NISAR Pro.exe"
 #ifndef SourceDir
-  #define SourceDir "..\..\NISAR-Pro-1.0.0"
+  #define SourceDir "..\..\NISAR-Pro"
 #endif
 
 [Setup]
@@ -33,7 +35,7 @@ LicenseFile=..\..\LICENSE
 SetupIconFile=nisar-pro.ico
 UninstallDisplayIcon={app}\nisar-pro.ico
 UninstallDisplayName={#AppName}
-OutputBaseFilename=NISAR-Pro-Setup-{#AppVersion}
+OutputBaseFilename=NISAR-Pro-Setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

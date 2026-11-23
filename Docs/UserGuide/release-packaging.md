@@ -9,7 +9,8 @@ are merged into `main` and pushed to GitLab.
 2. GitLab publishes the Linux x86_64 package to its Generic Package Registry.
 3. GitHub Actions builds the Windows x64 package and deploys the hosted
    dashboard.
-4. Both platforms publish version `v1.0.0` assets.
+4. Windows: a version tag (`v1.1.0`) publishes a GitHub release with `NISAR-Pro-Setup.exe` and
+   `NISAR-Pro-windows-x64-portable.zip`. Linux: GitLab publishes the tarball to its package registry.
 
 The CI jobs do not process NISAR granules. They package the already-built
 gateway, processor, and dashboard. Full-scene processing remains a user-side
@@ -17,8 +18,8 @@ operation.
 
 ## Windows users
 
-Download and extract `NISAR-Pro-1.0.0-windows-x64.zip`, then double-click
-`NISAR-Pro-1.0.0.exe`. Rust, Cargo, Node.js, and Python are not required.
+Run `NISAR-Pro-Setup.exe`, or extract `NISAR-Pro-windows-x64-portable.zip` and double-click
+`NISAR Pro.exe`. Rust, Cargo, Node.js, and Python are not required.
 
 ## Linux users
 

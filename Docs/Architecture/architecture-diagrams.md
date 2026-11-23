@@ -190,7 +190,7 @@ graph LR
     GL -->|mirror| GH[GitHub main]
     GH -->|.github/workflows/deploy-dashboard.yml| WB[Windows build]
     GH --> PG[Dashboard on GitHub Pages]
-    WB --> SETUP[NISAR-Pro-Setup-1.0.0.exe<br/>Inno Setup installer]
+    WB --> SETUP[NISAR-Pro-Setup.exe<br/>Inno Setup installer]
     WB --> ZIP[Portable ZIP]
 ```
 

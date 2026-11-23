@@ -10,7 +10,7 @@ It runs on an ordinary laptop.
 
 [Website](https://main.nisar-pro.pages.dev/) ·
 [Live demo](https://main.nisar-pro.pages.dev/app) ·
-[Windows installer](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe) ·
+[Windows installer](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup.exe) ·
 [Linux](#linux) ·
 [Documentation](Docs/README.md) ·
 [Work with us](#work-with-runlayer-lab)
@@ -69,11 +69,11 @@ No Rust, Node.js or Python needed.
 
 ### Windows
 
-1. Download [NISAR-Pro-Setup-1.0.0.exe](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup-1.0.0.exe) and run it (no admin rights needed).
+1. Download [NISAR-Pro-Setup.exe](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup.exe) and run it (no admin rights needed).
 2. Start **NISAR Pro** from the Start Menu.
 
 The installer is not code-signed: on "Windows protected your PC", choose **More info → Run anyway**.
-A [portable zip](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-windows-x64-portable.zip) is also available.
+A [portable zip](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-windows-x64-portable.zip) is also available.
 
 ### Linux
 
@@ -84,7 +84,7 @@ curl -fsSL https://gitlab.com/api/v4/projects/76194026/packages/generic/nisar-pr
 nisar-pro
 ```
 
-Or the [tarball](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-1.0.0-linux-x86_64.tar.gz): extract it and run `./nisar-pro`.
+Or the [tarball](https://gitlab.com/api/v4/projects/76194026/packages/generic/nisar-pro/latest/NISAR-Pro-1.0.0-linux-x86_64.tar.gz): extract it and run `./nisar-pro`.
 
 ### NASA data
 

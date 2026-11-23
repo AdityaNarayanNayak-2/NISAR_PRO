@@ -159,7 +159,7 @@ jobs:
           docker exec nisar sar_science_processor --help > /dev/null
           docker rm -f nisar
       - name: Scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0 (tag names start with "v"; pinned to the commit)
         with:
           image-ref: ${{ env.IMAGE }}:sha-${{ github.sha }}
           format: sarif

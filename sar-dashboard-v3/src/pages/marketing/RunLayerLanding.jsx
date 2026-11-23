@@ -256,7 +256,7 @@ const CLOUDS = [
 function Deploy() {
   const items = [
     ['On our servers', 'We host it, run every pass and send the report. You only need a browser.'],
-    ['On your servers', 'One container image, or a Helm chart for Kubernetes. Works without internet once scenes are copied in.'],
+    ['On your servers', 'One container image, or a Helm chart for Kubernetes with a Redis queue: one worker per waiting run, none when idle. Terraform for EKS, AKS and GKE. Works without internet once scenes are copied in.'],
     ['Watched like a service', 'Health checks, Prometheus metrics, alerts and a Grafana board: run time, failures, queue.'],
     ['Your data stays yours', 'NISAR data is free and public. Results stay on the machine that made them.'],
   ]
@@ -324,7 +324,7 @@ function Faq() {
   const qa = [
     ['Does this replace field reports?', 'No. It shows where radar detected water and ranks it, so teams know where to look first. Every map says it is not confirmed on the ground.'],
     ['How is this different from national flood maps?', 'National centres cover the whole country. We work for your district: your areas ranked with village names, district totals, waypoints for your teams, and a dashboard you control.'],
-    ['What data do you use?', 'NISAR L2 GCOV radar from NASA and ISRO, which is free and public. Sentinel-1 support is planned.'],
+    ['What data do you use?', 'NISAR L2 GCOV radar from NASA and ISRO, which is free and public. Sentinel-1 (European radar, also free) runs on the same engine for more frequent passes; its results are not yet checked against an independent reference.'],
     ['Where does it run?', 'On our servers, or on yours. A full scene pair takes about 25 seconds on an ordinary 4-core machine.'],
     ['What does a pilot cost?', 'We agree scope and cost per district after a short call. The first map of a past flood is free.'],
   ]

@@ -9,6 +9,9 @@ on:
       - 'sar_science_processor/**'
       - 'installer/**'
       - '.github/workflows/deploy-dashboard.yml'
+    # A version tag (git tag v1.1.0 && git push origin v1.1.0) publishes a GitHub release.
+    # Releases are immutable, so every release needs a new tag; pushes to main only build.
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -56,6 +59,7 @@ jobs:
 
   deploy-dashboard:
     needs: build-dashboard
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -90,10 +94,17 @@ jobs:
         run: |
           rustc -O -C panic=abort --edition 2021 installer/launcher.rs -o "NISAR Pro.exe"
 
+      - name: Version from tag
+        shell: pwsh
+        run: |
+          # v1.2.3 tag -> 1.2.3; any other build -> 0.0.0-dev (built and kept as an artifact only).
+          $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.Substring(1) } else { '0.0.0-dev' }
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Assemble release folder
         shell: pwsh
         run: |
-          $release = "NISAR-Pro-1.0.0"
+          $release = "NISAR-Pro"
           New-Item -ItemType Directory -Force "$release/sar-gateway/target/release" | Out-Null
           New-Item -ItemType Directory -Force "$release/sar_science_processor/target/release" | Out-Null
           New-Item -ItemType Directory -Force "$release/sar-dashboard-v3/dist" | Out-Null
@@ -104,7 +115,7 @@ jobs:
           Copy-Item "sar_science_processor/target/release/sar_science_processor.exe" "$release/sar_science_processor/target/release/"
           Copy-Item "sar-dashboard-v3/dist/*" "$release/sar-dashboard-v3/dist/" -Recurse
           @"
-          NISAR Pro 1.0.0
+          NISAR Pro $env:VERSION
 
           Double-click "NISAR Pro.exe". It starts the local server and opens the dashboard
           at http://localhost:3000. To close it, run "NISAR Pro.exe --stop"
@@ -115,33 +126,32 @@ jobs:
 
           NISAR granules are not included.
           "@ | Set-Content "$release/README.txt"
-          Compress-Archive -Path "$release" -DestinationPath "NISAR-Pro-1.0.0-windows-x64-portable.zip"
+          Compress-Archive -Path "$release" -DestinationPath "NISAR-Pro-windows-x64-portable.zip"
 
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "/DSourceDir=$PWD\NISAR-Pro-1.0.0" "/O$PWD" "installer\windows\NISAR-Pro.iss"
+          & $iscc "/DSourceDir=$PWD\NISAR-Pro" "/DAppVersion=$($env:VERSION -replace '-dev$', '')" "/O$PWD" "installer\windows\NISAR-Pro.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: NISAR-Pro-1.0.0-windows-x64
+          name: NISAR-Pro-${{ env.VERSION }}-windows-x64
           path: |
-            NISAR-Pro-Setup-1.0.0.exe
-            NISAR-Pro-1.0.0-windows-x64-portable.zip
+            NISAR-Pro-Setup.exe
+            NISAR-Pro-windows-x64-portable.zip
 
       - name: Publish GitHub release
-        if: github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          target_commitish: main
-          name: NISAR Pro v1.0.0
+          tag_name: ${{ github.ref_name }}
+          name: NISAR Pro ${{ github.ref_name }}
           files: |
-            NISAR-Pro-Setup-1.0.0.exe
-            NISAR-Pro-1.0.0-windows-x64-portable.zip
+            NISAR-Pro-Setup.exe
+            NISAR-Pro-windows-x64-portable.zip
           generate_release_notes: true
           make_latest: true

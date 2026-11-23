@@ -3,7 +3,7 @@
 | File | Platform | What it is |
 |---|---|---|
 | `launcher.rs` | Windows | Source of `NISAR Pro.exe`. Starts the server with no console window, opens the dashboard, shows errors in a message box. `--stop` closes it. |
-| `windows/NISAR-Pro.iss` | Windows | Inno Setup script for `NISAR-Pro-Setup-1.0.0.exe` |
+| `windows/NISAR-Pro.iss` | Windows | Inno Setup script for `NISAR-Pro-Setup.exe` |
 | `windows/nisar-pro.ico` | Windows | App icon |
 | `nisar-pro` | Linux | Start script inside the Linux package |
 | `install.sh` | Linux | Downloads the Linux package and links `nisar-pro` into `~/.local/bin` |
@@ -13,10 +13,10 @@
 The GitHub workflow `.github/workflows/deploy-dashboard.yml` builds both Windows files on
 every push to `main`:
 
-- `NISAR-Pro-Setup-1.0.0.exe`: installer. Per-user install into
+- `NISAR-Pro-Setup.exe`: installer. Per-user install into
   `%LOCALAPPDATA%\Programs\NISAR Pro`, no admin rights. Adds Start Menu entries
   "NISAR Pro" and "Stop NISAR Pro", an optional desktop icon, and an uninstaller.
-- `NISAR-Pro-1.0.0-windows-x64-portable.zip`: the same files without installing.
+- `NISAR-Pro-windows-x64-portable.zip`: the same files without installing.
 
 How the app behaves:
 
@@ -32,8 +32,8 @@ To build by hand on Windows (Rust and Inno Setup 6 installed, dashboard built):
 cargo build --release --manifest-path sar_science_processor\Cargo.toml
 cargo build --release --manifest-path sar-gateway\Cargo.toml
 rustc -O -C panic=abort --edition 2021 installer\launcher.rs -o "NISAR Pro.exe"
-# assemble NISAR-Pro-1.0.0\ as in the workflow, then:
-iscc /DSourceDir="$PWD\NISAR-Pro-1.0.0" /O"$PWD" installer\windows\NISAR-Pro.iss
+# assemble NISAR-Pro\ as in the workflow, then:
+iscc /DSourceDir="$PWD\NISAR-Pro" /DAppVersion=1.1.0 /O"$PWD" installer\windows\NISAR-Pro.iss
 ```
 
 ## Linux
@@ -42,3 +42,15 @@ iscc /DSourceDir="$PWD\NISAR-Pro-1.0.0" /O"$PWD" installer\windows\NISAR-Pro.iss
 curl -fsSL <install.sh URL from the GitLab release> | bash
 nisar-pro
 ```
+
+## Publishing a Windows release
+
+Pushes to `main` build the installer and keep it as a workflow artifact only. To publish a
+GitHub release, push a new version tag (GitHub releases are immutable, so never reuse a tag):
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+Asset names carry no version (`NISAR-Pro-Setup.exe`, `NISAR-Pro-windows-x64-portable.zip`), so
+`releases/latest/download/...` links in the README always point at the newest release.
