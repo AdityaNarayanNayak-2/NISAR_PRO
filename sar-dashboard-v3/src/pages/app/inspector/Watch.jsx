@@ -129,6 +129,7 @@ export default function WatchView() {
   const mode = useRunStore((s) => s.mode)
   const open = useRunStore((s) => s.open)
   const refreshRuns = useRunStore((s) => s.refresh)
+  const canAdmin = useRunStore((s) => s.canAdmin())
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
   const [form, setForm] = useState(null)
@@ -192,7 +193,7 @@ export default function WatchView() {
       {form ? <AreaForm initial={form} onDone={(saved) => { setForm(null); if (saved) load() }} /> : (
         <div className="sec">
           <h3>Areas <span className="muted">{areas.length || ''}</span></h3>
-          {areas.length === 0 && <p className="note" style={{ marginTop: 0 }}>No area yet. Move the map to a district or river reach and add it.</p>}
+          {areas.length === 0 && <p className="note" style={{ marginTop: 0 }}>{canAdmin ? 'No area yet. Move the map to a district or river reach and add it.' : 'No area is watched on this machine yet.'}</p>}
           <ul className="watch-areas">
             {areas.map((a) => (
               <li key={a.id}>
@@ -207,15 +208,15 @@ export default function WatchView() {
                   {(a.has_webhook || a.has_telegram) ? ` · ${[a.has_webhook && 'webhook', a.has_telegram && 'Telegram'].filter(Boolean).join(', ')}` : ' · no alert channel'}
                 </div>
                 <div className="m">Checked {ago(a.last_checked)}{a.last_result ? `: ${a.last_result}` : ''}</div>
-                <div className="acts">
+                {canAdmin && <div className="acts">
                   <button type="button" className="btn btn-sm" disabled={checking[a.id]} onClick={() => check(a.id)}>{checking[a.id] ? <><span className="spin" />Checking…</> : 'Check now'}</button>
                   <button type="button" className="btn btn-sm" onClick={() => edit(a)}>Edit</button>
                   <button type="button" className="icon-btn" onClick={() => remove(a)} aria-label={`Stop watching ${a.name}`} title="Stop watching"><Icon name="trash" size={14} /></button>
-                </div>
+                </div>}
               </li>
             ))}
           </ul>
-          <button type="button" className="btn" style={{ marginTop: 12 }} onClick={() => setForm({ ...EMPTY })}><Icon name="plus" size={14} />Add area</button>
+          {canAdmin && <button type="button" className="btn" style={{ marginTop: 12 }} onClick={() => setForm({ ...EMPTY })}><Icon name="plus" size={14} />Add area</button>}
         </div>
       )}
 

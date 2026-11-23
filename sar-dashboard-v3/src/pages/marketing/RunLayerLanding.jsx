@@ -121,7 +121,7 @@ function Proof() {
   return (
     <section className="rl-proof">
       <div><b>{FX.km2}</b><span>flood extent mapped over Bihar from one NISAR pass pair, {FX.acres}</span></div>
-      <div><b>44–65 s</b><span>for a full scene pair (2 × 1.157 billion samples) on a 4-core laptop, under 2.5 GB RAM</span></div>
+      <div><b>21–28 s</b><span>for a full scene pair (2 × 1.157 billion samples) on a 4-core laptop, about 1 GB RAM</span></div>
       <div><b>L and S band</b><span>checked against Sentinel-2 optical images on cloud-free pixels</span></div>
     </section>
   )
@@ -325,7 +325,7 @@ function Faq() {
     ['Does this replace field reports?', 'No. It shows where radar detected water and ranks it, so teams know where to look first. Every map says it is not confirmed on the ground.'],
     ['How is this different from national flood maps?', 'National centres cover the whole country. We work for your district: your areas ranked with village names, district totals, waypoints for your teams, and a dashboard you control.'],
     ['What data do you use?', 'NISAR L2 GCOV radar from NASA and ISRO, which is free and public. Sentinel-1 support is planned.'],
-    ['Where does it run?', 'On our servers, or on yours. A full scene pair takes about a minute on an ordinary 4-core machine.'],
+    ['Where does it run?', 'On our servers, or on yours. A full scene pair takes about 25 seconds on an ordinary 4-core machine.'],
     ['What does a pilot cost?', 'We agree scope and cost per district after a short call. The first map of a past flood is free.'],
   ]
   return (
@@ -363,7 +363,7 @@ function About() {
       <div>
         <p className="rl-eyebrow">About RunLayer Lab</p>
         <h2>You talk to the person who built it.</h2>
-        <p className="rl-lead">I am Aditya Narayan Nayak, from Kundura, Odisha. I built NISAR Pro end to end: the Rust radar engine that maps a full scene pair in about a minute, the processing service and the dashboard. The Bihar 2026 analysis is my IEEE InGARSS 2026 work. RunLayer Lab is small on purpose: one team that answers your call and runs your system.</p>
+        <p className="rl-lead">I am Aditya Narayan Nayak, from Kundura, Odisha. I built NISAR Pro end to end: the Rust radar engine that maps a full scene pair in about 25 seconds, the processing service and the dashboard. The Bihar 2026 analysis is my IEEE InGARSS 2026 work. RunLayer Lab is small on purpose: one team that answers your call and runs your system.</p>
         <p className="rl-award">1st prize, Technical Poster Presentation and Coding Ninja · TECHNIRVANA 2K26, GKCET Jeypore</p>
         <p className="rl-contact"><a href={BRIEFING}>{MAIL}</a></p>
       </div>

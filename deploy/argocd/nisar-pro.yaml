@@ -1,0 +1,45 @@
+# NISAR Pro from this repository (GitOps). Argo CD keeps the cluster equal to the chart on the
+# main branch: a merged change to deploy/helm is rolled out without anyone running helm.
+#
+#   kubectl apply -n argocd -f deploy/argocd/keda.yaml -f deploy/argocd/nisar-pro.yaml
+#
+# Set storageClass to a ReadWriteMany class of your cluster (gateway and workers share files):
+#   EKS efs-sc (deploy/terraform/k8s-eks) · AKS azurefile-csi · GKE standard-rwx (Filestore)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nisar-pro
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/AdityaNarayanNayak-2/NISAR_PRO.git
+    targetRevision: main
+    path: deploy/helm/nisar-pro
+    helm:
+      valuesObject:
+        image:
+          tag: main
+          pullPolicy: Always
+        gateway:
+          replicas: 2
+        queue:
+          enabled: true
+        worker:
+          mode: keda
+          maxReplicas: 4
+        persistence:
+          accessModes: [ReadWriteMany]
+          storageClass: efs-sc
+          size: 200Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nisar-pro
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+  # KEDA writes its own fields on the ScaledJob; do not fight over them.
+  ignoreDifferences:
+    - group: keda.sh
+      kind: ScaledJob
+      jsonPointers: [/status]

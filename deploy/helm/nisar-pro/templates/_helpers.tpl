@@ -16,3 +16,28 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "nisar.secretName" -}}
 {{- if .Values.earthdata.existingSecret }}{{ .Values.earthdata.existingSecret }}{{ else }}{{ include "nisar.fullname" . }}-earthdata{{ end }}
 {{- end }}
+{{- define "nisar.queueUrl" -}}
+{{- if .Values.queue.externalUrl }}{{ .Values.queue.externalUrl }}{{ else }}redis://{{ include "nisar.fullname" . }}-redis:6379{{ end }}
+{{- end }}
+{{- define "nisar.image" -}}
+"{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+{{- end }}
+{{- define "nisar.claim" -}}
+{{ .Values.persistence.existingClaim | default (printf "%s-data" (include "nisar.fullname" .)) }}
+{{- end }}
+{{/* Shared env for gateway and workers. */}}
+{{- define "nisar.env" -}}
+- name: RUST_LOG
+  value: {{ .Values.logLevel | quote }}
+{{- if .Values.queue.enabled }}
+- name: NISAR_QUEUE_URL
+  value: {{ include "nisar.queueUrl" . | quote }}
+{{- end }}
+{{- if or .Values.earthdata.token .Values.earthdata.existingSecret }}
+- name: EARTHDATA_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "nisar.secretName" . }}
+      key: EARTHDATA_TOKEN
+{{- end }}
+{{- end }}

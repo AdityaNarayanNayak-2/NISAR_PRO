@@ -1,0 +1,93 @@
+{{- define "nisar.workerPod" -}}
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ include "nisar.name" . }}-worker
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext: {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  # On SIGTERM the worker stops the engine and puts the run back in the queue.
+  terminationGracePeriodSeconds: 30
+  {{- if eq .Values.worker.mode "keda" }}
+  restartPolicy: Never
+  {{- end }}
+  containers:
+    - name: worker
+      image: {{ include "nisar.image" . }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      args: {{ if eq .Values.worker.mode "keda" }}["sar-gateway", "worker", "--once"]{{ else }}["sar-gateway", "worker"]{{ end }}
+      securityContext: {{- toYaml .Values.securityContext | nindent 8 }}
+      env:
+        {{- include "nisar.env" . | nindent 8 }}
+        - name: NISAR_WORKER_IDLE_EXIT_SECONDS
+          value: {{ .Values.worker.idleExitSeconds | quote }}
+      resources: {{- toYaml .Values.worker.resources | nindent 8 }}
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/nisar-pro
+        - name: tmp
+          mountPath: /tmp
+  volumes:
+    - name: data
+      {{- if .Values.persistence.enabled }}
+      persistentVolumeClaim:
+        claimName: {{ include "nisar.claim" . }}
+      {{- else }}
+      emptyDir: {}
+      {{- end }}
+    - name: tmp
+      emptyDir: {}
+  {{- with .Values.worker.nodeSelector }}
+  nodeSelector: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.worker.tolerations }}
+  tolerations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- if .Values.queue.enabled }}
+{{- if eq .Values.worker.mode "keda" }}
+# One Kubernetes Job per waiting run (KEDA "accurate": runs a worker has taken leave the list,
+# so they are not counted twice). Jobs are never scaled down mid-run: each exits on its own.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: {{ include "nisar.fullname" . }}-worker
+  labels: {{- include "nisar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  pollingInterval: {{ .Values.worker.pollingInterval }}
+  maxReplicaCount: {{ .Values.worker.maxReplicas }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  scalingStrategy:
+    strategy: accurate
+  jobTargetRef:
+    parallelism: 1
+    completions: 1
+    backoffLimit: 0           # a lost run is put back in the queue by the gateway, not retried here
+    activeDeadlineSeconds: 7200
+    template: {{- include "nisar.workerPod" . | nindent 6 }}
+  triggers:
+    - type: redis
+      metadata:
+        address: {{ .Values.queue.kedaAddress | default (printf "%s-redis.%s.svc:6379" (include "nisar.fullname" .) .Release.Namespace) | quote }}
+        listName: "nisar:queue"
+        listLength: "1"
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nisar.fullname" . }}-worker
+  labels: {{- include "nisar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "nisar.name" . }}-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template: {{- include "nisar.workerPod" . | nindent 4 }}
+{{- end }}
+{{- end }}

@@ -1,8 +1,13 @@
 # NISAR Pro Helm values.
 #
-# The gateway keeps the run list in memory and runs the engine as a child process, so it runs as
-# ONE replica with a ReadWriteOnce volume (strategy Recreate). Scale up with more CPU and
-# MAX_CONCURRENT_JOBS, not replicas.
+# Two ways to run:
+#   queue.enabled: false (default)  ONE gateway pod runs the engine itself, ReadWriteOnce volume,
+#                                   strategy Recreate. Scale up with CPU and maxConcurrentJobs.
+#   queue.enabled: true             gateway pods put runs in Redis; worker pods run the engine.
+#                                   Workers scale on the queue (KEDA ScaledJob: one Kubernetes Job
+#                                   per waiting run, 0 when idle). Gateway and workers share the
+#                                   data volume, so it must be ReadWriteMany (EFS, Azure Files,
+#                                   Filestore, NFS) unless everything runs on one node.
 
 image:
   repository: ghcr.io/adityanarayannayak-2/nisar-pro
@@ -19,6 +24,40 @@ logLevel: info
 earthdata:
   token: ""              # creates a Secret when set
   existingSecret: ""     # or use your own Secret with key EARTHDATA_TOKEN
+
+gateway:
+  replicas: 1            # more than 1 only with queue.enabled (copies share state through Redis)
+
+queue:
+  enabled: false
+  # Redis to use. Empty: the chart runs a small Redis (one pod, append-only file on a volume).
+  externalUrl: ""        # e.g. redis://my-redis:6379 (ElastiCache, Azure Cache, Memorystore)
+  kedaAddress: ""        # host:port KEDA reads the queue length from (needed with externalUrl)
+  kedaNamespace: keda    # KEDA's namespace, allowed through the Redis NetworkPolicy
+  redis:
+    image: docker.io/library/redis:7.4-alpine
+    storage: 1Gi
+    storageClass: ""
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+worker:
+  # keda: one Job per waiting run, scaled by KEDA from the Redis list (needs KEDA installed).
+  # deployment: a fixed number of always-on workers (no KEDA needed).
+  mode: keda
+  replicas: 1            # deployment mode
+  maxReplicas: 4         # keda mode: most runs at the same time
+  pollingInterval: 10    # keda mode: seconds between queue checks
+  idleExitSeconds: 30    # keda mode: a Job with nothing to do exits after this
+  resources:
+    requests:
+      cpu: "2"
+      memory: 3Gi
+    limits:
+      memory: 6Gi
+  nodeSelector: {}       # e.g. put engine runs on a spot/compute node pool
+  tolerations: []
 
 persistence:
   enabled: true

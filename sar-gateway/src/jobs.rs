@@ -71,6 +71,8 @@ pub struct JobMetadata {
     pub summary: Option<Value>,
     pub artifacts: Artifacts,
     pub cancel_tx: Option<tokio::sync::mpsc::Sender<()>>,
+    /// Client address that started the run (public mode limits runs per visitor). Not shown.
+    pub owner: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -83,6 +85,9 @@ pub struct JobResponse {
     pub summary: Option<Value>,
     pub artifacts: Artifacts,
     pub fingerprint: Option<String>,
+    /// Place in the queue (1 = next) while the run waits for an engine slot or a worker.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_position: Option<usize>,
     /// Settings the run was started with (absent for runs saved before job.json existed).
     pub request: Option<ProcessRequest>,
     // Older field names, kept so existing dashboards keep working.
@@ -108,11 +113,12 @@ impl JobMetadata {
             summary: None,
             artifacts: Artifacts::default(),
             cancel_tx: None,
+            owner: None,
         }
     }
 
     /// Keep a log line for late subscribers and send it to live ones.
-    fn emit(&mut self, line: impl Into<String>) {
+    pub fn emit(&mut self, line: impl Into<String>) {
         let line = line.into();
         self.logs.push(line.clone());
         let _ = self.tx.send(line);
@@ -127,6 +133,7 @@ impl JobMetadata {
             bbox: self.bbox.clone(),
             summary: self.summary.clone(),
             fingerprint: self.fingerprint.clone(),
+            queue_position: None,
             request: self.request.clone(),
             output_path: a.overlay.clone(),
             flood_report_path: a.report.clone(),
@@ -165,11 +172,11 @@ fn find_report(dir: &Path) -> Option<PathBuf> {
 
 // ─── Reading a finished run ─────────────────────────────────────────────────
 
-/// `YYYY-MM-DD` from a NISAR granule name (first `YYYYMMDDTHHMMSS` token).
+/// `YYYY-MM-DD` from a NISAR or Sentinel-1 file name (first `YYYYMMDDTHHMMSS` token).
 fn granule_date(name: &str) -> Option<String> {
-    name.split('_').find_map(|t| {
+    name.split(['_', '-']).find_map(|t| {
         let b = t.as_bytes();
-        (b.len() == 15 && b[8] == b'T' && b[..8].iter().all(u8::is_ascii_digit))
+        (b.len() >= 15 && b[8] == b'T' && b[..8].iter().all(u8::is_ascii_digit) && b[9..15].iter().all(u8::is_ascii_digit))
             .then(|| format!("{}-{}-{}", &t[0..4], &t[4..6], &t[6..8]))
     })
 }
@@ -261,18 +268,28 @@ struct JobFile {
     request: Option<ProcessRequest>,
 }
 
-fn write_job_file(m: &JobMetadata) {
-    let status = match &m.status {
+fn status_text(s: &JobStatus) -> String {
+    match s {
         JobStatus::Queued => "queued".to_string(),
         JobStatus::Running => "running".to_string(),
         JobStatus::Completed => "completed".to_string(),
         JobStatus::Failed(e) => format!("failed: {e}"),
-    };
-    let file = JobFile { id: m.id.clone(), created_at: m.created_at, status, request: m.request.clone() };
-    let dir = jobs_root().join(&m.id);
+    }
+}
+
+fn write_job_file(m: &JobMetadata) {
     // Keep the processor log next to the results once the run has ended.
-    if matches!(m.status, JobStatus::Completed | JobStatus::Failed(_)) {
-        let _ = std::fs::write(dir.join("run.log"), m.logs.join("\n"));
+    let logs = matches!(m.status, JobStatus::Completed | JobStatus::Failed(_)).then_some(m.logs.as_slice());
+    write_job_json(&m.id, m.created_at, &m.status, m.request.clone(), logs);
+}
+
+/// Write `job.json` (and `run.log` when given) into the run folder. Used by the gateway and by
+/// queue workers, which share the results folder.
+pub fn write_job_json(id: &str, created_at: u64, status: &JobStatus, request: Option<ProcessRequest>, logs: Option<&[String]>) {
+    let file = JobFile { id: id.to_string(), created_at, status: status_text(status), request };
+    let dir = jobs_root().join(id);
+    if let Some(lines) = logs {
+        let _ = std::fs::write(dir.join("run.log"), lines.join("\n"));
     }
     let path = dir.join("job.json");
     if let Ok(text) = serde_json::to_string_pretty(&file) {
@@ -307,6 +324,11 @@ fn load_run(dir: &Path) -> Option<JobMetadata> {
     if attach_results(&mut m, dir) {
         m.status = JobStatus::Completed;
         m.logs.push("[SYSTEM] Loaded saved run from disk.".into());
+        Some(m)
+    } else if let Some(st) = job_file.as_ref().map(|j| j.status.as_str()).filter(|s| crate::queue::enabled() && matches!(*s, "queued" | "running")) {
+        // Queue mode: a worker may still be on it. The queue reaper fails it if no worker is.
+        m.status = if st == "queued" { JobStatus::Queued } else { JobStatus::Running };
+        m.logs.push("[SYSTEM] Waiting for or running on a queue worker.".into());
         Some(m)
     } else if job_file.is_some() {
         // Started but never finished (gateway stopped mid-run).
@@ -394,7 +416,12 @@ fn file_exists(p: &Option<String>) -> bool {
     p.as_deref().is_some_and(|p| Path::new(p.trim()).is_file())
 }
 
-pub async fn start_job(state: crate::AppState, mut req: ProcessRequest) -> Result<StartResult, String> {
+pub async fn start_job(state: crate::AppState, req: ProcessRequest) -> Result<StartResult, String> {
+    start_job_as(state, req, None).await
+}
+
+/// Start a run for a client (`owner` is its address in public mode, used for per-visitor limits).
+pub async fn start_job_as(state: crate::AppState, mut req: ProcessRequest, owner: Option<String>) -> Result<StartResult, String> {
     // Only the science processor's flood mode exists; reject anything else early.
     let pipeline = req.pipeline.clone().unwrap_or_else(|| "flood".into());
     if pipeline != "flood" {
@@ -440,15 +467,32 @@ pub async fn start_job(state: crate::AppState, mut req: ProcessRequest) -> Resul
         }
     }
     req.force = false;
+    if let Some(o) = owner.as_deref() {
+        crate::public::check_capacity(&state, o).await?;
+    }
 
     let job_id = format!("run-{}", &Uuid::new_v4().simple().to_string()[..8]);
     let dir = jobs_root().join(&job_id);
     std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
 
     let mut m = JobMetadata::new(job_id.clone(), now_unix(), Some(req.clone()));
+    m.owner = owner.clone();
+    write_job_file(&m);
+
+    if crate::queue::enabled() {
+        // A worker picks it up. Every gateway copy (this one included) adds the run to its list
+        // when the "queued" event comes back, so insert it here first for an instant answer.
+        m.emit("[SYSTEM] Queued: waiting for a worker");
+        state.jobs.write().await.insert(job_id.clone(), Arc::new(RwLock::new(m)));
+        if let Err(e) = crate::queue::enqueue(&job_id, &req, now_unix(), owner).await {
+            let _ = delete_job(state.clone(), &job_id).await;
+            return Err(format!("Could not queue the run: {e}"));
+        }
+        return Ok(StartResult { job_id, reused: false });
+    }
+
     let (cancel_tx, cancel_rx) = tokio::sync::mpsc::channel(1);
     m.cancel_tx = Some(cancel_tx);
-    write_job_file(&m);
     let meta = Arc::new(RwLock::new(m));
     state.jobs.write().await.insert(job_id.clone(), meta.clone());
 
@@ -492,25 +536,19 @@ async fn fail(meta: &Arc<RwLock<JobMetadata>>, msg: String) {
     write_job_file(&m);
 }
 
-async fn run_processor(
-    state: crate::AppState,
-    job_id: String,
-    req: ProcessRequest,
-    meta: Arc<RwLock<JobMetadata>>,
+/// Run the engine for one run and send every output line to `lines`. Ok when the engine exited
+/// cleanly; the caller then reads the report from the run folder. Used by the gateway (local
+/// mode) and by queue workers.
+pub async fn run_engine(
+    job_id: &str,
+    req: &ProcessRequest,
+    lines: tokio::sync::mpsc::Sender<String>,
     mut cancel_rx: tokio::sync::mpsc::Receiver<()>,
-) {
-    let dir = jobs_root().join(&job_id);
-    let output = dir.join(&job_id).to_string_lossy().to_string();
+) -> Result<(), String> {
+    let output = jobs_root().join(job_id).join(job_id).to_string_lossy().to_string();
     let binary = find_science_processor_binary();
-
-    meta.write().await.emit("[SYSTEM] Waiting for a free processor slot...");
-    let _permit = match state.processor_semaphore.clone().acquire_owned().await {
-        Ok(p) => p,
-        Err(_) => return fail(&meta, "Processor scheduler closed".into()).await,
-    };
-
     let mut cmd = Command::new(&binary);
-    cmd.args(processor_args(&req, &output))
+    cmd.args(processor_args(req, &output))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("RUST_LOG", "info")
@@ -520,39 +558,19 @@ async fn run_processor(
         // The gateway runs without a console; don't open one per run.
         cmd.creation_flags(0x0800_0000);
     }
+    let mut child = cmd.spawn().map_err(|e| format!("Could not start {binary}: {e}"))?;
+    let _ = lines.send(format!("[SYSTEM] Processor started ({binary})")).await;
 
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => return fail(&meta, format!("Could not start {binary}: {e}")).await,
-    };
-    let started = std::time::Instant::now();
-    crate::metrics::run_started();
-    {
-        let mut m = meta.write().await;
-        m.status = JobStatus::Running;
-        m.emit(format!("[SYSTEM] Processor started ({binary})"));
-        write_job_file(&m);
-    }
-
-    let pump = |stream: Box<dyn tokio::io::AsyncRead + Unpin + Send>, meta: Arc<RwLock<JobMetadata>>| {
+    let pump = |stream: Box<dyn tokio::io::AsyncRead + Unpin + Send>, tx: tokio::sync::mpsc::Sender<String>| {
         tokio::spawn(async move {
-            let mut lines = BufReader::new(stream).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                let mut m = meta.write().await;
-                if line.contains("\"event\":\"georef\"") {
-                    if let Some(bb) = serde_json::from_str::<Value>(&line)
-                        .ok()
-                        .and_then(|v| serde_json::from_value::<GeoBbox>(v.get("bbox")?.clone()).ok())
-                    {
-                        m.bbox = Some(bb);
-                    }
-                }
-                m.emit(line);
+            let mut l = BufReader::new(stream).lines();
+            while let Ok(Some(line)) = l.next_line().await {
+                if tx.send(line).await.is_err() { break; }
             }
         })
     };
-    let out_task = pump(Box::new(child.stdout.take().unwrap()), meta.clone());
-    let err_task = pump(Box::new(child.stderr.take().unwrap()), meta.clone());
+    let out_task = pump(Box::new(child.stdout.take().unwrap()), lines.clone());
+    let err_task = pump(Box::new(child.stderr.take().unwrap()), lines);
 
     let result = tokio::select! {
         r = tokio::time::timeout(std::time::Duration::from_secs(RUN_TIMEOUT_SECS), child.wait()) => match r {
@@ -565,34 +583,179 @@ async fn run_processor(
     };
     let _ = out_task.await;
     let _ = err_task.await;
+    result
+}
 
-    if let Err(msg) = result {
-        crate::metrics::run_finished(false, started);
-        return fail(&meta, msg).await;
-    }
+/// Bounds from the engine's `{"event":"georef",...}` line, if this is one.
+fn georef_line(line: &str) -> Option<GeoBbox> {
+    if !line.contains("\"event\":\"georef\"") { return None; }
+    serde_json::from_value(serde_json::from_str::<Value>(line).ok()?.get("bbox")?.clone()).ok()
+}
 
+/// Add one engine output line to a run (log and, for the georef line, its bounds).
+pub fn take_line(m: &mut JobMetadata, line: String) {
+    if let Some(bb) = georef_line(&line) { m.bbox = Some(bb); }
+    m.emit(line);
+}
+
+/// Read the finished run folder into the run and drop older identical runs.
+async fn finish_completed(state: &crate::AppState, meta: &Arc<RwLock<JobMetadata>>, job_id: &str) -> bool {
+    let dir = jobs_root().join(job_id);
     let fp = {
         let mut m = meta.write().await;
         m.cancel_tx = None;
-        if !attach_results(&mut m, &dir) {
-            drop(m);
-            crate::metrics::run_finished(false, started);
-            return fail(&meta, "Processor finished but wrote no report".into()).await;
-        }
-        crate::metrics::run_finished(true, started);
+        if !attach_results(&mut m, &dir) { return false; }
         m.status = JobStatus::Completed;
-        write_job_file(&m);
         m.fingerprint.clone()
     };
     if let Some(fp) = fp {
-        for old in remove_duplicates_of(&state, &job_id, &fp).await {
+        for old in remove_duplicates_of(state, job_id, &fp).await {
             meta.write().await.emit(format!("[SYSTEM] Removed older identical run {old}"));
         }
     }
     let mut m = meta.write().await;
     m.emit("[SYSTEM] PROCESS_COMPLETED");
     write_job_file(&m);
+    true
+}
+
+async fn run_processor(
+    state: crate::AppState,
+    job_id: String,
+    req: ProcessRequest,
+    meta: Arc<RwLock<JobMetadata>>,
+    mut cancel_rx: tokio::sync::mpsc::Receiver<()>,
+) {
+    meta.write().await.emit("[SYSTEM] Waiting for a free processor slot...");
+    state.waiting.lock().unwrap().push_back(job_id.clone());
+    let permit = tokio::select! {
+        p = state.processor_semaphore.clone().acquire_owned() => p.ok(),
+        _ = cancel_rx.recv() => None,
+    };
+    state.waiting.lock().unwrap().retain(|i| i != &job_id);
+    let Some(_permit) = permit else {
+        return fail(&meta, "Cancelled by user".into()).await;
+    };
+
+    let started = std::time::Instant::now();
+    crate::metrics::run_started();
+    {
+        let mut m = meta.write().await;
+        m.status = JobStatus::Running;
+        write_job_file(&m);
+    }
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(256);
+    let sink = {
+        let meta = meta.clone();
+        tokio::spawn(async move {
+            while let Some(line) = rx.recv().await { take_line(&mut *meta.write().await, line); }
+        })
+    };
+    let result = run_engine(&job_id, &req, tx, cancel_rx).await;
+    let _ = sink.await;
+
+    if let Err(msg) = result {
+        crate::metrics::run_finished(false, started);
+        return fail(&meta, msg).await;
+    }
+    if !finish_completed(&state, &meta, &job_id).await {
+        crate::metrics::run_finished(false, started);
+        return fail(&meta, "Processor finished but wrote no report".into()).await;
+    }
+    crate::metrics::run_finished(true, started);
     info!("Job {} completed", job_id);
+}
+
+// ─── Queue mode: events from workers (see queue.rs) ─────────────────────────
+
+/// Apply a worker event to this gateway's run list.
+pub async fn apply_event(state: &crate::AppState, ev: crate::queue::Event) {
+    use crate::queue::Kind;
+    let id = ev.id.clone();
+    if !is_safe_id(&id) { return; }
+    if ev.kind == Kind::Deleted {
+        state.jobs.write().await.remove(&id);
+        return;
+    }
+    let existing = state.jobs.read().await.get(&id).cloned();
+    let fresh = existing.is_none();
+    let meta = match existing {
+        Some(m) => m,
+        None => {
+            let mut m = JobMetadata::new(id.clone(), ev.created_at.unwrap_or_else(now_unix), ev.request.clone());
+            m.owner = ev.owner.clone();
+            if ev.kind != Kind::Queued {
+                m.emit("[SYSTEM] Earlier log lines are in run.log once the run ends.");
+            }
+            let m = Arc::new(RwLock::new(m));
+            state.jobs.write().await.entry(id.clone()).or_insert(m).clone()
+        }
+    };
+    match ev.kind {
+        Kind::Queued => {
+            let mut m = meta.write().await;
+            // The gateway that queued the run already logged this line.
+            if fresh || m.status != JobStatus::Queued {
+                if let Some(t) = ev.text { m.emit(t); }
+            }
+            m.status = JobStatus::Queued;
+        }
+        Kind::Running => {
+            crate::metrics::run_started();
+            let mut m = meta.write().await;
+            m.status = JobStatus::Running;
+            if let Some(t) = ev.text { m.emit(t); }
+        }
+        Kind::Log => {
+            if let Some(t) = ev.text { take_line(&mut *meta.write().await, t); }
+        }
+        Kind::Completed => {
+            let ok = finish_completed_event(state, &meta, &id).await;
+            crate::metrics::run_finished_secs(ok, ev.seconds.unwrap_or(0.0));
+        }
+        Kind::Failed => {
+            crate::metrics::run_finished_secs(false, ev.seconds.unwrap_or(0.0));
+            let msg = ev.text.unwrap_or_else(|| "Failed".into());
+            let mut m = meta.write().await;
+            m.status = JobStatus::Failed(msg.clone());
+            m.emit(format!("[SYSTEM] PROCESS_FAILED: {msg}"));
+        }
+        Kind::Cancel | Kind::Deleted => {}
+    }
+}
+
+/// Like `finish_completed`, but the worker has already written job.json and run.log.
+async fn finish_completed_event(state: &crate::AppState, meta: &Arc<RwLock<JobMetadata>>, job_id: &str) -> bool {
+    let dir = jobs_root().join(job_id);
+    let fp = {
+        let mut m = meta.write().await;
+        if !attach_results(&mut m, &dir) {
+            m.status = JobStatus::Failed("The worker finished but no report was found".into());
+            return false;
+        }
+        m.status = JobStatus::Completed;
+        m.fingerprint.clone()
+    };
+    if let Some(fp) = fp {
+        for old in remove_duplicates_of(state, job_id, &fp).await {
+            meta.write().await.emit(format!("[SYSTEM] Removed older identical run {old}"));
+        }
+    }
+    meta.write().await.emit("[SYSTEM] PROCESS_COMPLETED");
+    true
+}
+
+/// Place in the queue for each waiting run (1 = next).
+pub async fn queue_positions(state: &crate::AppState) -> std::collections::HashMap<String, usize> {
+    if crate::queue::enabled() {
+        return crate::queue::positions().await;
+    }
+    state.waiting.lock().unwrap().iter().enumerate().map(|(i, id)| (id.clone(), i + 1)).collect()
+}
+
+/// Path of a run's report, for queue workers checking their output.
+pub fn has_report(job_id: &str) -> bool {
+    find_report(&jobs_root().join(job_id)).is_some()
 }
 
 /// True when the engine binary can be found (readiness probe and metrics).
@@ -627,6 +790,14 @@ fn find_science_processor_binary() -> String {
 // ─── Cancel / delete / prune ────────────────────────────────────────────────
 
 pub async fn cancel_job(state: crate::AppState, job_id: String) -> Result<(), String> {
+    if crate::queue::enabled() {
+        let active = match state.jobs.read().await.get(&job_id) {
+            Some(l) => matches!(l.read().await.status, JobStatus::Queued | JobStatus::Running),
+            None => return Err("Job not found".into()),
+        };
+        if !active { return Err("Job is not running".into()); }
+        return crate::queue::cancel(&job_id).await;
+    }
     let jobs = state.jobs.read().await;
     let lock = jobs.get(&job_id).ok_or("Job not found")?;
     let mut m = lock.write().await;
@@ -646,6 +817,7 @@ pub async fn delete_job(state: crate::AppState, job_id: &str) -> Result<usize, S
     let _ = cancel_job(state.clone(), job_id.to_string()).await;
     let files = delete_run_dir(job_id);
     let removed = state.jobs.write().await.remove(job_id).is_some();
+    crate::queue::deleted(job_id).await;
     if removed || files > 0 {
         Ok(files)
     } else {
@@ -676,6 +848,7 @@ pub async fn prune_jobs(state: crate::AppState, keep: usize) -> Result<PruneSumm
     let mut jobs = state.jobs.write().await;
     for (_, id) in finished.into_iter().skip(keep) {
         jobs.remove(&id);
+        crate::queue::deleted(&id).await;
         summary.files_deleted += delete_run_dir(&id);
         summary.jobs_deleted += 1;
     }
@@ -709,8 +882,35 @@ fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+/// Sentinel-1 backscatter GeoTIFF (Planetary Computer RTC `S1x_IW_GRDH_..._VV.tif`, or OPERA
+/// `OPERA_L2_RTC-S1_T121-..._VV.tif`): C-band, date from the name, track from OPERA's `T<orbit>`.
+fn s1_scene(p: &Path, name: &str) -> Option<SceneFile> {
+    let lower = name.to_ascii_lowercase();
+    if !(lower.ends_with(".tif") || lower.ends_with(".tiff")) || lower.contains("_mask") {
+        return None;
+    }
+    let s1 = name.starts_with("S1A_") || name.starts_with("S1B_") || name.starts_with("S1C_") || name.starts_with("S1D_") || name.contains("RTC-S1");
+    if !s1 {
+        return None;
+    }
+    let date = granule_date(name);
+    let track = name.split('_').find_map(|t| t.strip_prefix('T').and_then(|r| r.split('-').next()).and_then(|n| n.parse::<u32>().ok()));
+    Some(SceneFile {
+        path: p.canonicalize().unwrap_or_else(|_| p.to_path_buf()).to_string_lossy().to_string(),
+        date,
+        band: Some("c".to_string()),
+        track,
+        frame: None,
+        size_bytes: p.metadata().map(|m| m.len()).unwrap_or(0),
+        name: name.to_string(),
+    })
+}
+
 fn scene_from_path(p: &Path) -> Option<SceneFile> {
     let name = p.file_name()?.to_str()?.to_string();
+    if let Some(s) = s1_scene(p, &name) {
+        return Some(s);
+    }
     if !name.ends_with(".h5") || !name.contains("GCOV") {
         return None;
     }
@@ -765,4 +965,21 @@ pub fn list_scenes() -> Vec<SceneFile> {
     }
     out.sort_by(|a, b| a.band.cmp(&b.band).then(a.date.cmp(&b.date)));
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scene_names() {
+        let n = granule_info("NISAR_L2_PR_GCOV_029_098_A_014_4005_DHDH_A_20260831T233810_20260831T233845_P05023_N_F_J_001.h5").unwrap();
+        assert_eq!((n.band.as_deref(), n.date.as_deref(), n.track, n.frame), (Some("l"), Some("2026-08-31"), Some(98), Some(14)));
+        let s = granule_info("S1D_IW_GRDH_1SDV_20260912T001128_20260912T001153_004537_008704_rtc_VV.tif").unwrap();
+        assert_eq!((s.band.as_deref(), s.date.as_deref(), s.track), (Some("c"), Some("2026-09-12"), None));
+        let o = granule_info("OPERA_L2_RTC-S1_T121-258660-IW2_20260831T001130Z_20260831T120000Z_S1D_30_v1.0_VV.tif").unwrap();
+        assert_eq!((o.band.as_deref(), o.date.as_deref(), o.track), (Some("c"), Some("2026-08-31"), Some(121)));
+        assert!(granule_info("OPERA_L2_RTC-S1_T121-258660-IW2_20260831T001130Z_x_S1D_30_v1.0_mask.tif").is_none());
+        assert!(granule_info("photo.tif").is_none());
+    }
 }

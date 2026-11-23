@@ -1,0 +1,19 @@
+# KEDA (event-driven autoscaling) from its official Helm chart. Not needed on AKS, which has a
+# KEDA add-on (the Terraform in deploy/terraform/k8s-aks turns it on).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://kedacore.github.io/charts
+    chart: keda
+    targetRevision: 2.16.1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]

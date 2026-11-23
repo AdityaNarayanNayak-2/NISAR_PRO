@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 
+use rayon::prelude::*;
 use rustyhdf5::MmapFile;
 use rustyhdf5_format::chunked_read::{collect_chunk_info, ChunkInfo};
 use rustyhdf5_format::data_layout::DataLayout;
@@ -265,6 +266,7 @@ impl ChunkedF32Reader {
             .expect("index inserted by ensure_index");
         let (mut data, mut stats) =
             read_window_from_with(index, self.file.as_bytes(), window, &mut on_chunk)?;
+        release_window_pages(index, self.file.as_bytes(), window);
         stats.elapsed_ms = started.elapsed().as_millis();
         on_chunk(&stats);
         data.shrink_to_fit();
@@ -606,51 +608,55 @@ where
             detail: "chunk byte size".to_string(),
         })?;
 
+    // One row of chunks at a time: decompress its chunks in parallel (most of a full-scene read
+    // is spent here), then copy them into `out` in order. Same bytes as a serial read; extra
+    // memory is one decoded chunk row.
     for chunk_row in first_row..=last_row {
+        let mut cells: Vec<(u64, u64, Option<&ChunkInfo>)> = Vec::new();
         for chunk_col in first_col..=last_col {
-            stats.cells_touched += 1;
             let key = (chunk_row * index.chunk_rows, chunk_col * index.chunk_cols);
-            let info = match index.chunks.get(&key) {
-                Some(info) => info,
-                None => {
-                    stats.chunks_missing += 1;
-                    on_chunk(&stats);
-                    continue;
-                }
-            };
-
-            let start = info.address;
-            let end = start
-                .checked_add(info.chunk_size as u64)
-                .ok_or(WindowError::SizeOverflow {
-                    detail: format!("chunk at {start} plus size {}", info.chunk_size),
+            let info = index.chunks.get(&key);
+            if let Some(info) = info {
+                let end = info.address.checked_add(info.chunk_size as u64).ok_or(WindowError::SizeOverflow {
+                    detail: format!("chunk at {} plus size {}", info.address, info.chunk_size),
                 })?;
-            if end > file_len {
-                return Err(WindowError::ChunkOutOfFile {
-                    start,
-                    end,
-                    file_len,
-                });
+                if end > file_len {
+                    return Err(WindowError::ChunkOutOfFile { start: info.address, end, file_len });
+                }
             }
-            let start_usize = start as usize;
-            let end_usize = end as usize;
-            let compressed = &file_data[start_usize..end_usize];
+            cells.push((key.0, key.1, info));
+        }
 
-            let pipeline = pipeline_for_chunk(&index.pipeline, info.filter_mask);
-            let decoded = decompress_chunk(compressed, &pipeline, expected_decoded, ELEMENT_SIZE as u32)?;
-            if decoded.len() != expected_decoded {
-                return Err(WindowError::ShortChunk {
-                    addr: start,
-                    expected: expected_decoded as u64,
-                    got: decoded.len() as u64,
-                });
-            }
+        let decoded: Vec<Result<Option<Vec<u8>>, WindowError>> = cells
+            .par_iter()
+            .map(|&(_, _, info)| {
+                let Some(info) = info else { return Ok(None) };
+                let start = info.address as usize;
+                let compressed = &file_data[start..start + info.chunk_size as usize];
+                let pipeline = pipeline_for_chunk(&index.pipeline, info.filter_mask);
+                let decoded = decompress_chunk(compressed, &pipeline, expected_decoded, ELEMENT_SIZE as u32)?;
+                if decoded.len() != expected_decoded {
+                    return Err(WindowError::ShortChunk {
+                        addr: info.address,
+                        expected: expected_decoded as u64,
+                        got: decoded.len() as u64,
+                    });
+                }
+                Ok(Some(decoded))
+            })
+            .collect();
+
+        for (&(chunk_r0, chunk_c0, info), decoded) in cells.iter().zip(decoded) {
+            stats.cells_touched += 1;
+            let (Some(info), Some(decoded)) = (info, decoded?) else {
+                stats.chunks_missing += 1;
+                on_chunk(&stats);
+                continue;
+            };
             stats.chunks_decoded += 1;
             stats.compressed_bytes += info.chunk_size as u64;
             stats.decoded_bytes += decoded.len() as u64;
 
-            let chunk_r0 = key.0;
-            let chunk_c0 = key.1;
             let chunk_r1 = (chunk_r0 + index.chunk_rows).min(index.rows);
             let chunk_c1 = (chunk_c0 + index.chunk_cols).min(index.cols);
 
@@ -675,6 +681,43 @@ where
     }
 
     Ok((out, stats))
+}
+
+/// After a window is decoded, tell the kernel this process no longer needs the file pages of
+/// its chunks (`MADV_DONTNEED`). The file is mapped read-only, so nothing is lost: a page read
+/// again is faulted back from the page cache. Without this, every chunk page touched stays in
+/// the process's resident memory until the file is closed, which is most of a full-scene
+/// read's peak RAM. Only called on the read-only file mapping, never on owned buffers.
+fn release_window_pages(index: &ChunkIndex, mapping: &[u8], window: Window) {
+    #[cfg(unix)]
+    {
+        // SAFETY: sysconf has no preconditions.
+        let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        let page = if page > 0 { page as usize } else { 4096 };
+        let base = mapping.as_ptr() as usize;
+        let (r0, r1) = (window.row_start / index.chunk_rows, (window.row_end - 1) / index.chunk_rows);
+        let (c0, c1) = (window.col_start / index.chunk_cols, (window.col_end - 1) / index.chunk_cols);
+        for cr in r0..=r1 {
+            for cc in c0..=c1 {
+                let Some(info) = index.chunks.get(&(cr * index.chunk_rows, cc * index.chunk_cols)) else { continue };
+                let (start, end) = (info.address as usize, info.address as usize + info.chunk_size as usize);
+                if end > mapping.len() {
+                    continue;
+                }
+                // Whole pages inside this chunk only.
+                let first = (base + start).div_ceil(page) * page;
+                let last = (base + end) / page * page;
+                if last > first {
+                    // SAFETY: [first, last) lies inside the live read-only mapping `mapping`;
+                    // MADV_DONTNEED on a shared file mapping only drops this process's page
+                    // references and does not change the file or other mappings.
+                    unsafe { libc::madvise(first as *mut libc::c_void, last - first, libc::MADV_DONTNEED) };
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = (index, mapping, window);
 }
 
 fn bytemuck_cast(bytes: &[u8]) -> &[f32] {

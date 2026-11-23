@@ -33,9 +33,24 @@ fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |d, (x, y)| d | (x ^ y)) == 0
 }
 
+/// True when the request carries the admin login (false when no login is configured).
+pub fn is_admin(headers: &axum::http::HeaderMap) -> bool {
+    let Some(Some(expected)) = EXPECTED.get() else { return false };
+    let given = headers.get(header::AUTHORIZATION).map(|v| v.as_bytes()).unwrap_or(b"");
+    same(given, expected.as_bytes())
+}
+
 pub async fn basic_auth(req: Request<Body>, next: Next) -> Response {
-    let Some(Some(expected)) = EXPECTED.get() else { return next.run(req).await };
-    if matches!(req.uri().path(), "/healthz" | "/readyz") {
+    let public = crate::public::enabled();
+    let open = public && crate::public::open_to_visitors(req.method(), req.uri().path());
+    let Some(Some(expected)) = EXPECTED.get() else {
+        // Public mode without an admin login: the machine cannot be changed from outside at all.
+        if public && !open {
+            return (StatusCode::FORBIDDEN, "not available in the public demo").into_response();
+        }
+        return next.run(req).await;
+    };
+    if open || matches!(req.uri().path(), "/healthz" | "/readyz") {
         return next.run(req).await;
     }
     let given = req.headers().get(header::AUTHORIZATION).map(|v| v.as_bytes()).unwrap_or(b"");

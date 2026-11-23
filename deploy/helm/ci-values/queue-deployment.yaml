@@ -1,0 +1,7 @@
+# Queue with always-on workers (no KEDA) and an external Redis.
+queue:
+  enabled: true
+  externalUrl: redis://redis.example.internal:6379
+worker:
+  mode: deployment
+  replicas: 2

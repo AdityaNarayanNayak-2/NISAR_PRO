@@ -42,15 +42,34 @@ pub async fn search_nisar_handler(Query(params): Query<NisarSearchQuery>) -> Jso
 /// If an identical finished run exists, its id is returned with `reused: true`.
 pub async fn start_job_handler(
     State(state): State<crate::AppState>,
-    Json(payload): Json<ProcessRequest>,
+    headers: axum::http::HeaderMap,
+    Json(mut payload): Json<ProcessRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    match crate::jobs::start_job(state, payload).await {
+    // Public demo: a visitor without the admin login gets the limits in public.rs.
+    let owner = if crate::public::enabled() && !crate::auth::is_admin(&headers) {
+        let check = {
+            let mut p = payload.clone();
+            tokio::task::spawn_blocking(move || crate::public::check_request(&mut p).map(|_| p)).await
+        };
+        match check {
+            Ok(Ok(p)) => payload = p,
+            Ok(Err(msg)) => return Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg })))),
+            Err(_) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "check failed" })))),
+        }
+        Some(crate::rate_limit::extract_client_ip(&headers, None))
+    } else {
+        None
+    };
+    match crate::jobs::start_job_as(state, payload, owner).await {
         Ok(r) => Ok(Json(json!({
             "job_id": r.job_id,
             "status": if r.reused { "completed" } else { "queued" },
             "reused": r.reused
         }))),
-        Err(msg) => Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg })))),
+        Err(msg) => match msg.strip_prefix(crate::public::BUSY) {
+            Some(m) => Err((StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": m, "busy": true })))),
+            None => Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg })))),
+        },
     }
 }
 
@@ -63,10 +82,13 @@ pub async fn list_scenes_handler() -> Json<Vec<crate::jobs::SceneFile>> {
 pub async fn list_jobs_handler(
     State(state): State<crate::AppState>,
 ) -> Json<Vec<crate::jobs::JobResponse>> {
+    let pos = crate::jobs::queue_positions(&state).await;
     let jobs = state.jobs.read().await;
     let mut list = Vec::with_capacity(jobs.len());
     for metadata_lock in jobs.values() {
-        list.push(metadata_lock.read().await.to_response());
+        let mut r = metadata_lock.read().await.to_response();
+        r.queue_position = pos.get(&r.id).copied();
+        list.push(r);
     }
     list.sort_by(|a, b| b.created_at.cmp(&a.created_at).then_with(|| a.id.cmp(&b.id)));
     Json(list)
@@ -76,10 +98,12 @@ pub async fn get_job_handler(
     State(state): State<crate::AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<crate::jobs::JobResponse>, StatusCode> {
+    let pos = crate::jobs::queue_positions(&state).await;
     let jobs = state.jobs.read().await;
     if let Some(metadata_lock) = jobs.get(&id) {
-        let metadata = metadata_lock.read().await;
-        Ok(Json(metadata.to_response()))
+        let mut r = metadata_lock.read().await.to_response();
+        r.queue_position = pos.get(&id).copied();
+        Ok(Json(r))
     } else {
         Err(StatusCode::NOT_FOUND)
     }

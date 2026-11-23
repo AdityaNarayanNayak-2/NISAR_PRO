@@ -4,9 +4,15 @@ metadata:
   name: {{ include "nisar.fullname" . }}
   labels: {{- include "nisar.labels" . | nindent 4 }}
 spec:
-  replicas: 1   # run state lives in this pod; see values.yaml
+  {{- if .Values.queue.enabled }}
+  replicas: {{ .Values.gateway.replicas }}   # copies share runs and logs through Redis
+  strategy:
+    type: RollingUpdate
+  {{- else }}
+  replicas: 1   # without the queue, run state lives in this pod; see values.yaml
   strategy:
     type: Recreate
+  {{- end }}
   selector:
     matchLabels: {{- include "nisar.selector" . | nindent 6 }}
   template:
@@ -26,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: gateway
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "nisar.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
@@ -35,15 +41,7 @@ spec:
           env:
             - name: MAX_CONCURRENT_JOBS
               value: {{ .Values.maxConcurrentJobs | quote }}
-            - name: RUST_LOG
-              value: {{ .Values.logLevel | quote }}
-            {{- if or .Values.earthdata.token .Values.earthdata.existingSecret }}
-            - name: EARTHDATA_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "nisar.secretName" . }}
-                  key: EARTHDATA_TOKEN
-            {{- end }}
+            {{- include "nisar.env" . | nindent 12 }}
           startupProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 2
@@ -56,7 +54,14 @@ spec:
             httpGet: { path: /readyz, port: http }
             periodSeconds: 10
             timeoutSeconds: 3
+          {{- if .Values.queue.enabled }}
+          # The engine runs in worker pods; the gateway only serves the API and dashboard.
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          {{- else }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/nisar-pro
@@ -66,7 +71,7 @@ spec:
         - name: data
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
-            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "nisar.fullname" .)) }}
+            claimName: {{ include "nisar.claim" . }}
           {{- else }}
           emptyDir: {}
           {{- end }}

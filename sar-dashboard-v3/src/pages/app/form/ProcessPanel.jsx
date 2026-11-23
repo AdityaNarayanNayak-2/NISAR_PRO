@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRunStore } from '../stores/useRunStore'
 import { useMapStore } from '../stores/useMapStore'
-import { DEFAULTS, sceneInfo, validateRun } from './validateRun'
+import { DEFAULTS, isSentinel1, sceneInfo, validateRun } from './validateRun'
 import { formatDate, formatNumber } from '../lib/units'
 import CatalogSearch from './CatalogSearch'
 import DbRuler from '../ui/DbRuler'
@@ -21,6 +21,11 @@ const THR = [
 
 /** Polarizations in the file, from the NISAR name (…_4005_DHDH_…: dual-pol, H transmit). */
 function polsOf(name) {
+  // Sentinel-1 GeoTIFFs hold one polarization each, named in the file (…_VV.tif).
+  if (isSentinel1(name)) {
+    const p = /[_-](VV|VH|HH|HV)[._]/i.exec(name)
+    return p ? [p[1].toUpperCase()] : null
+  }
   const m = /_\d{4}_([A-Z]{2})([A-Z]{2})_/.exec(name || '')
   if (!m) return null
   const c = m[1]
@@ -47,17 +52,17 @@ function Slider({ label, hint, value, onChange, min, max, step, unit = 'dB', err
   )
 }
 
-function SceneSelect({ label, value, onChange, scenes, filter, error }) {
+function SceneSelect({ label, value, onChange, scenes, filter, error, allowPath = true }) {
   const info = sceneInfo(value)
   const options = (scenes || []).filter(filter)
   return (
     <div className="field">
       <span>{label}</span>
       <select className="input" value={options.some((s) => s.path === value) ? value : ''} onChange={(e) => onChange(e.target.value)} aria-invalid={!!error}>
-        <option value="">{options.length ? 'Choose a scene…' : 'No matching scenes on this computer'}</option>
-        {options.map((s) => <option key={s.path} value={s.path}>{`${(s.band || '?').toUpperCase()} · ${formatDate(s.date)} · track ${s.track ?? '?'} · frame ${s.frame ?? '?'}`}</option>)}
+        <option value="">{options.length ? 'Choose a scene…' : allowPath ? 'No matching scenes on this computer' : 'No matching scenes'}</option>
+        {options.map((s) => <option key={s.path} value={s.path}>{s.band === 'c' ? `C · ${formatDate(s.date)} · Sentinel-1${polsOf(s.name) ? ` ${polsOf(s.name)[0]}` : ''}${s.track ? ` · orbit ${s.track}` : ''}` : `${(s.band || '?').toUpperCase()} · ${formatDate(s.date)} · track ${s.track ?? '?'} · frame ${s.frame ?? '?'}`}</option>)}
       </select>
-      <input className="input mono tiny-input" placeholder="or paste a full path to a GCOV .h5" value={value} onChange={(e) => onChange(e.target.value.trim())} spellCheck="false" />
+      {allowPath && <input className="input mono tiny-input" placeholder="or paste a full path (NISAR GCOV .h5 or Sentinel-1 .tif)" value={value} onChange={(e) => onChange(e.target.value.trim())} spellCheck="false" />}
       {value && info.name && !error && <div className="hint">{info.name}</div>}
       {error && <div className="err-text">{error}</div>}
     </div>
@@ -65,7 +70,9 @@ function SceneSelect({ label, value, onChange, scenes, filter, error }) {
 }
 
 export default function ProcessPanel() {
-  const { scenes, startRun, toast, mode, loadScenes } = useRunStore()
+  const { scenes, startRun, toast, mode, loadScenes, config } = useRunStore()
+  // Public demo visitor: only the scenes listed here, no file paths, no NASA downloads.
+  const visitor = config.public_mode && !config.admin
   const { picking, startPicking, setPreview } = useMapStore()
   const [tab, setTab] = useState('local')
   const [busy, setBusy] = useState(false)
@@ -78,7 +85,9 @@ export default function ProcessPanel() {
   // Pick a scene: the band follows it, and thresholds follow the band until edited.
   const setScene = (role) => (path) => setV((o) => {
     const band = sceneInfo(path).band || o.band
-    const next = { ...o, [role]: path, band }
+    // Sentinel-1 files hold one polarization: use it.
+    const only = polsOf(sceneInfo(path).name)
+    const next = { ...o, [role]: path, band, pol: only?.length === 1 ? only[0] : o.pol }
     return band !== o.band && !o.edited ? { ...next, ...DEFAULTS[band] } : next
   })
 
@@ -159,20 +168,27 @@ export default function ProcessPanel() {
   return (
     <div className="process">
       <div className="insp-scroll">
+        {visitor && (
+          <div className="sec public-note">
+            <h3>Public demo</h3>
+            <p>Your run goes into a queue on the NISAR Pro machine and runs on real NISAR radar scenes. You can have {config.runs_per_visitor === 1 ? 'one run' : `${config.runs_per_visitor} runs`} waiting or running at a time{config.active_runs ? `; ${config.active_runs} ${config.active_runs === 1 ? 'run is' : 'runs are'} in the queue now` : ''}. Pick two scenes from the list, an area and the thresholds. A run with the same settings as a finished one opens straight away.</p>
+          </div>
+        )}
         <div className="sec">
           <div className="form-step"><span className="n">1</span>Scenes</div>
-          <div className="seg wide" role="tablist" aria-label="Scene source" style={{ marginBottom: 12 }}>
+          {!visitor && <div className="seg wide" role="tablist" aria-label="Scene source" style={{ marginBottom: 12 }}>
             <button type="button" role="tab" aria-pressed={tab === 'local'} onClick={() => setTab('local')}>This computer <span className="muted">{scenes ? scenes.length : ''}</span></button>
             <button type="button" role="tab" aria-pressed={tab === 'catalog'} onClick={() => setTab('catalog')}><Icon name="globe" size={13} />NASA catalog</button>
-          </div>
-          {tab === 'catalog' ? <CatalogSearch onUse={use} /> : (
+          </div>}
+          {tab === 'catalog' && !visitor ? <CatalogSearch onUse={use} /> : (
             <>
-              <SceneSelect label="Earlier scene (baseline)" value={v.baseline} onChange={setScene('baseline')} scenes={scenes} filter={() => true} error={shown('baseline')} />
+              <SceneSelect label="Earlier scene (baseline)" value={v.baseline} onChange={setScene('baseline')} scenes={scenes} filter={() => true} error={shown('baseline')} allowPath={!visitor} />
               <SceneSelect
                 label="Later scene (active)"
                 value={v.active}
                 onChange={setScene('active')}
                 scenes={scenes}
+                allowPath={!visitor}
                 error={v.active && v.baseline ? errors.active : shown('active')}
                 filter={(s) => !v.baseline || (s.path !== v.baseline && (!base.band || s.band === base.band) && (!base.tf || (s.track === base.tf.track && s.frame === base.tf.frame)) && (!base.date || s.date > base.date))}
               />
@@ -203,7 +219,7 @@ export default function ProcessPanel() {
           <div className="form-step"><span className="n">3</span>Radar</div>
           <div className="row-between">
             <span className="muted">Band</span>
-            <span>{v.band === 's' ? 'S-band · 3.2 GHz' : 'L-band · 1.24 GHz'} <span className="muted">from the scene</span></span>
+            <span>{v.band === 's' ? 'S-band · 3.2 GHz' : v.band === 'c' ? 'C-band · 5.405 GHz · Sentinel-1' : 'L-band · 1.24 GHz'} <span className="muted">from the scene</span></span>
           </div>
           <div className="row-between" style={{ marginTop: 10 }}>
             <span className="muted">Polarization</span>
@@ -222,11 +238,11 @@ export default function ProcessPanel() {
           <button type="button" className="link" onClick={() => setV((o) => ({ ...o, ...DEFAULTS[o.band], minArea: 8, edited: false }))}>Reset all to {v.band.toUpperCase()}-band defaults</button>
         </div>
 
-        <div className="sec">
+        {!visitor && <div className="sec">
           <div className="form-step"><span className="n">5</span>Optional inputs</div>
           <label className="field"><span>GUNW coherence file</span><input className="input mono tiny-input" placeholder="path to NISAR GUNW .h5" value={v.gunw} onChange={(e) => set('gunw')(e.target.value.trim())} spellCheck="false" /></label>
           <label className="field"><span>Reference water mask</span><input className="input mono tiny-input" placeholder="path to a water-mask GeoTIFF" value={v.mask} onChange={(e) => set('mask')(e.target.value.trim())} spellCheck="false" /></label>
-        </div>
+        </div>}
 
         <div className="sec">
           <div className="row-between"><span className="form-step" style={{ margin: 0 }}>Command</span><button type="button" className="icon-btn xs" title="Copy command" aria-label="Copy command" onClick={() => navigator.clipboard?.writeText(command).then(() => toast('Command copied.', 'ok'))}><Icon name="copy" size={13} /></button></div>
@@ -234,8 +250,8 @@ export default function ProcessPanel() {
         </div>
       </div>
       <div className="form-foot">
-        <div className="why">{touched && !valid ? firstError : 'A full scene pair takes about a minute.'}</div>
-        <button type="button" className="btn btn-accent btn-run" onClick={submit} disabled={busy || (touched && !valid)}>{busy ? 'Starting…' : 'Run'}</button>
+        <div className="why">{touched && !valid ? firstError : visitor ? 'A full scene pair takes about 25 seconds once it starts.' : 'A full scene pair takes about 25 seconds on 4 cores.'}</div>
+        <button type="button" className="btn btn-accent btn-run" onClick={submit} disabled={busy || (touched && !valid)}>{busy ? 'Starting…' : visitor ? 'Add to queue' : 'Run'}</button>
       </div>
     </div>
   )

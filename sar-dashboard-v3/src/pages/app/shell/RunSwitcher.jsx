@@ -18,6 +18,7 @@ function Mark({ kind }) {
 
 export default function RunSwitcher({ label = 'All runs' }) {
   const { runs, openId, open, mode, remove, cancel, stages } = useRunStore()
+  const canAdmin = useRunStore((s) => s.canAdmin())
   const [isOpen, setOpen] = useState(false)
   const [band, setBand] = useState('all')
   const [confirm, setConfirm] = useState(null)
@@ -68,7 +69,7 @@ export default function RunSwitcher({ label = 'All runs' }) {
                   const st = runStatus(r)
                   const ri = runInfo(r)
                   const stage = STAGES.find((x) => x.key === stages[r.id]?.stage)?.label
-                  const sub = st.kind === 'running' ? stage || 'Running' : st.kind === 'queued' ? 'Waiting for a free slot' : st.kind === 'failed' ? 'Failed' : PRESET[r.summary?.crop_preset || r.request?.crop_preset] || r.summary?.crop_preset
+                  const sub = st.kind === 'running' ? stage || 'Running' : st.kind === 'queued' ? (r.queue_position ? `In queue · ${r.queue_position === 1 ? 'next' : `place ${r.queue_position}`}` : 'Waiting') : st.kind === 'failed' ? 'Failed' : PRESET[r.summary?.crop_preset || r.request?.crop_preset] || r.summary?.crop_preset
                   return (
                     <div key={r.id} className="pop-row" aria-current={r.id === openId}>
                       <button type="button" className="pop-main" onClick={() => { open(r.id); setOpen(false) }}>
@@ -76,7 +77,7 @@ export default function RunSwitcher({ label = 'All runs' }) {
                         <span className="t"><span className="t1">{ri.dates || r.id}</span><span className="t2">{[sub, formatRelativeTime(r.created_at)].filter(Boolean).join(' · ')}</span></span>
                         <Mark kind={st.kind} />
                       </button>
-                      {mode === 'local' && (
+                      {mode === 'local' && canAdmin && (
                         <span className="pop-acts">
                           {(st.kind === 'running' || st.kind === 'queued') && <button type="button" className="icon-btn" title="Cancel run" aria-label="Cancel run" onClick={() => cancel(r.id)}><Icon name="close" size={14} /></button>}
                           {st.kind !== 'running' && <button type="button" className="icon-btn" title="Delete run" aria-label="Delete run" onClick={() => setConfirm(r)}><Icon name="trash" size={14} /></button>}

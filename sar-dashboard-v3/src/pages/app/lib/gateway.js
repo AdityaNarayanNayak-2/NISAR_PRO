@@ -67,6 +67,15 @@ export async function fetchJson(path, mode, signal) {
   return getJson(gatewayUrl(path, mode), signal)
 }
 
+/** What this gateway allows (public demo, admin, queue). Older gateways: full access. */
+export async function fetchConfig() {
+  try {
+    return await getJson(`${gatewayBase()}/config`)
+  } catch {
+    return { public_mode: false, admin: true, queue: 'local' }
+  }
+}
+
 export async function postRun(body) {
   const res = await fetch(`${gatewayBase()}/jobs`, {
     method: 'POST',

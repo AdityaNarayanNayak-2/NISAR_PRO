@@ -6,7 +6,7 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@fontsource-variable/inter'
 import { detectMode, fetchRuns, fetchJson, gatewayUrl } from './lib/gateway'
-import { parseReport, CLASSES, granuleTime } from './lib/report'
+import { parseReport, CLASSES, granuleTime, sensorName } from './lib/report'
 import useDistricts from './inspector/useDistricts'
 import { regionList, hotspots } from './lib/regions'
 import { placeFor, placeLabel } from './lib/places'
@@ -135,7 +135,7 @@ export default function ReportPage() {
           <div>
             <div className="rp-brand">/// NISAR PRO</div>
             <h1>Situation report · Flood extent</h1>
-            <div className="rp-sub">{[where, `${formatDate(r.baselineDate)} → ${formatDate(r.activeDate)}`, `NISAR ${r.band}-band ${r.polarization || ''}`].filter(Boolean).join(' · ')}</div>
+            <div className="rp-sub">{[where, `${formatDate(r.baselineDate)} → ${formatDate(r.activeDate)}`, `${sensorName(r.band)} ${r.band}-band ${r.polarization || ''}`].filter(Boolean).join(' · ')}</div>
           </div>
           <div className="rp-meta">Radar pass {pass ? `${formatDate(pass.toISOString().slice(0, 10))} ${pass.toISOString().slice(11, 16)} UTC` : '—'}<br />Generated {now.toISOString().slice(0, 16).replace('T', ' ')} UTC<br /><span className="mono">{run.id}</span></div>
         </header>

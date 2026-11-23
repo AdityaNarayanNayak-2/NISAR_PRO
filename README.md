@@ -53,12 +53,13 @@ Water maps were checked against Sentinel-2 optical images on cloud-free pixels; 
 
 | | |
 |---|---|
-| **Engine** | Rust. Streams a full GCOV scene (33,696 × 34,344 px) in 1,024-row strips, averages it to an 80 m grid, and classes the change in backscatter: log-ratio change detection, Otsu reported, region growing, clean-up. A full scene pair (2 × 1.157 billion samples) takes 44–65 s on 4 cores with under 2.5 GB RAM. |
+| **Engine** | Rust. Streams a full GCOV scene (33,696 × 34,344 px) in 1,024-row strips, averages it to an 80 m grid, and classes the change in backscatter: log-ratio change detection, Otsu reported, region growing, clean-up. A full scene pair (2 × 1.157 billion samples) takes 21–28 s on 4 cores with about 1 GB RAM (measured 2026-11-23; same output byte for byte as the slower first version). |
+| **Sentinel-1** | The same engine also reads Sentinel-1 C-band backscatter (RTC GeoTIFFs from Microsoft Planetary Computer, or OPERA RTC-S1), tile by tile: a full scene pair (2 × 609 million samples) on the 80 m grid in about 45 s under 400 MB. More passes between NISAR's 12-day repeats. Find and download scenes with `scripts/fetch_sentinel1.py`. C-band thresholds are the engine's band defaults and have not been checked against Sentinel-2. |
 | **Gateway** | Axum. Runs jobs, streams logs live, reuses identical runs, searches and downloads from the NASA ASF catalog, and looks up place names (OpenStreetMap). |
 | **Dashboard** | React and MapLibre on a dark satellite basemap. Replay of both passes, numbered areas with coordinates in decimal, DMS and UTM, flood extent per district, change since the last pass, quality checks, and every engine parameter for engineers. |
 | **Impact** | Free public data joined to every run: hospitals, schools and police stations within 1 km of the flood extent (OpenStreetMap), river flow on the pass dates and a 30-day river forecast (GloFAS), rain between the passes (ERA5) and the 7-day rain forecast. Each source is named; none of it is NISAR output. |
 | **Watch** | Continuous monitoring. Add an area once; every new NISAR pass over it is found in the ASF catalog, downloaded, paired with the pass before and processed with no one pressing a button. Flood extent inside the area goes to a webhook or Telegram when it passes your alert level, and out as an Atom feed of CAP 1.2 alerts (the format disaster agencies use, India's SACHET included). Every run is also in a STAC catalog for QGIS, ArcGIS or any GIS. |
-| **Operations** | One container image; one-click VMs on AWS, Azure and Google Cloud plus one installer for any Linux server; optional login, Cloudflare Tunnel, results backup and stop-when-idle; Helm chart, health and readiness probes, Prometheus metrics, alert rules and a Grafana board, CI with tests, template checks, image scan and smoke test. See [deploy/](deploy/README.md). |
+| **Operations** | One container image; one-click VMs on AWS, Azure and Google Cloud plus one installer for any Linux server; optional login, Cloudflare Tunnel, results backup and stop-when-idle; a Redis queue with engine workers that KEDA starts per waiting run (gateway copies share state, a lost worker's run goes back in the queue); a public demo mode where visitors queue runs safely; Terraform for EKS, AKS and GKE with Spot engine nodes from zero, Argo CD; Helm chart, health and readiness probes, Prometheus metrics, alert rules and a Grafana board, CI with tests, template checks, image scan and smoke test. See [deploy/](deploy/README.md). |
 | **Outputs** | 2-page situation report (PDF via print), class GeoTIFF (UTM), areas GeoJSON, hotspots CSV, KML and GPX waypoints, report JSON. |
 
 ## Install
@@ -104,8 +105,15 @@ curl -fsSL https://raw.githubusercontent.com/AdityaNarayanNayak-2/NISAR_PRO/main
 podman build -t nisar-pro .                       # or docker build
 podman run -p 3000:3000 -v nisar:/var/lib/nisar-pro nisar-pro
 podman compose up -d --build                      # with Prometheus and Grafana
-helm install nisar deploy/helm/nisar-pro          # Kubernetes
+helm install nisar deploy/helm/nisar-pro          # Kubernetes, one pod
+podman compose -f compose.yaml -f compose.queue.yaml up -d --scale worker=2   # Redis queue + 2 workers
 ```
+
+Production on Kubernetes: `queue.enabled=true` runs the gateway as several copies and the engine
+in worker Jobs that KEDA starts from the Redis queue (0 when idle). Clusters with shared storage
+and Spot engine nodes: `deploy/terraform/k8s-eks`, `k8s-aks`, `k8s-gke`; GitOps: `deploy/argocd`.
+Public demo: `NISAR_PUBLIC_MODE=on` lets anyone with the link queue a run on the scenes on your
+machine (one run per visitor, admin actions behind a login).
 
 One-click VMs: **Deploy to Azure** (`deploy/azure`), **Open in Google Cloud** (`deploy/gcp`), AWS
 CloudFormation (`deploy/aws`), Terraform (`deploy/terraform`). Configuration, probes, metrics,

@@ -1,0 +1,103 @@
+{{- if and .Values.queue.enabled (not .Values.queue.externalUrl) }}
+# Small Redis for the run queue. Append-only file on a volume, so waiting runs survive a restart.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "nisar.fullname" . }}-redis
+  labels: {{- include "nisar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: queue
+spec:
+  serviceName: {{ include "nisar.fullname" . }}-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "nisar.name" . }}-redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "nisar.name" . }}-redis
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: redis
+          image: {{ .Values.queue.redis.image }}
+          args: ["--appendonly", "yes", "--save", "", "--dir", "/data"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            exec: { command: [redis-cli, ping] }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: redis }
+            periodSeconds: 20
+          resources: {{- toYaml .Values.queue.redis.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.queue.redis.storageClass }}
+        storageClassName: {{ .Values.queue.redis.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.queue.redis.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nisar.fullname" . }}-redis
+  labels: {{- include "nisar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: queue
+spec:
+  selector:
+    app.kubernetes.io/name: {{ include "nisar.name" . }}-redis
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+{{- if .Values.networkPolicy.enabled }}
+---
+# Only NISAR Pro pods of this release (gateway and workers) may reach Redis.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nisar.fullname" . }}-redis
+  labels: {{- include "nisar.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "nisar.name" . }}-redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {{- include "nisar.selector" . | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "nisar.name" . }}-worker
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        - namespaceSelector:     # KEDA reads the queue length
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.queue.kedaNamespace }}
+      ports:
+        - port: 6379
+{{- end }}
+{{- end }}

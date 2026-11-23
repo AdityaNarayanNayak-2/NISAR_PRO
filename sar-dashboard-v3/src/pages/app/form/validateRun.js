@@ -4,11 +4,15 @@ import { granuleDate, granuleTrackFrame } from '../lib/report'
 export const DEFAULTS = {
   l: { seed: -5.0, growth: -2.5, minChange: -3.0, floor: -13.0 },
   s: { seed: -4.8, growth: -2.2, minChange: -2.7, floor: -12.5 },
+  c: { seed: -4.5, growth: -2.0, minChange: -2.5, floor: -12.0 },
 }
+
+/** Sentinel-1 backscatter GeoTIFF (Planetary Computer RTC or OPERA RTC-S1). */
+export const isSentinel1 = (name) => /^S1[ABCD]_.*\.tiff?$|RTC-S1.*\.tiff?$/i.test(name || '')
 
 export function sceneInfo(path) {
   const name = (path || '').split(/[\\/]/).pop()
-  const band = /NISAR_L2_|_LSAR_/.test(name) ? 'l' : /NISAR_S2_|_SSAR_/.test(name) ? 's' : null
+  const band = /NISAR_L2_|_LSAR_/.test(name) ? 'l' : /NISAR_S2_|_SSAR_/.test(name) ? 's' : isSentinel1(name) ? 'c' : null
   return { name, band, date: granuleDate(name), tf: granuleTrackFrame(name) }
 }
 

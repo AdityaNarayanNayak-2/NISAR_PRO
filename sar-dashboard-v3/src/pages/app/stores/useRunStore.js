@@ -1,10 +1,11 @@
 // Runs, the open run, its report and regions, and live logs of running jobs.
 // The gateway (or the demo manifest) is the only source; nothing is cached in localStorage.
 import { create } from 'zustand'
-import { gatewayBase, detectMode, fetchRuns, fetchJson, postRun, cancelRun, deleteRun, openLogStream, runStatus } from '../lib/gateway'
+import { gatewayBase, detectMode, fetchRuns, fetchJson, fetchConfig, postRun, cancelRun, deleteRun, openLogStream, runStatus } from '../lib/gateway'
 import { parseReport } from '../lib/report'
 
 const streams = new Map() // runId -> EventSource
+let poller = null
 const inflight = new Map() // key -> AbortController
 
 const STAGES = [
@@ -56,6 +57,8 @@ export const useRunStore = create((set, get) => ({
   stages: {}, // id -> { stage, startedAt }
   toasts: [],
   scenes: null, // GCOV files found on this computer (local mode), null until loaded
+  // From GET /config: public demo mode, whether this browser has the admin login, queue kind.
+  config: { public_mode: false, admin: true, queue: 'local' },
 
   toast(text, kind = 'info', action = null) {
     const id = Math.random().toString(36).slice(2)
@@ -69,6 +72,7 @@ export const useRunStore = create((set, get) => ({
   async init() {
     const mode = await detectMode()
     set({ mode })
+    if (mode === 'local') set({ config: await fetchConfig() })
     await get().refresh()
     // Open a run only when the link names one (?run=<id>). Otherwise start on the workspace home.
     const wanted = new URLSearchParams(window.location.search).get('run')
@@ -79,6 +83,21 @@ export const useRunStore = create((set, get) => ({
     if (mode === 'local') get().loadScenes()
     // Follow runs that were already going when the page loaded.
     if (mode === 'local') runs.filter((r) => ['queued', 'running'].includes(runStatus(r).kind)).forEach((r) => get().follow(r.id))
+    // While runs wait or run, refresh every 5 s: queue places change and other people's runs
+    // (public demo, other gateway copies) appear.
+    if (mode === 'local' && !poller) {
+      poller = setInterval(() => {
+        if (document.hidden) return
+        const active = get().runs.some((r) => ['queued', 'running'].includes(runStatus(r).kind))
+        if (active || get().config.public_mode) get().refresh()
+      }, 5000)
+    }
+  },
+
+  /** True when this browser may change runs (delete, cancel, Watch areas). */
+  canAdmin() {
+    const c = get().config
+    return get().mode === 'local' && (!c.public_mode || c.admin)
   },
 
   async loadScenes() {

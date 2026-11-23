@@ -21,6 +21,7 @@
 //!       nominalAcquisitionPRF  (Hz, f64)
 //! ```
 
+use rayon::prelude::*;
 use anyhow::{bail, Context, Result};
 use log::info;
 use ndarray::Array2;
@@ -828,37 +829,40 @@ pub fn parse_nisar_full_scene_multilooked(
             .read_window(&data_path, window)
             .map_err(|e| anyhow::anyhow!("Failed to read strip rows {}..{} from '{}': {}", strip_start, strip_end, data_path, e))?;
 
-        for out_r_local in 0..num_out_rows {
-            let out_r = out_row_base + out_r_local;
-            if out_r >= out_rows {
-                break;
-            }
-            let r_top = out_r_local * look_factor;
+        // Block-average the strip; output rows are independent, so they run in parallel
+        // (same per-pixel sum order as before, so identical values).
+        let rows_here = num_out_rows.min(out_rows.saturating_sub(out_row_base));
+        out_slc
+            .slice_mut(ndarray::s![out_row_base..out_row_base + rows_here, ..])
+            .axis_iter_mut(ndarray::Axis(0))
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(out_r_local, mut out_row)| {
+                let r_top = out_r_local * look_factor;
+                for out_c in 0..out_cols {
+                    let c_left = out_c * look_factor;
+                    let mut sum = 0.0f32;
+                    let mut valid_count = 0usize;
 
-            for out_c in 0..out_cols {
-                let c_left = out_c * look_factor;
-                let mut sum = 0.0f32;
-                let mut valid_count = 0usize;
-
-                for lr in 0..look_factor {
-                    let row_offset = (r_top + lr) * full_cols;
-                    for lc in 0..look_factor {
-                        let val = strip_data[row_offset + c_left + lc];
-                        if val.is_finite() && val >= 1e-4 {
-                            sum += val;
-                            valid_count += 1;
+                    for lr in 0..look_factor {
+                        let row_offset = (r_top + lr) * full_cols;
+                        for lc in 0..look_factor {
+                            let val = strip_data[row_offset + c_left + lc];
+                            if val.is_finite() && val >= 1e-4 {
+                                sum += val;
+                                valid_count += 1;
+                            }
                         }
                     }
-                }
 
-                let final_val = if valid_count >= min_valid {
-                    sum / valid_count as f32
-                } else {
-                    0.0f32
-                };
-                out_slc[[out_r, out_c]] = Complex32::new(final_val, 0.0);
-            }
-        }
+                    let final_val = if valid_count >= min_valid {
+                        sum / valid_count as f32
+                    } else {
+                        0.0f32
+                    };
+                    out_row[out_c] = Complex32::new(final_val, 0.0);
+                }
+            });
 
         strip_idx += 1;
         if strip_idx % 8 == 0 || strip_idx == total_strips {

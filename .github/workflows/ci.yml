@@ -72,16 +72,21 @@ jobs:
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
           for v in deploy/helm/ci-values/*.yaml; do
             echo "::group::$v"
-            helm template t deploy/helm/nisar-pro -f "$v" | ./kubeconform -strict -summary -ignore-missing-schemas -kubernetes-version 1.30.0
+            helm template t deploy/helm/nisar-pro -f "$v" | ./kubeconform -strict -summary -kubernetes-version 1.30.0 \
+              -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
             echo "::endgroup::"
           done
 
   terraform:
-    name: Terraform
+    name: Terraform (${{ matrix.dir }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [aws-single-node, k8s-eks, k8s-aks, k8s-gke]
     defaults:
       run:
-        working-directory: deploy/terraform/aws-single-node
+        working-directory: deploy/terraform/${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3

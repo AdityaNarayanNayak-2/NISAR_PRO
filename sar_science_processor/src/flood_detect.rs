@@ -5,7 +5,8 @@
 //! multi-tier confidence scoring (with optional GUNW coherence fusion).
 
 use log::{info, warn};
-use ndarray::Array2;
+use ndarray::{Array2, Axis};
+use rayon::prelude::*;
 use num_complex::Complex32;
 use serde::{Deserialize, Serialize};
 
@@ -194,30 +195,39 @@ pub fn gcov_to_db(slc: &Array2<Complex32>) -> Array2<f32> {
 pub fn median_filter_3x3(data: &Array2<f32>, valid_mask: &Array2<bool>) -> Array2<f32> {
     let (rows, cols) = data.dim();
     let mut filtered = data.clone();
+    if rows < 3 || cols < 3 {
+        return filtered;
+    }
 
-    for r in 1..(rows.saturating_sub(1)) {
-        for c in 1..(cols.saturating_sub(1)) {
-            if !valid_mask[[r, c]] {
-                continue;
-            }
-
-            let mut window = Vec::with_capacity(9);
-            for dr in -1..=1 {
-                for dc in -1..=1 {
-                    let nr = (r as isize + dr) as usize;
-                    let nc = (c as isize + dc) as usize;
-                    if valid_mask[[nr, nc]] {
-                        window.push(data[[nr, nc]]);
+    // Rows are independent; each window lives in a 9-slot array (no allocation per pixel).
+    // Same sort and the same `len / 2` pick as before, so the output is identical.
+    filtered
+        .axis_iter_mut(Axis(0))
+        .into_par_iter()
+        .enumerate()
+        .filter(|(r, _)| *r >= 1 && *r + 1 < rows)
+        .for_each(|(r, mut out_row)| {
+            let mut window = [0.0f32; 9];
+            for c in 1..cols - 1 {
+                if !valid_mask[[r, c]] {
+                    continue;
+                }
+                let mut n = 0;
+                for nr in r - 1..=r + 1 {
+                    for nc in c - 1..=c + 1 {
+                        if valid_mask[[nr, nc]] {
+                            window[n] = data[[nr, nc]];
+                            n += 1;
+                        }
                     }
                 }
+                if n > 0 {
+                    let w = &mut window[..n];
+                    w.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    out_row[c] = w[n / 2];
+                }
             }
-
-            if !window.is_empty() {
-                window.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                filtered[[r, c]] = window[window.len() / 2];
-            }
-        }
-    }
+        });
 
     filtered
 }
@@ -429,36 +439,46 @@ pub fn erode_swath_boundary(valid_mask: &Array2<bool>, iterations: usize) -> Arr
     if iterations == 0 {
         return valid_mask.clone();
     }
+    // `iterations` passes of 8-neighbour erosion keep a pixel exactly when no invalid pixel
+    // lies within chessboard distance `iterations` (the image border does not count as
+    // invalid). A two-pass chessboard distance transform gives that distance in one sweep.
     let (rows, cols) = valid_mask.dim();
-    let neighbors: [(isize, isize); 8] = [
-        (-1, -1), (-1, 0), (-1, 1),
-        (0, -1),           (0, 1),
-        (1, -1),  (1, 0),  (1, 1),
-    ];
-
-    let mut current = valid_mask.clone();
-    for _ in 0..iterations {
-        let mut next = current.clone();
-        for r in 0..rows {
-            for c in 0..cols {
-                if current[[r, c]] {
-                    for &(dr, dc) in &neighbors {
-                        let nr = r as isize + dr;
-                        let nc = c as isize + dc;
-                        if nr >= 0 && nr < rows as isize && nc >= 0 && nc < cols as isize {
-                            if !current[[nr as usize, nc as usize]] {
-                                next[[r, c]] = false;
-                                break;
-                            }
-                        }
-                    }
-                }
+    const FAR: u32 = u32::MAX / 2;
+    let mut d = Array2::<u32>::from_shape_fn((rows, cols), |p| if valid_mask[p] { FAR } else { 0 });
+    for r in 0..rows {
+        for c in 0..cols {
+            let mut v = d[[r, c]];
+            if v == 0 {
+                continue;
             }
+            if c > 0 { v = v.min(d[[r, c - 1]] + 1); }
+            if r > 0 {
+                v = v.min(d[[r - 1, c]] + 1);
+                if c > 0 { v = v.min(d[[r - 1, c - 1]] + 1); }
+                if c + 1 < cols { v = v.min(d[[r - 1, c + 1]] + 1); }
+            }
+            d[[r, c]] = v;
         }
-        current = next;
     }
-    current
+    for r in (0..rows).rev() {
+        for c in (0..cols).rev() {
+            let mut v = d[[r, c]];
+            if v == 0 {
+                continue;
+            }
+            if c + 1 < cols { v = v.min(d[[r, c + 1]] + 1); }
+            if r + 1 < rows {
+                v = v.min(d[[r + 1, c]] + 1);
+                if c + 1 < cols { v = v.min(d[[r + 1, c + 1]] + 1); }
+                if c > 0 { v = v.min(d[[r + 1, c - 1]] + 1); }
+            }
+            d[[r, c]] = v;
+        }
+    }
+    let keep = iterations.min(FAR as usize - 1) as u32;
+    d.mapv(|v| v > keep)
 }
+
 
 /// Stage 6b: Morphological opening/closing and connected component size filtering
 pub fn morphological_cleanup(flood_mask: &mut Array2<bool>, min_area_pixels: usize) -> usize {
@@ -644,7 +664,9 @@ pub fn run_flood_detection_pipeline(
             "[FLOOD_PIPELINE] Eroding swath boundary by {} pixels to eliminate RTC edge roll-off...",
             opts.swath_edge_erosion_pixels
         );
+        crate::timing::lap("detect: prepare");
         valid_mask = erode_swath_boundary(&valid_mask, opts.swath_edge_erosion_pixels);
+        crate::timing::lap("detect: swath erosion");
     }
 
     let valid_pixels = valid_mask.iter().filter(|&&v| v).count();
@@ -699,6 +721,7 @@ pub fn run_flood_detection_pipeline(
     // tail of the background distribution, so genuine flood - a small, shallow
     // secondary mode - is never separated. Exclude them from the histogram.
     // (Region growing already refuses to grow into permanent water.)
+    crate::timing::lap("detect: speckle filter + change + water mask");
     let otsu_valid = &valid_mask & &perm_water_mask.mapv(|is_water| !is_water);
     let otsu_excluded =
         valid_mask.iter().filter(|&&v| v).count() - otsu_valid.iter().filter(|&&v| v).count();
@@ -714,6 +737,7 @@ pub fn run_flood_detection_pipeline(
     info!("[FLOOD_PIPELINE] Stage 6a: Two-threshold region growing...");
 
     let seed_thresh = opts.seed_threshold_db.min(effective_threshold);
+    crate::timing::lap("detect: otsu");
     let mut flood_mask = region_grow(
         &delta_db,
         seed_thresh,
@@ -723,7 +747,9 @@ pub fn run_flood_detection_pipeline(
     );
 
     info!("[FLOOD_PIPELINE] Stage 6b: Morphological cleanup & size filtering...");
+    crate::timing::lap("detect: region grow");
     let regions_count = morphological_cleanup(&mut flood_mask, opts.min_area_pixels);
+    crate::timing::lap("detect: cleanup");
     for (mask, valid) in flood_mask.iter_mut().zip(valid_mask.iter()) {
         if !*valid {
             *mask = false;
@@ -1173,3 +1199,51 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod speed_equivalence {
+    use super::*;
+
+    /// The old 8-neighbour erosion, one pass at a time (reference for the distance transform).
+    fn erode_by_passes(valid: &Array2<bool>, iterations: usize) -> Array2<bool> {
+        let (rows, cols) = valid.dim();
+        let mut cur = valid.clone();
+        for _ in 0..iterations {
+            let mut next = cur.clone();
+            for r in 0..rows {
+                for c in 0..cols {
+                    if !cur[[r, c]] { continue; }
+                    'n: for dr in -1isize..=1 {
+                        for dc in -1isize..=1 {
+                            let (nr, nc) = (r as isize + dr, c as isize + dc);
+                            if nr >= 0 && nc >= 0 && (nr as usize) < rows && (nc as usize) < cols && !cur[[nr as usize, nc as usize]] {
+                                next[[r, c]] = false;
+                                break 'n;
+                            }
+                        }
+                    }
+                }
+            }
+            cur = next;
+        }
+        cur
+    }
+
+    fn noise(rows: usize, cols: usize, seed: u64, p_false: u64) -> Array2<bool> {
+        let mut x = seed;
+        Array2::from_shape_fn((rows, cols), |_| {
+            x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+            x % 100 >= p_false
+        })
+    }
+
+    #[test]
+    fn distance_transform_erosion_equals_repeated_passes() {
+        for (seed, p) in [(1u64, 1u64), (7, 3), (42, 10), (99, 0), (5, 60)] {
+            let m = noise(57, 83, seed, p);
+            for k in [0, 1, 2, 3, 5, 9, 40] {
+                assert_eq!(erode_swath_boundary(&m, k), erode_by_passes(&m, k), "seed {seed} p {p} k {k}");
+            }
+        }
+    }
+}

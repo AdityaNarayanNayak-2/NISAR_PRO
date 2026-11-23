@@ -9,6 +9,8 @@ pub mod metrics;
 pub mod auth;
 pub mod watch;
 pub mod stac;
+pub mod queue;
+pub mod public;
 
 use axum::{
     routing::{get, post},
@@ -30,12 +32,22 @@ pub struct AppState {
     pub jobs: Arc<RwLock<HashMap<String, Arc<RwLock<jobs::JobMetadata>>>>>,
     pub processor_semaphore: Arc<tokio::sync::Semaphore>,
     pub rate_limiter: Arc<rate_limit::RateLimiter>,
+    /// Local mode: runs waiting for an engine slot, in order (for queue positions).
+    pub waiting: Arc<std::sync::Mutex<std::collections::VecDeque<String>>>,
 }
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
     env_logger::init();
+
+    // `sar-gateway worker [--once]`: take runs from the Redis queue (see queue.rs).
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("worker") {
+        let once = args.iter().any(|a| a == "--once");
+        std::process::exit(queue::run_worker(once).await);
+    }
+
     metrics::init();
     if auth::init() { info!("Login required (NISAR_BASIC_AUTH is set)"); }
 
@@ -53,7 +65,15 @@ async fn main() {
         jobs: Arc::new(RwLock::new(HashMap::new())),
         processor_semaphore: Arc::new(tokio::sync::Semaphore::new(max_concurrent_jobs)),
         rate_limiter,
+        waiting: Arc::new(std::sync::Mutex::new(std::collections::VecDeque::new())),
     };
+
+    match queue::init(Some(state.clone())).await {
+        Ok(true) => info!("Runs go to the Redis queue (NISAR_QUEUE_URL); start workers with: sar-gateway worker"),
+        Ok(false) => {}
+        Err(e) => { log::error!("{e}"); std::process::exit(1); }
+    }
+    if public::enabled() { info!("Public demo mode: visitors can queue runs on the scenes here (see public.rs)"); }
 
     // Load saved runs from results/jobs and delete older duplicates.
     jobs::preload_runs(&state).await;
@@ -78,6 +98,7 @@ async fn main() {
         .route("/watch/cap/:file", get(watch::cap))
         .route("/stac", get(stac::catalog))
         .route("/stac/items/:id", get(stac::item))
+        .route("/config", get(public::config))
         .route("/metrics", get(metrics::metrics_handler))
         .route("/healthz", get(metrics::healthz))
         .route("/readyz", get(metrics::readyz))

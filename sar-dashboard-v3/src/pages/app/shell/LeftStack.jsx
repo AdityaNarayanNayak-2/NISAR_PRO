@@ -87,21 +87,31 @@ function FloodCard() {
   )
 }
 
+/** "NISAR L · S", "Sentinel-1 C", or both. C-band runs come from Sentinel-1, not NISAR. */
+function sensorLabel(bands) {
+  const nisar = bands.filter((b) => b === 'L' || b === 'S')
+  const parts = []
+  if (nisar.length) parts.push(`NISAR ${nisar.join(' · ')}`)
+  if (bands.includes('C')) parts.push('Sentinel-1 C')
+  return parts.join(' + ') || 'NISAR'
+}
+
 function StatusCard() {
-  const { mode, runs, scenes } = useRunStore()
+  const { mode, runs, scenes, config } = useRunStore()
   const auth = useAuth(mode)
   const done = runs.filter((r) => runStatus(r).kind === 'completed')
-  const busy = runs.filter((r) => ['running', 'queued'].includes(runStatus(r).kind)).length
+  const running = runs.filter((r) => runStatus(r).kind === 'running').length
+  const waiting = runs.filter((r) => runStatus(r).kind === 'queued').length
   const bands = [...new Set(done.map((r) => r.summary?.band).filter(Boolean))].sort()
   return (
     <section className="bento compact" aria-label="System status">
       <div className="bento-head">
         <h2>System status</h2>
-        <span className="muted">{{ local: 'This computer', demo: 'Demo data', offline: 'Gateway offline', connecting: 'Connecting' }[mode]}</span>
+        <span className="muted">{{ local: config.public_mode ? 'Public demo' : 'This computer', demo: 'Demo data', offline: 'Gateway offline', connecting: 'Connecting' }[mode]}</span>
       </div>
       <dl className="status-list">
-        <dt>Sensor</dt><dd>{bands.length ? `NISAR ${bands.join(' · ')}` : 'NISAR'}</dd>
-        <dt>Finished runs</dt><dd className="num">{formatNumber(done.length)}{busy ? ` · ${busy} running` : ''}</dd>
+        <dt>Sensor</dt><dd>{sensorLabel(bands)}</dd>
+        <dt>Finished runs</dt><dd className="num">{formatNumber(done.length)}{running ? ` · ${running} running` : ''}{waiting ? ` · ${waiting} waiting` : ''}</dd>
         <dt>Scenes on disk</dt><dd className="num">{mode === 'local' ? (scenes ? formatNumber(scenes.length) : '—') : 'n/a'}</dd>
         <dt>Earthdata</dt><dd>{mode !== 'local' ? 'n/a' : !auth ? '—' : auth.authenticated ? 'Signed in' : 'Search only'}</dd>
       </dl>
@@ -128,7 +138,7 @@ function RunCard({ run, on }) {
       <span className="rc-dates">{info.baselineDate && info.activeDate ? `${formatShortDate(info.baselineDate)} → ${formatShortDate(info.activeDate)}` : run.id}</span>
       <span className="rc-sub">{[tf && `T${tf.track} · F${tf.frame}`, preset && preset !== 'full' ? preset.replace('x', ' × ') : null, pol && pol !== 'HH' ? pol : null, custom ? 'custom thresholds' : null].filter(Boolean).join(' · ') || '—'}</span>
       <span className="rc-foot">
-        {st.kind === 'completed' && nw ? <span className="num">{formatNumber(nw.km2, nw.km2 < 10 ? 2 : 0)} km²</span> : <span className="muted">{st.kind === 'failed' ? 'Failed' : st.kind === 'completed' ? '—' : 'Processing'}</span>}
+        {st.kind === 'completed' && nw ? <span className="num">{formatNumber(nw.km2, nw.km2 < 10 ? 2 : 0)} km²</span> : <span className="muted">{st.kind === 'failed' ? 'Failed' : st.kind === 'completed' ? '—' : st.kind === 'queued' ? (run.queue_position ? `In queue · ${run.queue_position === 1 ? 'next' : run.queue_position}` : 'Waiting') : 'Processing'}</span>}
         {st.kind === 'running' || st.kind === 'queued' ? <span className="spin" /> : <span className={`dot ${st.kind === 'completed' ? 'ok' : st.kind === 'failed' ? 'err' : ''}`} />}
       </span>
     </button>

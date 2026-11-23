@@ -1,7 +1,7 @@
 # NISAR Pro — Official Engineering Brain & System Contract
 > **Auto-loaded by Claude Code / AI Agents on every session.**
 > **Mission**: InGARSS 2026 Phase-1 Hackathon (NASA-ISRO SAR Flood Inundation & Damage Mapping).
-> **Status**: Verified pipeline on consumer hardware (2 × 1.157 billion samples per pair in 44–65 s @ 1.87–2.32 GB peak RAM).
+> **Status**: Verified pipeline on consumer hardware (2 × 1.157 billion samples per pair in 21–28 s @ about 1 GB peak RAM, measured 2026-11-23).
 
 ---
 
@@ -39,7 +39,9 @@ sar_analyzer/
   2. **Streaming Chunked Hyperslabs**:
      - In `sar_science_processor/src/nisar_parser.rs`, `parse_nisar_full_scene_multilooked` uses `ChunkedF32Reader` to read **1,024-row strips** directly from HDF5.
      - Block-averages on the fly into an $80\text{ m} \times 80\text{ m}$ ground lattice ($4,212 \times 4,293$ pixels = 18.08M pixels = **72 MB** array).
-     - **Performance (measured 2026-11-07, 4 cores)**: Each pair (2 × 1.157B samples) takes **44–65 s** with **1.87–2.32 GB peak RAM**.
+     - **Performance (measured 2026-11-23, 4 cores, 3 runs each)**: L pair **22.9–27.7 s**, S pair **21.4–22.2 s**, peak RAM **0.98–1.01 GB**; Sentinel-1 pair 25.7–26.7 s, 0.52 GB. Before the speed work (2026-11-07): 44–65 s, 1.87–2.32 GB.
+     - **What made it faster (output byte-identical, checked on all four reference runs)**: chunks of each chunk row decompressed in parallel (`windowed.rs`), zlib-rs deflate backend (`flate2` feature), parallel multilook rows, `MADV_DONTNEED` on each decoded chunk's file pages (most of the old "peak RAM" was mapped file pages), swath erosion as a chessboard distance transform (test `speed_equivalence` compares it with the old 40 passes), median filter without per-pixel allocation and with parallel rows, the four output files written on parallel threads, Sentinel-1 tiles decoded in parallel then summed in the old order. Reading both dates at the same time was tried and dropped: 1.4 s faster but peak RSS 3.9 GB.
+     - Every run logs `[timing] <stage>: <s> s` (`src/timing.rs`) with `RUST_LOG=info` (the gateway sets it).
   3. **DO NOT revert to monolithic full-array reads** or claim full tiles cannot run on 8 GB RAM.
 
 ---
@@ -119,10 +121,10 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
   S 31 Aug→12 Sep, `--crop-preset full --swath-edge-erosion 40`) reproduce the package numbers
   on their own grids (e.g. L Aug→Sep new water 1,166.21 km², 288,178 ac).
 - Website demo data: `python3 sar-dashboard-v3/scripts/build_demo_data.py` with the gateway running.
-- Only the flood pipeline runs; the old Kubernetes job path was removed. Deployment now: root
-  `Dockerfile` (engine + gateway + dashboard, non-root), `compose.yaml` (with Prometheus/Grafana),
-  `deploy/helm/nisar-pro` (one replica by design, see `deploy/README.md`), CI in
-  `.github/workflows/ci.yml`. Gateway env: `NISAR_PORT`, `NISAR_PROCESSOR`, `NISAR_DASHBOARD_DIR`,
+- Only the flood pipeline runs. Deployment: root `Dockerfile` (engine + gateway + dashboard,
+  non-root), `compose.yaml` (with Prometheus/Grafana), `compose.queue.yaml` (Redis + workers),
+  `deploy/helm/nisar-pro` (one pod, or queue mode), `deploy/terraform/k8s-{eks,aks,gke}`,
+  `deploy/argocd`, CI in `.github/workflows/ci.yml`. Gateway env: `NISAR_PORT`, `NISAR_PROCESSOR`, `NISAR_DASHBOARD_DIR`,
   `NISAR_DATA_DIRS`; probes `/healthz`, `/readyz`; Prometheus `/metrics` (`src/metrics.rs`).
 - Watch (continuous monitoring, `src/watch.rs`): areas in `results/watch/areas.json`, results in
   `events.json`. Pairs the newest pass per band/track/frame with the one before, full scene,
@@ -130,6 +132,25 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
   Alerts: webhook/Telegram, Atom feed + CAP 1.2 (`/watch/feed.xml`, `/watch/cap/<id>.xml`,
   certainty `Possible`). STAC 1.0 of all runs: `/stac` (`src/stac.rs`). Dashboard tab `Watch`
   (`inspector/Watch.jsx`). Optional login `NISAR_BASIC_AUTH=user:pass` (`src/auth.rs`).
+- Queue mode (`src/queue.rs`): `NISAR_QUEUE_URL=redis://...` -> `POST /jobs` LPUSHes to
+  `nisar:queue`; `sar-gateway worker [--once]` (same binary/image) BLMOVEs to `nisar:running`,
+  holds a 60 s lease, runs the engine (`jobs::run_engine`, shared with local mode), writes
+  job.json/run.log to the shared `results/`, publishes events on `nisar:events`. Every gateway
+  copy applies events (`jobs::apply_event`); the reaper (Redis lock) requeues lease-less runs
+  twice, then fails them. `queue_position` on `/jobs`. Helm: `queue.enabled`, `worker.mode=keda`
+  (ScaledJob, one Job per waiting run) or `deployment`. Tested with processes and containers,
+  not on a real cluster (rootless podman here lacks the cpuset cgroup for kind/k3s).
+- Public demo (`src/public.rs`): `NISAR_PUBLIC_MODE=on`: visitors (no login) may GET and
+  `POST /jobs` only with scenes from `/scenes`, no GUNW/mask, 1 active run each
+  (`CF-Connecting-IP`), queue max 20 (429 `busy`); everything else needs `NISAR_BASIC_AUTH`.
+  `GET /config` tells the dashboard (`canAdmin()` in the store hides admin controls).
+- Sentinel-1 (`sar_science_processor/src/sentinel1.rs`): flood mode takes `.tif` inputs as
+  C-band RTC GeoTIFFs (float32 linear power, UTM, tiled COG). Both dates are read on one window
+  (overlap or crop) snapped to the shared lattice, tile by tile, 8 × 8 looks for full scenes.
+  Report `frequency: "C"`, band defaults `RadarBand::CBand`, polarization from the file name.
+  Gateway lists `S1x_...tif` / `OPERA_L2_RTC-S1_...tif` as band `c`. Download:
+  `scripts/fetch_sentinel1.py` (Planetary Computer, no account). Test scenes: Sentinel-1D orbit
+  121, 31 Aug and 12 Sep 2026, in `~/Desktop/nisar_data/sentinel1/`. No Sentinel-2 check yet.
 - One-click VMs: `deploy/vm/install.sh` (any Linux VM), `deploy/aws` (CloudFormation),
   `deploy/azure` (`main.bicep` -> `azuredeploy.json`, rebuild both together), `deploy/gcp`.
 - NASA catalog: `GET /search/nisar` (ASF search, no login) and `GET /asf/download-stream` (needs
@@ -144,7 +165,7 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
 ```bash
 cd sar_science_processor
 cargo test
-# All unit tests must pass (74 passed; 0 failed on 2026-11-11)
+# All unit tests must pass (78 passed; 0 failed on 2026-11-23)
 ```
 
 ### Compiling & Running Backend

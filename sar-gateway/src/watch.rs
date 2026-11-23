@@ -156,8 +156,11 @@ pub fn spawn(state: crate::AppState) {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(60)).await;
         loop {
-            for a in areas().into_iter().filter(|a| a.enabled) {
-                check_area(&state, &a.id).await;
+            // With the Redis queue several gateway copies may run; only one checks the areas.
+            if crate::queue::try_lock("watch", every * 60 + 600).await {
+                for a in areas().into_iter().filter(|a| a.enabled) {
+                    check_area(&state, &a.id).await;
+                }
             }
             tokio::time::sleep(Duration::from_secs(every * 60)).await;
         }

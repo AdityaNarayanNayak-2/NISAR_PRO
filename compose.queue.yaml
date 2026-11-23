@@ -1,0 +1,42 @@
+# Queue mode on one machine: Redis + gateway + engine workers (add to compose.yaml).
+#
+#   podman compose -f compose.yaml -f compose.queue.yaml up -d --scale worker=2
+#
+# The gateway puts runs in Redis and answers at once; each worker takes one run at a time.
+# Two workers = two runs at the same time (each full L-band pair needs ~2.5 GB RAM and 4 cores).
+# Public demo (visitors queue runs on the scenes here): also set NISAR_PUBLIC_MODE=on and
+# NISAR_BASIC_AUTH=admin:<password> in .env, and put a Cloudflare Tunnel in front (deploy/README.md).
+services:
+  nisar:
+    environment:
+      NISAR_QUEUE_URL: redis://redis:6379
+      NISAR_PUBLIC_MODE: ${NISAR_PUBLIC_MODE:-off}
+      NISAR_BASIC_AUTH: ${NISAR_BASIC_AUTH:-}
+    depends_on: [redis]
+
+  worker:
+    image: localhost/nisar-pro:dev
+    command: ["sar-gateway", "worker"]
+    environment:
+      NISAR_QUEUE_URL: redis://redis:6379
+      NISAR_DATA_DIRS: /var/lib/nisar-pro/data:/scenes
+    volumes:
+      - nisar-data:/var/lib/nisar-pro
+      - ./scenes:/scenes:ro,z
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    stop_grace_period: 30s
+    depends_on: [redis, nisar]
+    restart: unless-stopped
+
+  redis:
+    image: docker.io/library/redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", ""]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:

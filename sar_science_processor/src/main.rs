@@ -649,9 +649,32 @@ fn main() -> Result<()> {
                 radius_km: lat_half_km.max(lon_half_km),
             };
 
+            sar_science_processor::timing::lap("start");
+            // Sentinel-1 (C-band) GeoTIFFs: both dates are read together on one shared window.
+            let is_s1 = sar_science_processor::sentinel1::is_geotiff(input);
+            let (mut s1_active, mut s1_baseline) = if is_s1 {
+                let slave = cli.slave.as_ref().ok_or_else(|| anyhow::anyhow!("Sentinel-1 flood runs need a baseline scene (--slave)"))?;
+                println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[1/5] Loading active product metadata...\"}}");
+                crash_journal::phase("FLOOD_STEP_1", "Loading Sentinel-1 pair");
+                let area = if is_full_scene {
+                    sar_science_processor::sentinel1::Area::Full { look: 8 }
+                } else {
+                    sar_science_processor::sentinel1::Area::Crop { lat: crop_lat, lon: crop_lon, half_ns_km: lat_half_km, half_ew_km: lon_half_km }
+                };
+                let (a, b) = sar_science_processor::sentinel1::read_pair(input, slave, area)?;
+                crash_journal::checkpoint_after_free("Sentinel-1 pair read");
+                (Some(a), Some(b))
+            } else {
+                (None, None)
+            };
+            let polarization_used = s1_active.as_ref().map(|p| p.polarization.clone()).unwrap_or_else(|| cli.polarization.clone());
+
             println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[1/5] Loading active product metadata...\"}}");
             // 1. Load Active GCOV
-            let mut active_product = if is_full_scene {
+            let mut active_product = if let Some(p) = s1_active.take() {
+                info!("[1/5] Sentinel-1 active scene: {:?}", input);
+                p
+            } else if is_full_scene {
                 info!("[1/5] Ingesting Full-Scene Active GCOV: {:?}", input);
                 crash_journal::phase("FLOOD_STEP_1", &format!("Loading Full-Scene Active GCOV: {:?}", input.file_name().unwrap_or_default()));
                 nisar_parser::parse_nisar_full_scene_multilooked(input, &cli.polarization, 8)?
@@ -709,8 +732,12 @@ fn main() -> Result<()> {
             }
 
             // 2. Load Optional Baseline GCOV
+            sar_science_processor::timing::lap("read active (or Sentinel-1 pair)");
             println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[2/5] Loading baseline reference product...\"}}");
-            let baseline_product = if let Some(ref slave_path) = cli.slave {
+            let baseline_product = if let Some(p) = s1_baseline.take() {
+                info!("[2/5] Sentinel-1 baseline scene: {:?}", cli.slave);
+                Some(p)
+            } else if let Some(ref slave_path) = cli.slave {
                 if is_full_scene {
                     info!("[2/5] Ingesting Full-Scene Baseline GCOV: {:?}", slave_path);
                     crash_journal::phase("FLOOD_STEP_2", &format!("Loading Full-Scene Baseline GCOV: {:?}", slave_path.file_name().unwrap_or_default()));
@@ -851,6 +878,7 @@ fn main() -> Result<()> {
             }
 
             // 3. Load Optional Coherence from GUNW
+            sar_science_processor::timing::lap("read baseline");
             println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[3/5] Loading InSAR coherence helper...\"}}");
             let coherence = if let Some(ref gunw_path) = cli.gunw {
                 info!("[3/5] Loading GUNW coherence magnitude: {:?}", gunw_path);
@@ -897,16 +925,20 @@ fn main() -> Result<()> {
             };
 
             // 5. Run 7-Stage Flood Detection Pipeline
+            sar_science_processor::timing::lap("coherence + water mask");
             println!("{{\"event\":\"progress\",\"stage\":\"PROCESSING\",\"message\":\"[5/5] Running 7-stage change detection...\"}}");
             crash_journal::phase("FLOOD_STEP_5", "Running 7-stage flood detection pipeline");
             info!("[5/5] Running 7-stage flood detection pipeline...");
-            let default_band = if active_product.params.is_s_band() {
+            // Band of the product itself; the CLI default "l" follows the product.
+            let default_band = if is_s1 {
+                sar_science_processor::flood_detect::RadarBand::CBand
+            } else if active_product.params.is_s_band() {
                 sar_science_processor::flood_detect::RadarBand::SBand
             } else {
                 sar_science_processor::flood_detect::RadarBand::LBand
             };
-            let band = if cli.radar_band.eq_ignore_ascii_case("l") && active_product.params.is_s_band() {
-                sar_science_processor::flood_detect::RadarBand::SBand
+            let band = if cli.radar_band.eq_ignore_ascii_case("l") {
+                default_band
             } else {
                 cli.radar_band.parse::<sar_science_processor::flood_detect::RadarBand>()
                     .unwrap_or(default_band)
@@ -967,55 +999,72 @@ fn main() -> Result<()> {
             }
 
             // Save output files
+            sar_science_processor::timing::lap("detection (total)");
             println!("{{\"event\":\"progress\",\"stage\":\"GENERATING_OUTPUTS\",\"message\":\"Generating geospatial products...\"}}");
             let base = cli.output.replace(".tif", "").replace(".png", "");
             let bbox_opt = bbox.as_ref().map(|b| [b.west, b.south, b.east, b.north]);
 
-            // Save GeoTIFF classification raster (using compact 8-bit unsigned integer layout)
+            // The class GeoTIFF and the three PNGs (class map + both radar previews, each
+            // re-gridded to Web Mercator for web maps) do not depend on each other. PNG encoding
+            // runs on one core, so the four files are written on parallel threads. Same bytes.
+            use sar_science_processor::io as sio;
             let tif_path = format!("{}_flood_class.tif", base);
-            if let Some(grid) = utm_grid.as_ref() {
-                sar_science_processor::io::save_geotiff_u8_utm(class_map.view(), &tif_path, grid)?;
-            } else {
-                sar_science_processor::io::save_geotiff_u8(class_map.view(), &tif_path, bbox_opt)?;
-            }
-
-            // Save RGBA colormapped PNG
             let png_path = format!("{}_flood.png", base);
-            sar_science_processor::io::save_flood_map_png(class_map.view(), &png_path)?;
-
-            // Replay source imagery. These are the actual loaded GCOV observations,
-            // rendered only for presentation; the validated detection path above is
-            // unchanged. Both previews use the same crop/grid and therefore share the
-            // flood mask bounds exactly.
             let active_preview_path = format!("{}_flood_active.png", base);
-            sar_science_processor::io::save_sar_image(active_slc.view(), &active_preview_path)?;
-            let baseline_preview_path = if let Some(baseline) = baseline_slc {
-                let path = format!("{}_flood_baseline.png", base);
-                sar_science_processor::io::save_sar_image(baseline.view(), &path)?;
-                Some(path)
-            } else {
-                None
+            let baseline_preview_path = baseline_slc.map(|_| format!("{}_flood_baseline.png", base));
+            let (rows, cols) = (class_map.nrows(), class_map.ncols());
+            let warp = |path: &str| -> anyhow::Result<Option<[f64; 4]>> {
+                Ok(match utm_grid.as_ref() {
+                    Some(grid) => Some(sio::warp_png_to_web_mercator(path, grid, cols, rows)?),
+                    None => None,
+                })
             };
-
-            // Web maps draw images on Web Mercator. Re-grid the three PNGs from the
-            // UTM grid so they line up exactly; the GeoTIFF stays on its native grid.
-            let mut overlay_bbox: Option<[f64; 4]> = None;
-            if let Some(grid) = utm_grid.as_ref() {
-                let (rows, cols) = (class_map.nrows(), class_map.ncols());
-                overlay_bbox = Some(sar_science_processor::io::warp_png_to_web_mercator(&png_path, grid, cols, rows)?);
-                sar_science_processor::io::warp_png_to_web_mercator(&active_preview_path, grid, cols, rows)?;
-                if let Some(ref p) = baseline_preview_path {
-                    sar_science_processor::io::warp_png_to_web_mercator(p, grid, cols, rows)?;
-                }
-                if let Some([w, s, e, n]) = overlay_bbox {
-                    println!(
-                        "{}",
-                        serde_json::json!({"event": "georef", "bbox": {"south": s, "north": n, "west": w, "east": e}})
-                    );
-                }
+            let (tif_res, overlay_res, active_res, baseline_res) = std::thread::scope(|sc| {
+                let tif = sc.spawn(|| -> anyhow::Result<()> {
+                    // Compact 8-bit class raster; full scenes keep the native UTM grid.
+                    match utm_grid.as_ref() {
+                        Some(grid) => sio::save_geotiff_u8_utm(class_map.view(), &tif_path, grid)?,
+                        None => sio::save_geotiff_u8(class_map.view(), &tif_path, bbox_opt)?,
+                    }
+                    Ok(())
+                });
+                let overlay = sc.spawn(|| -> anyhow::Result<Option<[f64; 4]>> {
+                    sio::save_flood_map_png(class_map.view(), &png_path)?;
+                    warp(&png_path)
+                });
+                // Replay source imagery: the loaded observations, rendered for presentation only.
+                let active = sc.spawn(|| -> anyhow::Result<()> {
+                    sio::save_sar_image(active_slc.view(), &active_preview_path)?;
+                    warp(&active_preview_path).map(|_| ())
+                });
+                let baseline = sc.spawn(|| -> anyhow::Result<()> {
+                    if let (Some(b), Some(p)) = (baseline_slc, baseline_preview_path.as_ref()) {
+                        sio::save_sar_image(b.view(), p)?;
+                        warp(p)?;
+                    }
+                    Ok(())
+                });
+                let j = |r: std::thread::Result<anyhow::Result<()>>| r.unwrap_or_else(|_| Err(anyhow::anyhow!("output thread panicked")));
+                (
+                    j(tif.join()),
+                    overlay.join().unwrap_or_else(|_| Err(anyhow::anyhow!("output thread panicked"))),
+                    j(active.join()),
+                    j(baseline.join()),
+                )
+            });
+            tif_res?;
+            active_res?;
+            baseline_res?;
+            let overlay_bbox: Option<[f64; 4]> = overlay_res?;
+            if let Some([w, s, e, n]) = overlay_bbox {
+                println!(
+                    "{}",
+                    serde_json::json!({"event": "georef", "bbox": {"south": s, "north": n, "west": w, "east": e}})
+                );
             }
 
             // Save GeoJSON flood polygons
+            sar_science_processor::timing::lap("outputs: GeoTIFF + PNGs + warp");
             let geojson_path = format!("{}_flood.geo.json", base);
             if let Some(bbox_val) = bbox_opt {
                 if let Some(grid) = utm_grid.as_ref() {
@@ -1070,12 +1119,12 @@ fn main() -> Result<()> {
                 "product": {
                     "active_id": active_filename,
                     "baseline_id": baseline_filename,
-                    "frequency": if active_product.params.is_s_band() { "S" } else { "L" },
+                    "frequency": if is_s1 { "C" } else if active_product.params.is_s_band() { "S" } else { "L" },
                     "instrument": active_product.params.instrument,
                     "radar_band": active_product.params.radar_band,
                     "center_frequency_hz": active_product.params.center_frequency,
                     "wavelength_m": active_product.params.wavelength(),
-                    "polarization": cli.polarization,
+                    "polarization": polarization_used,
                     "pixel_spacing_x_m": effective_dx,
                     "pixel_spacing_y_m": effective_dy,
                     "crs": active_product.crs
@@ -1154,6 +1203,7 @@ fn main() -> Result<()> {
             std::fs::write(&report_path, serde_json::to_string_pretty(&full_report)?)?;
             info!("  ✓ Flood mapping report: {}", report_path);
 
+            sar_science_processor::timing::lap("outputs: GeoJSON + report");
             // Emit gateway event
             println!(
                 "{{\"event\":\"flood_report\",\"path\":\"{}\",\"summary\":{}}}",

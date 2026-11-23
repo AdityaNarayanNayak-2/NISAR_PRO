@@ -41,6 +41,9 @@ export function granuleTrackFrame(name) {
   return m ? { cycle: Number(m[1]), track: Number(m[2]), direction: m[3] === 'A' ? 'Ascending' : 'Descending', frame: Number(m[4]) } : null
 }
 
+/** Satellite of a band: C-band runs are Sentinel-1, L and S are NISAR. */
+export const sensorName = (band) => (String(band || '').toUpperCase() === 'C' ? 'Sentinel-1' : 'NISAR')
+
 export function parseReport(json) {
   if (!json || typeof json !== 'object') return null
   const areas = json.areas || {}

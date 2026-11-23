@@ -1,0 +1,13 @@
+# Production layout: Redis queue, 2 gateway copies, KEDA workers, shared ReadWriteMany volume.
+gateway:
+  replicas: 2
+queue:
+  enabled: true
+worker:
+  mode: keda
+  maxReplicas: 4
+persistence:
+  accessModes: [ReadWriteMany]
+  storageClass: efs-sc
+networkPolicy:
+  enabled: true

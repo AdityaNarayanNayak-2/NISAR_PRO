@@ -7,6 +7,7 @@
 //! - InSAR: Master+Slave SLC → Interferogram → Coherence → Unwrap → Displacement
 //! - GCOV: Geocoded Covariance → Speckle Filter → Colormapped PNG
 
+pub mod timing;
 pub mod crash_journal;
 pub mod sha256;
 pub mod windowed;
@@ -23,4 +24,5 @@ pub mod topo_phase;
 pub mod deramp;
 pub mod water_mask;
 pub mod flood_detect;
+pub mod sentinel1;
 

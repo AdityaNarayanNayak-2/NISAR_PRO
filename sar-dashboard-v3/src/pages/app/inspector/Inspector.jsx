@@ -18,14 +18,24 @@ function Elapsed({ since }) {
   return <span className="num">{Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}</span>
 }
 
+const ordinal = (n) => {
+  const t = n % 100
+  const end = t >= 11 && t <= 13 ? 'th' : { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'
+  return `${n}${end}`
+}
+
 function Running({ run, onShowLog }) {
   const st = useRunStore((s) => s.stages[run.id])
   const cancel = useRunStore((s) => s.cancel)
+  const canAdmin = useRunStore((s) => s.canAdmin())
+  const queue = useRunStore((s) => s.config.queue)
   const idx = STAGES.findIndex((x) => x.key === st?.stage)
   const queued = runStatus(run).kind === 'queued'
+  const place = run.queue_position
   return (
     <div className="sec">
-      <h3>{queued ? 'Waiting for a free processor slot' : 'Processing'}</h3>
+      <h3>{queued ? (queue === 'redis' ? 'Waiting for a worker' : 'Waiting for a free processor slot') : 'Processing'}</h3>
+      {queued && place != null && <p className="queue-place"><span className="num">{place === 1 ? 'Next' : `${ordinal(place)} in the queue`}</span>{place > 1 && <span className="muted"> · {place - 1} {place === 2 ? 'run' : 'runs'} ahead</span>}</p>}
       <ol className="stages">
         {STAGES.map((s, i) => (
           <li key={s.key} className={i < idx ? 'done' : i === idx ? 'now' : ''}>
@@ -34,10 +44,10 @@ function Running({ run, onShowLog }) {
           </li>
         ))}
       </ol>
-      <div className="foot">Elapsed {st?.startedAt ? <Elapsed since={st.startedAt} /> : '—'}</div>
+      {!queued && <div className="foot">Elapsed {st?.startedAt ? <Elapsed since={st.startedAt} /> : '—'}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <button type="button" className="btn" onClick={onShowLog}>Show log</button>
-        <button type="button" className="btn btn-danger" onClick={() => cancel(run.id)}>Cancel</button>
+        {canAdmin && <button type="button" className="btn btn-danger" onClick={() => cancel(run.id)}>Cancel</button>}
       </div>
     </div>
   )

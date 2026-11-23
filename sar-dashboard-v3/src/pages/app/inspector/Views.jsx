@@ -8,7 +8,7 @@
 import { useMemo } from 'react'
 import { useRunStore } from '../stores/useRunStore'
 import { periodsFor, shareOf } from '../lib/regions'
-import { granuleTime, granuleTrackFrame } from '../lib/report'
+import { granuleTime, granuleTrackFrame, sensorName } from '../lib/report'
 import { placeLabel } from '../lib/places'
 import Icon from '../ui/Icon'
 import { formatArea, formatDate, formatNumber, formatPercent, formatShortDate } from '../lib/units'
@@ -37,7 +37,7 @@ function summaryText(r, top, places) {
   const a = formatArea(r.newWater.km2, r.newWater.acres)
   const names = top.slice(0, 3).map((x) => `${placeLabel(places[x.id]) || `${x.lat.toFixed(4)}, ${x.lon.toFixed(4)}`} (${formatArea(x.km2, x.acres).km2})`)
   return [
-    `NISAR ${r.band || ''}-band radar, ${formatDate(r.baselineDate)} to ${formatDate(r.activeDate)}${at ? ` (later pass ${at.toISOString().slice(11, 16)} UTC)` : ''}.`,
+    `${sensorName(r.band)} ${r.band || ''}-band radar, ${formatDate(r.baselineDate)} to ${formatDate(r.activeDate)}${at ? ` (later pass ${at.toISOString().slice(11, 16)} UTC)` : ''}.`,
     `Flood extent ${a.km2} (${a.acres})${r.regions != null ? ` in ${formatNumber(r.regions)} areas` : ''}.`,
     names.length ? `Largest: ${names.join('; ')}.` : '',
     'Water detected by radar. Not confirmed on the ground. Source: NISAR Pro.',

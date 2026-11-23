@@ -38,8 +38,12 @@ pub fn run_reused() { RUNS_REUSED.fetch_add(1, Relaxed); }
 
 /// Record how a run ended and how long the engine took.
 pub fn run_finished(ok: bool, started: Instant) {
+    run_finished_secs(ok, started.elapsed().as_secs_f64());
+}
+
+/// Same, with the engine time reported by a queue worker.
+pub fn run_finished_secs(ok: bool, secs: f64) {
     if ok { RUNS_COMPLETED.fetch_add(1, Relaxed); } else { RUNS_FAILED.fetch_add(1, Relaxed); }
-    let secs = started.elapsed().as_secs_f64();
     for (i, b) in BUCKETS.iter().enumerate() {
         if secs <= *b { DURATION_BUCKETS[i].fetch_add(1, Relaxed); }
     }
@@ -77,6 +81,10 @@ pub async fn metrics_handler(State(state): State<crate::AppState>) -> impl IntoR
     gauge(&mut o, "nisar_last_activity_time_seconds", "Unix time of the last request that was not a probe or a scrape.", LAST_ACTIVITY.load(Relaxed).to_string());
     gauge(&mut o, "nisar_processor_free_slots", "Engine slots free right now (MAX_CONCURRENT_JOBS minus running).", slots.to_string());
     gauge(&mut o, "nisar_engine_ready", "1 if the science processor binary was found.", (crate::jobs::processor_found() as u8).to_string());
+    let (waiting, taken) = crate::queue::lengths();
+    gauge(&mut o, "nisar_queue_enabled", "1 when runs go through the Redis queue to workers.", (crate::queue::enabled() as u8).to_string());
+    gauge(&mut o, "nisar_queue_waiting", "Runs waiting in the Redis queue (refreshed every 10 s).", waiting.to_string());
+    gauge(&mut o, "nisar_queue_taken", "Runs a worker has taken from the Redis queue.", taken.to_string());
     o.push_str("# HELP nisar_jobs Runs known to the gateway, by status.\n# TYPE nisar_jobs gauge\n");
     for (s, v) in [("queued", queued), ("running", running), ("completed", completed), ("failed", failed)] {
         o.push_str(&format!("nisar_jobs{{status=\"{s}\"}} {v}\n"));

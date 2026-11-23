@@ -1,0 +1,5 @@
+apiVersion: v2
+name: storage-class
+description: One StorageClass, so Terraform can create it with the Helm provider alone.
+type: application
+version: 0.1.0
