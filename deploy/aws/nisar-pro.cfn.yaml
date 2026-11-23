@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  NISAR Pro on one EC2 instance: engine, gateway and dashboard in a container, scenes and
+  results on a separate encrypted EBS volume. No SSH; reach it through Systems Manager port
+  forwarding, a Cloudflare Tunnel, or a public port with a login.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: Machine }
+        Parameters: [InstanceType, UseSpot, DataVolumeGB, IdleStopMinutes]
+      - Label: { default: Access }
+        Parameters: [PublicCidr, LoginPassword, CloudflareTunnelToken]
+      - Label: { default: Data }
+        Parameters: [EarthdataToken]
+      - Label: { default: Advanced }
+        Parameters: [Image, InstallScriptUrl, UbuntuAmi]
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: c6i.xlarge
+    AllowedValues: [t3.xlarge, c6i.xlarge, c7i.xlarge, m6i.xlarge, c6i.2xlarge, c7i.2xlarge, m6i.2xlarge]
+    Description: 4 vCPU and 8 GB run one full L-band scene pair in about a minute.
+  UseSpot:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Spot capacity costs less; AWS may stop the instance, and a run in progress must be started again.
+  DataVolumeGB:
+    Type: Number
+    Default: 200
+    MinValue: 30
+    Description: Scenes (L about 7 GB, S about 12.6 GB each) and results. A snapshot is kept when the stack is deleted.
+  IdleStopMinutes:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: Stop the instance after this many minutes with no user and no run (0 = never). Start it again from the EC2 console.
+  PublicCidr:
+    Type: String
+    Default: ""
+    Description: Open port 80 to this range, e.g. 203.0.113.0/24 (empty = no public port). Set LoginPassword too.
+  LoginPassword:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Login password for user "admin" (empty = no login). Needed with a public port. Do not use " or \ in it.
+  CloudflareTunnelToken:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional. HTTPS on your own domain with no open port; route the tunnel to http://localhost:3000.
+  EarthdataToken:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional NASA Earthdata token for downloading scenes in the app (search works without it).
+  Image:
+    Type: String
+    Default: ghcr.io/adityanarayannayak-2/nisar-pro:main
+  InstallScriptUrl:
+    Type: String
+    Default: https://raw.githubusercontent.com/AdityaNarayanNayak-2/NISAR_PRO/main/deploy/vm/install.sh
+  UbuntuAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+
+Conditions:
+  Public: !Not [!Equals [!Ref PublicCidr, ""]]
+  Spot: !Equals [!Ref UseSpot, "true"]
+  Login: !Not [!Equals [!Ref LoginPassword, ""]]
+
+Resources:
+  # Secrets go to Secrets Manager, not into user data, so they never show in the console.
+  Settings:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: NISAR Pro settings read by the instance at boot
+      SecretString: !Sub
+        - '{"login":"${L}","tunnel":"${CloudflareTunnelToken}","earthdata":"${EarthdataToken}"}'
+        - L: !If [Login, !Sub "admin:${LoginPassword}", ""]
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: read-settings
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref Settings
+
+  Profile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref Role]
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: NISAR Pro
+      SecurityGroupIngress: !If
+        - Public
+        - - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Ref PublicCidr, Description: App }
+        - !Ref AWS::NoValue
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref UbuntuAmi
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile: { Arn: !GetAtt Profile.Arn }
+        SecurityGroupIds: [!GetAtt SecurityGroup.GroupId]
+        InstanceInitiatedShutdownBehavior: stop
+        MetadataOptions: { HttpTokens: required, HttpPutResponseHopLimit: 1 }
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs: { VolumeSize: 20, VolumeType: gp3, Encrypted: true }
+        InstanceMarketOptions: !If
+          - Spot
+          - MarketType: spot
+            SpotOptions: { SpotInstanceType: persistent, InstanceInterruptionBehavior: stop }
+          - !Ref AWS::NoValue
+        TagSpecifications:
+          - ResourceType: instance
+            Tags: [{ Key: Name, Value: !Ref AWS::StackName }]
+        UserData:
+          Fn::Base64: !Sub
+            - |
+              #!/bin/bash
+              set -euo pipefail
+              # Read the settings secret with the instance role (curl signs the request; no AWS CLI needed).
+              IMDS=http://169.254.169.254/latest
+              T=$(curl -fsS -X PUT "$IMDS/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+              ROLE=$(curl -fsS -H "X-aws-ec2-metadata-token: $T" $IMDS/meta-data/iam/security-credentials/)
+              C=$(curl -fsS -H "X-aws-ec2-metadata-token: $T" "$IMDS/meta-data/iam/security-credentials/$ROLE")
+              field() { python3 -c "import sys,json; print(json.load(sys.stdin)['$1'])"; }
+              S=$(curl -fsS --aws-sigv4 "aws:amz:${AWS::Region}:secretsmanager" \
+                   --user "$(echo "$C" | field AccessKeyId):$(echo "$C" | field SecretAccessKey)" \
+                   -H "x-amz-security-token: $(echo "$C" | field Token)" \
+                   -H "X-Amz-Target: secretsmanager.GetSecretValue" -H "Content-Type: application/x-amz-json-1.1" \
+                   -d '{"SecretId":"${Settings}"}' "https://secretsmanager.${AWS::Region}.amazonaws.com/" | field SecretString)
+              NISAR_BASIC_AUTH=$(echo "$S" | field login); export NISAR_BASIC_AUTH
+              CLOUDFLARE_TUNNEL_TOKEN=$(echo "$S" | field tunnel); export CLOUDFLARE_TUNNEL_TOKEN
+              EARTHDATA_TOKEN=$(echo "$S" | field earthdata); export EARTHDATA_TOKEN
+              export NISAR_IMAGE='${Image}' NISAR_DATA_DEVICE=auto
+              export NISAR_PUBLIC_PORT='${PortValue}'
+              [ "${IdleStopMinutes}" != 0 ] && export NISAR_IDLE_STOP_MINUTES=${IdleStopMinutes}
+              curl -fsSL '${InstallScriptUrl}' -o /root/nisar-install.sh
+              bash /root/nisar-install.sh
+            - PortValue: !If [Public, "80", ""]
+
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+
+  DataVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      AvailabilityZone: !GetAtt Instance.AvailabilityZone
+      Size: !Ref DataVolumeGB
+      VolumeType: gp3
+      Encrypted: true
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-data" }]
+
+  DataAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref Instance
+      VolumeId: !Ref DataVolume
+      Device: /dev/sdf
+
+Outputs:
+  InstanceId:
+    Value: !Ref Instance
+  PortForward:
+    Description: Open the app on this computer at http://localhost:3000/app (needs the AWS CLI and the Session Manager plugin)
+    Value: !Sub
+      - >-
+        aws ssm start-session --region ${AWS::Region} --target ${Instance}
+        --document-name AWS-StartPortForwardingSession
+        --parameters '{"portNumber":["${Port}"],"localPortNumber":["3000"]}'
+      - Port: !If [Public, "80", "3000"]
+  PublicUrl:
+    Condition: Public
+    Value: !Sub "http://${Instance.PublicIp}/app"

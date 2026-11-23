@@ -6,6 +6,9 @@ pub mod jobs;
 pub mod rate_limit;
 pub mod geocode;
 pub mod metrics;
+pub mod auth;
+pub mod watch;
+pub mod stac;
 
 use axum::{
     routing::{get, post},
@@ -34,6 +37,7 @@ async fn main() {
     dotenv().ok();
     env_logger::init();
     metrics::init();
+    if auth::init() { info!("Login required (NISAR_BASIC_AUTH is set)"); }
 
     let max_concurrent_jobs: usize = std::env::var("MAX_CONCURRENT_JOBS")
         .ok()
@@ -53,6 +57,7 @@ async fn main() {
 
     // Load saved runs from results/jobs and delete older duplicates.
     jobs::preload_runs(&state).await;
+    watch::spawn(state.clone());
 
     let app = Router::new()
         .route("/search", get(handlers::search_handler))
@@ -65,6 +70,14 @@ async fn main() {
         .route("/geocode/reverse", get(geocode::reverse_handler))
         .route("/geocode/search", get(geocode::search_handler))
         .route("/upload", post(handlers::upload_handler))
+        .route("/watch", get(watch::overview))
+        .route("/watch/areas", post(watch::save_area))
+        .route("/watch/areas/:id", axum::routing::delete(watch::delete_area))
+        .route("/watch/areas/:id/check", post(watch::check_now))
+        .route("/watch/feed.xml", get(watch::feed))
+        .route("/watch/cap/:file", get(watch::cap))
+        .route("/stac", get(stac::catalog))
+        .route("/stac/items/:id", get(stac::item))
         .route("/metrics", get(metrics::metrics_handler))
         .route("/healthz", get(metrics::healthz))
         .route("/readyz", get(metrics::readyz))
@@ -93,6 +106,8 @@ async fn main() {
             app
         }
     };
+    // Outermost, so the login also covers the dashboard files served by the fallback.
+    let app = app.layer(axum::middleware::from_fn(auth::basic_auth));
 
     // NISAR_BIND=127.0.0.1 keeps the server on this computer only (the desktop launchers set it).
     let host: std::net::IpAddr = std::env::var("NISAR_BIND")

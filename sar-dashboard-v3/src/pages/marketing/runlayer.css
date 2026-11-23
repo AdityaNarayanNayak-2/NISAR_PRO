@@ -190,3 +190,11 @@
   .rl-about { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .rl-scene img, .rl-pin, .rl-layer { transition: none; } }
+
+.rl-clouds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 28px; }
+.rl-cloud { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); color: inherit; text-decoration: none; transition: border-color .15s, background .15s; }
+.rl-cloud:hover { border-color: rgba(255,255,255,.32); background: rgba(255,255,255,.06); }
+.rl-cloud b { font-size: 15px; font-weight: 600; }
+.rl-cloud span { font-size: 13px; color: var(--lo); }
+@media (max-width: 900px) { .rl-clouds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .rl-clouds { grid-template-columns: 1fr; } }

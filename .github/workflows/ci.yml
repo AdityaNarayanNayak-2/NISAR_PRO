@@ -89,9 +89,25 @@ jobs:
       - run: terraform init -backend=false
       - run: terraform validate
 
+  vm-templates:
+    name: VM templates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck
+        run: shellcheck -S warning deploy/vm/install.sh deploy/gcp/deploy.sh deploy/gcp/startup.sh
+      - name: CloudFormation lint
+        run: pipx run cfn-lint deploy/aws/nisar-pro.cfn.yaml
+      - name: Azure template matches main.bicep
+        run: |
+          az bicep build --file deploy/azure/main.bicep --outfile /tmp/built.json
+          strip() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); d.get('metadata',{}).pop('_generator',None); print(json.dumps(d,sort_keys=True))" "$1"; }
+          diff <(strip /tmp/built.json) <(strip deploy/azure/azuredeploy.json) \
+            || { echo "::error::azuredeploy.json is out of date: az bicep build --file deploy/azure/main.bicep --outfile deploy/azure/azuredeploy.json"; exit 1; }
+
   image:
     name: Image
-    needs: [rust, dashboard, helm, terraform]
+    needs: [rust, dashboard, helm, terraform, vm-templates]
     runs-on: ubuntu-latest
     permissions:
       contents: read

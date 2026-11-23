@@ -736,3 +736,30 @@ kbd { padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line-strong)
 .outlook.up { border-color: rgba(212, 137, 47, .55); background: rgba(212, 137, 47, .10); color: var(--text-hi); }
 .outlook svg { flex: none; margin-top: 2px; }
 .spot-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Watch tab */
+.watch-box { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 12px; color: var(--text-mid); }
+.watch-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; }
+.watch-grid.two { grid-template-columns: 1fr 1fr; }
+.watch-notify { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 10px; }
+.watch-notify summary { cursor: pointer; font-size: 12px; color: var(--text-mid); margin-bottom: 10px; }
+.watch-areas, .watch-evs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.watch-areas li, .watch-ev { padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, .02); }
+.watch-areas .h, .watch-ev .h { display: flex; align-items: center; gap: 8px; }
+.watch-areas .n { font-weight: 600; font-size: 13px; color: var(--text-hi); padding: 0; text-align: left; }
+.watch-areas .m, .watch-ev .m { margin-top: 4px; font-size: 12px; line-height: 17px; color: var(--text-lo); overflow-wrap: anywhere; }
+.watch-areas .acts, .watch-ev .acts { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.watch-areas .acts .icon-btn { margin-left: auto; width: 28px; height: 28px; }
+.watch-ev .d { font-size: 12px; color: var(--text-mid); }
+.watch-ev .a { margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--text-hi); }
+.watch-ev .v { margin-top: 2px; font-size: 13px; }
+.watch-ev.waiting, .watch-ev.failed { background: transparent; }
+.watch-alert { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600; color: #fbbf24; border: 1px solid rgba(251, 191, 36, .4); }
+.watch-st { margin-left: auto; font-size: 11px; color: var(--text-lo); }
+.watch-st.failed { color: var(--err); }
+.watch-links { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Tabs that do not fit: dropdown instead (NavPill measures). */
+.ws-nav.compact .tabs { position: absolute; visibility: hidden; pointer-events: none; }
+.ws-nav.compact .tabs-select { display: block; }
+.ws-nav .tabs-select { background: rgba(18, 19, 22, .6); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); min-width: 150px; }

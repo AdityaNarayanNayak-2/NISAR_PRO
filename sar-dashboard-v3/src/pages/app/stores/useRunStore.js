@@ -16,7 +16,7 @@ const STAGES = [
 ]
 export { STAGES }
 // Tabs in the nav pill. Run tabs show an empty state until a run is open.
-export const VIEWS = ['map', 'timeseries', 'regions', 'impact', 'reports', 'processing', 'evaluation']
+export const VIEWS = ['map', 'timeseries', 'regions', 'impact', 'reports', 'processing', 'watch', 'evaluation']
 export const RUN_VIEWS = ['timeseries', 'regions', 'impact', 'reports', 'evaluation']
 
 function stageFromLine(line) {

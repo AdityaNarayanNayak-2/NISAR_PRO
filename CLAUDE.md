@@ -79,7 +79,7 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
   primary button; Plus Jakarta Sans, sentence case.
 - Full-screen dark satellite map (Esri World Imagery, desaturated in MapLibre paint, Esri places on
   top). Floating nav pill top left (Live Map, Time Series, Regions, Impact, Reports, Processing,
-  Evaluation Hub), command pill top right (place or lat, lon search, engine state), left bento stack (system
+  Watch, Evaluation Hub; tabs switch to a dropdown when they do not fit), command pill top right (place or lat, lon search, engine state), left bento stack (system
   status with the flood extent of the run in focus, latest four run cards), one 380 px right panel
   for the tab. Each fact has one owner tab; never show it twice. Nothing is tied to one region.
 - `/app` opens on Live Map with no run (no result numbers). A result shows only after a run is opened.
@@ -124,6 +124,14 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
   `deploy/helm/nisar-pro` (one replica by design, see `deploy/README.md`), CI in
   `.github/workflows/ci.yml`. Gateway env: `NISAR_PORT`, `NISAR_PROCESSOR`, `NISAR_DASHBOARD_DIR`,
   `NISAR_DATA_DIRS`; probes `/healthz`, `/readyz`; Prometheus `/metrics` (`src/metrics.rs`).
+- Watch (continuous monitoring, `src/watch.rs`): areas in `results/watch/areas.json`, results in
+  `events.json`. Pairs the newest pass per band/track/frame with the one before, full scene,
+  erosion 40 (reuses the reference runs), extent inside an area = regions whose centre is inside.
+  Alerts: webhook/Telegram, Atom feed + CAP 1.2 (`/watch/feed.xml`, `/watch/cap/<id>.xml`,
+  certainty `Possible`). STAC 1.0 of all runs: `/stac` (`src/stac.rs`). Dashboard tab `Watch`
+  (`inspector/Watch.jsx`). Optional login `NISAR_BASIC_AUTH=user:pass` (`src/auth.rs`).
+- One-click VMs: `deploy/vm/install.sh` (any Linux VM), `deploy/aws` (CloudFormation),
+  `deploy/azure` (`main.bicep` -> `azuredeploy.json`, rebuild both together), `deploy/gcp`.
 - NASA catalog: `GET /search/nisar` (ASF search, no login) and `GET /asf/download-stream` (needs
   `EARTHDATA_TOKEN` in `sar-gateway/.env`); downloads land in `sar-gateway/data/`, which `/scenes` reads.
 - Engine detection flags (`--seed-threshold-db`, `--growth-threshold-db`, `--min-change-db`,

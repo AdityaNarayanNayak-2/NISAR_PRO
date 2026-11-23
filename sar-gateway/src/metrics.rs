@@ -23,8 +23,13 @@ static DURATION_SUM_MS: AtomicU64 = AtomicU64::new(0);
 static HTTP: [AtomicU64; 5] = [const { AtomicU64::new(0) }; 5];
 
 static STARTED_AT: OnceLock<f64> = OnceLock::new();
+/// Unix seconds of the last request from a person (probes and scrapes do not count).
+static LAST_ACTIVITY: AtomicU64 = AtomicU64::new(0);
+
+fn now_secs() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
 
 pub fn init() {
+    LAST_ACTIVITY.store(now_secs(), Relaxed);
     let _ = STARTED_AT.set(SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0));
 }
 
@@ -43,6 +48,9 @@ pub fn run_finished(ok: bool, started: Instant) {
 }
 
 pub async fn http_counter(req: Request<Body>, next: Next) -> Response {
+    if !matches!(req.uri().path(), "/metrics" | "/healthz" | "/readyz" | "/jobs/health-ping") {
+        LAST_ACTIVITY.store(now_secs(), Relaxed);
+    }
     let res = next.run(req).await;
     let class = (res.status().as_u16() / 100).clamp(1, 5) as usize - 1;
     HTTP[class].fetch_add(1, Relaxed);
@@ -66,6 +74,7 @@ pub async fn metrics_handler(State(state): State<crate::AppState>) -> impl IntoR
     };
     o.push_str(&format!("# HELP nisar_build_info Gateway version.\n# TYPE nisar_build_info gauge\nnisar_build_info{{version=\"{}\"}} 1\n", env!("CARGO_PKG_VERSION")));
     gauge(&mut o, "nisar_process_start_time_seconds", "Unix time the gateway started.", format!("{:.0}", STARTED_AT.get().copied().unwrap_or(0.0)));
+    gauge(&mut o, "nisar_last_activity_time_seconds", "Unix time of the last request that was not a probe or a scrape.", LAST_ACTIVITY.load(Relaxed).to_string());
     gauge(&mut o, "nisar_processor_free_slots", "Engine slots free right now (MAX_CONCURRENT_JOBS minus running).", slots.to_string());
     gauge(&mut o, "nisar_engine_ready", "1 if the science processor binary was found.", (crate::jobs::processor_found() as u8).to_string());
     o.push_str("# HELP nisar_jobs Runs known to the gateway, by status.\n# TYPE nisar_jobs gauge\n");

@@ -37,7 +37,7 @@ export default function Workspace() {
       else if (e.key === '[') setLeft((v) => !v)
       else if ((e.key === 'l' || e.key === 'L') && st.mode === 'local') st.toggleLog()
       else if (e.key === 'n' || e.key === 'N') { st.setView('processing'); setInsp(true) }
-      else if (/^[1-7]$/.test(e.key)) { st.setView(VIEWS[Number(e.key) - 1]); setInsp(true) }
+      else if (/^[1-8]$/.test(e.key)) { st.setView(VIEWS[Number(e.key) - 1]); setInsp(true) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

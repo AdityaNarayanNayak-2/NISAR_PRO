@@ -244,6 +244,15 @@ function Beyond() {
   )
 }
 
+const REPO = 'https://github.com/AdityaNarayanNayak-2/NISAR_PRO'
+const RAW = 'https://raw.githubusercontent.com/AdityaNarayanNayak-2/NISAR_PRO/main'
+const CLOUDS = [
+  ['Deploy to Azure', `https://portal.azure.com/#create/Microsoft.Template/uri/${encodeURIComponent(`${RAW}/deploy/azure/azuredeploy.json`)}`, 'One form in the Azure portal.'],
+  ['Open in Google Cloud', `https://shell.cloud.google.com/cloudshell/open?cloudshell_git_repo=${encodeURIComponent(REPO)}&cloudshell_git_branch=main&cloudshell_tutorial=deploy/gcp/tutorial.md&shellonly=true`, 'Guided steps in Cloud Shell.'],
+  ['Launch on AWS', `${REPO}/blob/main/deploy/README.md#aws`, 'One CloudFormation stack, one command.'],
+  ['Any Linux server', `${REPO}/blob/main/deploy/README.md#any-linux-vm`, 'One command, also offline in a data centre.'],
+]
+
 function Deploy() {
   const items = [
     ['On our servers', 'We host it, run every pass and send the report. You only need a browser.'],
@@ -256,7 +265,13 @@ function Deploy() {
       <p className="rl-eyebrow">Runs where you need it</p>
       <h2>A laptop in a control room, or your state data centre.</h2>
       <div className="rl-grid4">{items.map(([t, c]) => <div key={t} className="rl-item"><h3>{t}</h3><p>{c}</p></div>)}</div>
-      <pre className="rl-code" aria-label="Install commands">{`podman run -p 3000:3000 -v nisar:/var/lib/nisar-pro ghcr.io/adityanarayannayak-2/nisar-pro
+      <div className="rl-clouds" aria-label="Deploy on your own cloud account">
+        {CLOUDS.map(([t, href, note]) => (
+          <a key={t} className="rl-cloud" href={href} target="_blank" rel="noreferrer"><b>{t} ↗</b><span>{note}</span></a>
+        ))}
+      </div>
+      <pre className="rl-code" aria-label="Install commands">{`curl -fsSL ${RAW}/deploy/vm/install.sh | sudo bash        # any Linux VM
+podman run -p 3000:3000 -v nisar:/var/lib/nisar-pro ghcr.io/adityanarayannayak-2/nisar-pro
 helm install nisar ./deploy/helm/nisar-pro --set persistence.size=200Gi`}</pre>
     </section>
   )

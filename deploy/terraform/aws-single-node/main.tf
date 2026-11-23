@@ -59,9 +59,9 @@ resource "aws_security_group" "app" {
 }
 
 resource "aws_iam_role" "node" {
-  name_prefix        = "${var.name}-"
+  name_prefix = "${var.name}-"
   assume_role_policy = jsonencode({
-    Version   = "2012-10-17"
+    Version = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
@@ -83,11 +83,11 @@ resource "aws_ssm_parameter" "earthdata" {
 }
 
 resource "aws_iam_role_policy" "read_token" {
-  count  = var.earthdata_token == "" ? 0 : 1
-  name   = "read-earthdata-token"
-  role   = aws_iam_role.node.id
+  count = var.earthdata_token == "" ? 0 : 1
+  name  = "read-earthdata-token"
+  role  = aws_iam_role.node.id
   policy = jsonencode({
-    Version   = "2012-10-17"
+    Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
       Action   = ["ssm:GetParameter"]
@@ -128,7 +128,7 @@ resource "aws_instance" "node" {
   }
 
   user_data_replace_on_change = true
-  user_data                   = templatefile("${path.module}/cloud-init.sh.tftpl", {
+  user_data = templatefile("${path.module}/cloud-init.sh.tftpl", {
     image         = var.image
     volume_serial = replace(aws_ebs_volume.data.id, "-", "")
     region        = var.region

@@ -736,6 +736,11 @@ fn scene_from_path(p: &Path) -> Option<SceneFile> {
     })
 }
 
+/// Band, date, track and frame read from a GCOV file name (the file need not exist).
+pub fn granule_info(name: &str) -> Option<SceneFile> {
+    scene_from_path(Path::new(name))
+}
+
 /// GCOV files in the data folders (and one level of sub-folders), oldest first.
 pub fn list_scenes() -> Vec<SceneFile> {
     let mut out = Vec::new();

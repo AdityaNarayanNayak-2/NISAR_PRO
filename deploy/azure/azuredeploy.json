@@ -1,0 +1,367 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.49.2.45890",
+      "templateHash": "8937454636905180957"
+    }
+  },
+  "parameters": {
+    "vmName": {
+      "type": "string",
+      "defaultValue": "nisar-pro",
+      "metadata": {
+        "description": "Name for the VM and its resources."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Central India keeps data in India."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_F4s_v2",
+      "allowedValues": [
+        "Standard_F4s_v2",
+        "Standard_D4as_v5",
+        "Standard_D4s_v5",
+        "Standard_F8s_v2",
+        "Standard_D8as_v5"
+      ],
+      "metadata": {
+        "description": "4 vCPU and 8 GB run one full L-band scene pair in about a minute."
+      }
+    },
+    "useSpot": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Spot capacity costs less; Azure may deallocate the VM, and a run in progress must be started again."
+      }
+    },
+    "dataDiskGB": {
+      "type": "int",
+      "defaultValue": 200,
+      "minValue": 32,
+      "metadata": {
+        "description": "Scenes (L about 7 GB, S about 12.6 GB each) and results."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "nisar"
+    },
+    "sshPublicKey": {
+      "type": "string",
+      "metadata": {
+        "description": "Your SSH public key (ssh-ed25519 ... or ssh-rsa ...). Azure requires one; port 22 stays closed unless sshCidr is set."
+      }
+    },
+    "sshCidr": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Open SSH to this range, e.g. 203.0.113.7/32 (empty = closed)."
+      }
+    },
+    "publicCidr": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Open port 80 to this range, e.g. 203.0.113.0/24 or * (empty = no public port). Set loginPassword too."
+      }
+    },
+    "loginPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Login password for user admin (empty = no login). Needed with a public port."
+      }
+    },
+    "cloudflareTunnelToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. HTTPS on your own domain with no open port; route the tunnel to http://localhost:3000."
+      }
+    },
+    "earthdataToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional NASA Earthdata token for downloading scenes in the app."
+      }
+    },
+    "idleStopMinutes": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Deallocate the VM after this many minutes with no user and no run (0 = never). Gives the VM a managed identity allowed to stop itself; deploying that needs Owner or User Access Administrator."
+      }
+    },
+    "autoShutdownTime": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional daily shutdown at this time, India Standard Time, e.g. 2300."
+      }
+    },
+    "image": {
+      "type": "string",
+      "defaultValue": "ghcr.io/adityanarayannayak-2/nisar-pro:main"
+    },
+    "installScriptUrl": {
+      "type": "string",
+      "defaultValue": "https://raw.githubusercontent.com/AdityaNarayanNayak-2/NISAR_PRO/main/deploy/vm/install.sh"
+    }
+  },
+  "variables": {
+    "login": "[if(empty(parameters('loginPassword')), '', format('admin:{0}', parameters('loginPassword')))]",
+    "selfStop": "[greater(parameters('idleStopMinutes'), 0)]",
+    "publicPort": "[if(empty(parameters('publicCidr')), '', '80')]",
+    "vmContributor": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c",
+    "boot": "#!/bin/bash\nset -euo pipefail\nd() ( echo \"$1\" | base64 -d )\nNISAR_BASIC_AUTH=$(d '{0}'); export NISAR_BASIC_AUTH\nCLOUDFLARE_TUNNEL_TOKEN=$(d '{1}'); export CLOUDFLARE_TUNNEL_TOKEN\nEARTHDATA_TOKEN=$(d '{2}'); export EARTHDATA_TOKEN\nexport NISAR_IMAGE='{3}' NISAR_DATA_DEVICE=auto NISAR_PUBLIC_PORT='{4}' NISAR_STOP_MODE=azure-deallocate\nif [ '{5}' != 0 ]; then export NISAR_IDLE_STOP_MINUTES='{5}'; fi\ncurl -fsSL '{6}' -o /root/nisar-install.sh\nbash /root/nisar-install.sh\n",
+    "appRule": [
+      {
+        "name": "app",
+        "properties": {
+          "priority": 100,
+          "direction": "Inbound",
+          "access": "Allow",
+          "protocol": "Tcp",
+          "sourceAddressPrefix": "[parameters('publicCidr')]",
+          "sourcePortRange": "*",
+          "destinationAddressPrefix": "*",
+          "destinationPortRange": "80"
+        }
+      }
+    ],
+    "sshRule": [
+      {
+        "name": "ssh",
+        "properties": {
+          "priority": 110,
+          "direction": "Inbound",
+          "access": "Allow",
+          "protocol": "Tcp",
+          "sourceAddressPrefix": "[parameters('sshCidr')]",
+          "sourcePortRange": "*",
+          "destinationAddressPrefix": "*",
+          "destinationPortRange": "22"
+        }
+      }
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}-nsg', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": "[concat(if(empty(parameters('publicCidr')), createArray(), variables('appRule')), if(empty(parameters('sshCidr')), createArray(), variables('sshRule')))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}-vnet', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.40.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "default",
+            "properties": {
+              "addressPrefix": "10.40.0.0/24",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('vmName')))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('vmName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}-ip', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}-nic', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('vmName'))), '2023-09-01').subnets[0].id]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('vmName')))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('vmName')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('vmName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-07-01",
+      "name": "[parameters('vmName')]",
+      "location": "[parameters('location')]",
+      "identity": "[if(variables('selfStop'), createObject('type', 'SystemAssigned'), null())]",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "priority": "[if(parameters('useSpot'), 'Spot', 'Regular')]",
+        "evictionPolicy": "[if(parameters('useSpot'), 'Deallocate', null())]",
+        "billingProfile": "[if(parameters('useSpot'), createObject('maxPrice', -1), null())]",
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "ubuntu-24_04-lts",
+            "sku": "server",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage",
+            "diskSizeGB": 30,
+            "managedDisk": {
+              "storageAccountType": "StandardSSD_LRS"
+            },
+            "deleteOption": "Delete"
+          },
+          "dataDisks": [
+            {
+              "lun": 0,
+              "name": "[format('{0}-data', parameters('vmName'))]",
+              "createOption": "Empty",
+              "diskSizeGB": "[parameters('dataDiskGB')]",
+              "managedDisk": {
+                "storageAccountType": "StandardSSD_LRS"
+              },
+              "deleteOption": "Detach"
+            }
+          ]
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "customData": "[base64(format(variables('boot'), base64(variables('login')), base64(parameters('cloudflareTunnelToken')), base64(parameters('earthdataToken')), parameters('image'), variables('publicPort'), string(parameters('idleStopMinutes')), parameters('installScriptUrl')))]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+              ]
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('vmName')))]",
+              "properties": {
+                "deleteOption": "Delete"
+              }
+            }
+          ]
+        },
+        "securityProfile": {
+          "securityType": "TrustedLaunch",
+          "uefiSettings": {
+            "secureBootEnabled": true,
+            "vTpmEnabled": true
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('vmName')))]"
+      ]
+    },
+    {
+      "condition": "[variables('selfStop')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]",
+      "name": "[guid(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), 'self-stop')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('vmContributor'))]",
+        "principalId": "[if(variables('selfStop'), reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), '2024-07-01', 'full').identity.principalId, '')]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('autoShutdownTime')))]",
+      "type": "Microsoft.DevTestLab/schedules",
+      "apiVersion": "2018-09-15",
+      "name": "[format('shutdown-computevm-{0}', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "status": "Enabled",
+        "taskType": "ComputeVmShutdownTask",
+        "dailyRecurrence": {
+          "time": "[if(empty(parameters('autoShutdownTime')), '2300', parameters('autoShutdownTime'))]"
+        },
+        "timeZoneId": "India Standard Time",
+        "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]",
+        "notificationSettings": {
+          "status": "Disabled"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "publicIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('vmName'))), '2023-09-01').ipAddress]"
+    },
+    "appUrl": {
+      "type": "string",
+      "value": "[if(empty(parameters('publicCidr')), 'No public port. Use sshTunnel or your Cloudflare Tunnel hostname.', format('http://{0}/app', reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('vmName'))), '2023-09-01').ipAddress))]"
+    },
+    "sshTunnel": {
+      "type": "string",
+      "value": "[if(empty(parameters('sshCidr')), 'SSH closed (set sshCidr to open it).', format('ssh -L 3000:127.0.0.1:{0} {1}@{2}   then open http://localhost:3000/app', if(empty(parameters('publicCidr')), '3000', '80'), parameters('adminUsername'), reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('vmName'))), '2023-09-01').ipAddress))]"
+    }
+  }
+}

@@ -6,6 +6,7 @@ import { runInfo } from '../lib/runInfo'
 import { LiveMapView, TimeSeriesView, RegionsView, ReportsView } from './Views'
 import Validation from './Validation'
 import ImpactView from './Impact'
+import WatchView from './Watch'
 import ProcessPanel from '../form/ProcessPanel'
 import Home from './Home'
 import Icon from '../ui/Icon'
@@ -55,7 +56,7 @@ function Failed({ run, onShowLog }) {
   )
 }
 
-const TITLES = { map: 'Live map', timeseries: 'Time series', regions: 'Regions', impact: 'Impact', reports: 'Reports', processing: 'Processing', evaluation: 'Evaluation hub' }
+const TITLES = { map: 'Live map', timeseries: 'Time series', regions: 'Regions', impact: 'Impact', reports: 'Reports', processing: 'Processing', watch: 'Watch', evaluation: 'Evaluation hub' }
 const RUN_BODY = { map: LiveMapView, timeseries: TimeSeriesView, regions: RegionsView, impact: ImpactView, reports: ReportsView, evaluation: Validation }
 
 function PickRun() {
@@ -85,6 +86,8 @@ export default function Inspector({ onClose }) {
         <ProcessPanel />
       </>
     )
+  } else if (view === 'watch') {
+    body = <div className="insp-scroll" ref={scroll}><WatchView /></div>
   } else if (!run) {
     body = <div className="insp-scroll" ref={scroll}>{view === 'map' ? <Home /> : <PickRun />}</div>
   } else {
@@ -106,11 +109,12 @@ export default function Inspector({ onClose }) {
       <div className="insp-head">
         <div className="t">
           <div className="t1">{TITLES[view]}</div>
-          {run && view !== 'processing' && <div className="t2">{info.band && <span className="badge sm">{info.band}</span>}{info.dates || run.id}</div>}
+          {view === 'watch' && <div className="t2">New passes, processed on their own</div>}
+          {run && view !== 'processing' && view !== 'watch' && <div className="t2">{info.band && <span className="badge sm">{info.band}</span>}{info.dates || run.id}</div>}
           {view === 'processing' && <div className="t2">Water change between two passes</div>}
         </div>
         {mode === 'local' && view === 'processing' && <button type="button" className="chip sm" aria-pressed={logOpen} onClick={() => toggleLog()}><Icon name="log" size={13} />Log</button>}
-        {run && view !== 'processing' && <button type="button" className="icon-btn" onClick={() => useRunStore.getState().close()} aria-label="Close run" title="Close run"><Icon name="back" /></button>}
+        {run && view !== 'processing' && view !== 'watch' && <button type="button" className="icon-btn" onClick={() => useRunStore.getState().close()} aria-label="Close run" title="Close run"><Icon name="back" /></button>}
         <button type="button" className="icon-btn hide-mobile" onClick={onClose} aria-label="Hide panel" title="Hide panel  ]"><Icon name="close" /></button>
       </div>
       {body}

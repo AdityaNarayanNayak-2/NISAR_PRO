@@ -57,7 +57,8 @@ Water maps were checked against Sentinel-2 optical images on cloud-free pixels; 
 | **Gateway** | Axum. Runs jobs, streams logs live, reuses identical runs, searches and downloads from the NASA ASF catalog, and looks up place names (OpenStreetMap). |
 | **Dashboard** | React and MapLibre on a dark satellite basemap. Replay of both passes, numbered areas with coordinates in decimal, DMS and UTM, flood extent per district, change since the last pass, quality checks, and every engine parameter for engineers. |
 | **Impact** | Free public data joined to every run: hospitals, schools and police stations within 1 km of the flood extent (OpenStreetMap), river flow on the pass dates and a 30-day river forecast (GloFAS), rain between the passes (ERA5) and the 7-day rain forecast. Each source is named; none of it is NISAR output. |
-| **Operations** | One container image, Helm chart, health and readiness probes, Prometheus metrics, alert rules and a Grafana board, CI with tests, image scan and smoke test. See [deploy/](deploy/README.md). |
+| **Watch** | Continuous monitoring. Add an area once; every new NISAR pass over it is found in the ASF catalog, downloaded, paired with the pass before and processed with no one pressing a button. Flood extent inside the area goes to a webhook or Telegram when it passes your alert level, and out as an Atom feed of CAP 1.2 alerts (the format disaster agencies use, India's SACHET included). Every run is also in a STAC catalog for QGIS, ArcGIS or any GIS. |
+| **Operations** | One container image; one-click VMs on AWS, Azure and Google Cloud plus one installer for any Linux server; optional login, Cloudflare Tunnel, results backup and stop-when-idle; Helm chart, health and readiness probes, Prometheus metrics, alert rules and a Grafana board, CI with tests, template checks, image scan and smoke test. See [deploy/](deploy/README.md). |
 | **Outputs** | 2-page situation report (PDF via print), class GeoTIFF (UTM), areas GeoJSON, hotspots CSV, KML and GPX waypoints, report JSON. |
 
 ## Install
@@ -96,16 +97,19 @@ A full L-band scene is about 7 GB, S-band about 12.6 GB. 8 GB RAM is enough.
 | `GLIBC_2.39 not found` | Older Linux: build from source. |
 | Download fails with 401 | Earthdata token missing or expired. |
 
-## Container and Kubernetes
+## Container, cloud and Kubernetes
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/AdityaNarayanNayak-2/NISAR_PRO/main/deploy/vm/install.sh | sudo bash   # any Linux VM
 podman build -t nisar-pro .                       # or docker build
 podman run -p 3000:3000 -v nisar:/var/lib/nisar-pro nisar-pro
 podman compose up -d --build                      # with Prometheus and Grafana
 helm install nisar deploy/helm/nisar-pro          # Kubernetes
 ```
 
-Configuration, probes, metrics, alerts and a runbook: [deploy/README.md](deploy/README.md).
+One-click VMs: **Deploy to Azure** (`deploy/azure`), **Open in Google Cloud** (`deploy/gcp`), AWS
+CloudFormation (`deploy/aws`), Terraform (`deploy/terraform`). Configuration, probes, metrics,
+alerts, monitoring areas and a runbook: [deploy/README.md](deploy/README.md).
 
 ## Build from source
 
