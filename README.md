@@ -64,7 +64,7 @@ Water maps were checked against Sentinel-2 optical images on cloud-free pixels; 
 
 ## Install
 
-The app runs a local server and opens the dashboard at `http://localhost:3000`. Your data stays on your machine.
+The app runs a local server and opens the dashboard at `http://localhost:3000` (on Windows in its own app window). Your data stays on your machine.
 No Rust, Node.js or Python needed.
 
 ### Windows

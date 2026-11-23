@@ -2,7 +2,7 @@
 
 | File | Platform | What it is |
 |---|---|---|
-| `launcher.rs` | Windows | Source of `NISAR Pro.exe`. Starts the server with no console window, opens the dashboard, shows errors in a message box. `--stop` closes it. |
+| `launcher.rs` | Windows | Source of `NISAR Pro.exe`. Starts the server with no console window and opens NISAR Pro in its own window (Edge or Chrome app mode, start screen until the server answers). Closing the window quits; it asks first if a run is processing. Errors show in a message box. `--stop` closes it. |
 | `windows/NISAR-Pro.iss` | Windows | Inno Setup script for `NISAR-Pro-Setup.exe` |
 | `windows/nisar-pro.ico` | Windows | App icon |
 | `nisar-pro` | Linux | Start script inside the Linux package |
@@ -21,7 +21,10 @@ every push to `main`:
 How the app behaves:
 
 - The server listens on `127.0.0.1:3000` only, so Windows Firewall does not ask for access.
-- Opening the app a second time only opens the dashboard again.
+- It opens in its own window (Microsoft Edge app mode, own profile in `%LOCALAPPDATA%\NISAR Pro\window`): no tabs or address bar, own taskbar icon. Chrome is used if Edge is missing; with neither, the default browser opens and the server keeps running until "Stop NISAR Pro".
+- Closing the window stops the server. If a run is still processing it asks: stop it, or keep processing in the background.
+- Opening the app a second time only opens another window.
+- `NISAR Pro.exe` carries the app icon and the release version (Properties > Details).
 - If port 3000 is used by another program, a message says so.
 - Logs: `%LOCALAPPDATA%\NISAR Pro\logs\gateway.log`.
 - Results: `sar-gateway\results` inside the install folder.

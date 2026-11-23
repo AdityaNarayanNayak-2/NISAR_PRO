@@ -90,16 +90,48 @@ jobs:
         working-directory: sar-gateway
         run: cargo build --release --bin sar-gateway
 
-      - name: Build Windows launcher
-        run: |
-          rustc -O -C panic=abort --edition 2021 installer/launcher.rs -o "NISAR Pro.exe"
-
       - name: Version from tag
         shell: pwsh
         run: |
           # v1.2.3 tag -> 1.2.3; any other build -> 0.0.0-dev (built and kept as an artifact only).
           $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.Substring(1) } else { '0.0.0-dev' }
           "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build Windows launcher (icon + version details)
+        shell: pwsh
+        run: |
+          # Icon and version details for "NISAR Pro.exe" (Explorer, taskbar, Properties).
+          $n = ($env:VERSION -replace '-.*$', '').Split('.') + @('0','0','0') | Select-Object -First 3
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\rc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          @"
+          1 ICON "installer/windows/nisar-pro.ico"
+          1 VERSIONINFO
+          FILEVERSION $($n[0]),$($n[1]),$($n[2]),0
+          PRODUCTVERSION $($n[0]),$($n[1]),$($n[2]),0
+          BEGIN
+            BLOCK "StringFileInfo"
+            BEGIN
+              BLOCK "040904b0"
+              BEGIN
+                VALUE "CompanyName", "RunLayer Labs"
+                VALUE "FileDescription", "NISAR Pro"
+                VALUE "FileVersion", "$env:VERSION"
+                VALUE "ProductName", "NISAR Pro"
+                VALUE "ProductVersion", "$env:VERSION"
+                VALUE "OriginalFilename", "NISAR Pro.exe"
+              END
+            END
+            BLOCK "VarFileInfo"
+            BEGIN
+              VALUE "Translation", 0x409, 1200
+            END
+          END
+          "@ | Set-Content launcher.rc
+          & $rc.FullName /nologo /fo launcher.res launcher.rc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:NISAR_VERSION = $env:VERSION
+          rustc -O -C panic=abort --edition 2021 -C link-arg=launcher.res installer/launcher.rs -o "NISAR Pro.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Assemble release folder
         shell: pwsh
@@ -117,9 +149,10 @@ jobs:
           @"
           NISAR Pro $env:VERSION
 
-          Double-click "NISAR Pro.exe". It starts the local server and opens the dashboard
-          at http://localhost:3000. To close it, run "NISAR Pro.exe --stop"
-          (the installer adds a "Stop NISAR Pro" Start Menu entry for this).
+          Double-click "NISAR Pro.exe". It starts the local server and opens NISAR Pro in
+          its own window (Microsoft Edge app mode). Close the window to quit; if a run is
+          still processing it asks first. Without Edge or Chrome it opens your browser at
+          http://localhost:3000/app; then run "NISAR Pro.exe --stop" to close it.
 
           Put your NISAR .h5 granules anywhere on this computer and select them in the dashboard.
           Results are saved in sar-gateway\results. Logs are in %LOCALAPPDATA%\NISAR Pro\logs.
