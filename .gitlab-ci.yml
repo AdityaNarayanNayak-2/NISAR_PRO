@@ -36,6 +36,9 @@ sync_to_github:
     - git remote add github "https://x-access-token:${GITHUB_PAT}@github.com/${GITHUB_REPOSITORY}.git"
     # GitLab main is authoritative. Do not erase divergent GitHub history.
     - git push github HEAD:main
+    # Version tags too: a new v* tag on GitHub publishes the Windows release
+    # (.github/workflows/deploy-dashboard.yml). Releases are immutable, never reuse a tag.
+    - git push github 'refs/tags/v*:refs/tags/v*'
 
 build_linux_release:
   stage: build
