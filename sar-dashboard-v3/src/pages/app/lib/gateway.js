@@ -31,8 +31,21 @@ export function gatewayUrl(path, mode = 'local') {
   return `${gatewayBase()}${path.startsWith('/') ? '' : '/'}${path.replace(/\/{2,}/g, '/')}`
 }
 
+const wait = (ms, signal) => new Promise((resolve, reject) => {
+  const t = setTimeout(resolve, ms)
+  signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')) }, { once: true })
+})
+
 async function getJson(url, signal) {
-  const res = await fetch(url, { signal, headers: { Accept: 'application/json' } })
+  let res
+  // A busy gateway (429/503) says when to come back: wait and retry twice before giving up.
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(url, { signal, headers: { Accept: 'application/json' } })
+    if ((res.status !== 429 && res.status !== 503) || attempt >= 2) break
+    const after = Number(res.headers.get('retry-after'))
+    await wait(Math.min(Number.isFinite(after) && after > 0 ? after * 1000 : 2000, 10000), signal)
+  }
+  if (res.status === 429) throw new Error('The server is busy. Wait a moment and try again.')
   if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`)
   const type = res.headers.get('content-type') || ''
   if (!type.includes('json')) throw new Error(`Expected JSON from ${url}, got ${type || 'unknown type'}`)

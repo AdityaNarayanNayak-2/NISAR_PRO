@@ -6,6 +6,8 @@ export const useMapStore = create((set) => ({
   phase: 'detected', // baseline | active | detected
   basemap: 'satellite', // satellite | plain
   labels: true, // place names and boundaries on the basemap
+  terrain: false, // 3D: map tilted over elevation tiles, flood layers draped on top
+  exaggeration: 3, // vertical scale in 3D (the Ganga plain is nearly flat)
   playing: false,
   layers: { ...DEFAULT_LAYERS },
   opacity: 0.85,
@@ -22,6 +24,8 @@ export const useMapStore = create((set) => ({
   setPhase: (phase) => set({ phase }),
   setBasemap: (basemap) => set({ basemap }),
   toggleLabels: () => set((s) => ({ labels: !s.labels })),
+  setTerrain: (terrain) => set({ terrain }),
+  setExaggeration: (exaggeration) => set({ exaggeration }),
   setPlaying: (playing) => set({ playing }),
   setLayers: (patch) => set((s) => ({ layers: { ...s.layers, ...patch } })),
   toggleLayer: (key) => set((s) => ({ layers: { ...s.layers, [key]: !s.layers[key] } })),

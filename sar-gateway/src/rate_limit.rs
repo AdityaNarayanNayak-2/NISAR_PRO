@@ -17,8 +17,17 @@ use tokio::sync::RwLock;
 /// Window duration for rate limiting (1 minute)
 const WINDOW_DURATION: Duration = Duration::from_secs(60);
 
-/// Maximum general API requests per IP per minute
-const MAX_GENERAL_REQUESTS: usize = 120;
+/// Maximum general API requests per IP per minute (public demo mode only; a local or
+/// logged-in install is one trusted user and only new runs are limited). One dashboard visit
+/// names up to 250 areas through /geocode and polls /jobs, so this is far above normal use.
+const MAX_GENERAL_REQUESTS: usize = 600;
+
+/// API paths the limit applies to. Everything else is the dashboard itself (JS, CSS, images,
+/// SPA routes) and is never limited: blocking those breaks the page, not an abuser.
+const API_PREFIXES: &[&str] = &[
+    "/search", "/assets/", "/context", "/jobs", "/scenes", "/geocode/", "/upload", "/watch",
+    "/stac", "/config", "/asf/",
+];
 
 /// Maximum heavy job creation requests (`POST /jobs`) per IP per minute
 const MAX_JOB_REQUESTS: usize = 6;
@@ -159,6 +168,10 @@ pub async fn rate_limit_middleware(
     }
 
     let is_job_creation = method == axum::http::Method::POST && path == "/jobs";
+    let is_api = API_PREFIXES.iter().any(|p| path == p.trim_end_matches('/') || path.starts_with(p));
+    if !is_api || (!is_job_creation && !crate::public::enabled()) {
+        return next.run(req).await;
+    }
     let client_ip = extract_client_ip(req.headers(), None);
 
     match state.rate_limiter.check(&client_ip, is_job_creation).await {

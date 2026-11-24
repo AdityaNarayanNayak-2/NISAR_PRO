@@ -1,17 +1,19 @@
 // What the right panel shows for each nav tab. Each fact has one owner tab:
 //   Live Map    top 5 areas and copy summary, sum in view / drawn area, confidence
 //   Time Series flood extent per period and water on each date for the frame
-//   Regions     largest areas with place names, areas by size
+//   Regions     flood extent by district, every area (sort, filter, page, CSV), areas by size
 //   Reports     situation report and files, class table, thresholds, method, product
 //   Evaluation  Sentinel-2 agreement (Validation.jsx)
 // The flood extent number itself lives on the left run card.
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useRunStore } from '../stores/useRunStore'
-import { periodsFor, shareOf } from '../lib/regions'
+import { periodsFor, shareOf, hotspotsCsv } from '../lib/regions'
 import { granuleTime, granuleTrackFrame, sensorName } from '../lib/report'
 import { placeLabel } from '../lib/places'
+import { useMapStore } from '../stores/useMapStore'
+import { mapHandle, freePadding } from '../map/mapHandle'
 import Icon from '../ui/Icon'
-import { formatArea, formatDate, formatNumber, formatPercent, formatShortDate } from '../lib/units'
+import { formatArea, formatDate, formatNumber, formatPercent, formatShortDate, KM2_PER_ACRE } from '../lib/units'
 import { InView, Hotspots, Confidence, TakeAway } from './Brief'
 import useRunAreas from './useRunAreas'
 import useDistricts from './useDistricts'
@@ -59,7 +61,7 @@ export function LiveMapView({ run }) {
           </button>
         </Hotspots>
       )}
-      {geo?.status === 'loading' && <Loading />}
+      {(!geo || geo.status === 'loading') && <Loading />}
       {geo?.status === 'error' && <div className="sec"><div className="err-text">Areas file could not be read.</div></div>}
       {geo?.status === 'ok' && <InView regions={regions} />}
       {geo?.status === 'ok' && <Confidence split={split} />}
@@ -135,8 +137,7 @@ export function TimeSeriesView({ run }) {
   ))
 }
 
-function Districts({ regions, mode, run }) {
-  const d = useDistricts(regions, mode, run.places)
+function Districts({ d, mode }) {
   return (
     <div className="sec">
       <h3>Flood extent by district <span className="muted">{d.done ? `${d.rows.length} districts` : `naming ${d.asked} of ${d.toAsk} areas…`}</span></h3>
@@ -163,13 +164,92 @@ function Districts({ regions, mode, run }) {
   )
 }
 
+const SIZES = [['All', 0], ['≥ 1 km²', 1], ['≥ 10 km²', 10]]
+const PAGE = 25
+
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** Every flood area of the run: sort, filter by size or by the map view, page through, export. */
+function AllAreas({ regions, places, run }) {
+  const { viewBounds, selectedRegionId, selectRegion } = useMapStore()
+  const [sort, setSort] = useState('size')
+  const [min, setMin] = useState(0)
+  const [inView, setInView] = useState(false)
+  const [shown, setShown] = useState(PAGE)
+  const list = useMemo(() => {
+    const b = inView ? viewBounds : null
+    const out = regions.filter((r) => r.km2 >= min && (!b || (r.lon >= b.west && r.lon <= b.east && r.lat >= b.south && r.lat <= b.north)))
+    const hi = (r) => (r.pixels ? r.high / r.pixels : 0)
+    out.sort(sort === 'size' ? (a, b) => b.acres - a.acres : (a, b) => hi(b) - hi(a) || b.acres - a.acres)
+    return out
+  }, [regions, min, inView, viewBounds, sort])
+  const sum = list.reduce((s, r) => s + r.acres, 0)
+  const zoom = (r) => {
+    selectRegion(r.id)
+    mapHandle.current?.flyTo({ center: [r.lon, r.lat], zoom: Math.max(mapHandle.current.getZoom(), 11), duration: 700, padding: freePadding(0) })
+  }
+  const reset = (fn) => (v) => { fn(v); setShown(PAGE) }
+  return (
+    <div className="sec">
+      <h3>All areas <span className="muted">{formatNumber(list.length)} of {formatNumber(regions.length)}</span></h3>
+      <div className="aa-filters">
+        <div className="seg sm" role="group" aria-label="Minimum size">
+          {SIZES.map(([l, v]) => <button key={l} type="button" aria-pressed={min === v} onClick={() => reset(setMin)(v)}>{l}</button>)}
+        </div>
+        <button type="button" className="chip sm" aria-pressed={inView} onClick={() => reset(setInView)(!inView)}>In this view</button>
+        <select className="aa-sort" aria-label="Sort" value={sort} onChange={(e) => reset(setSort)(e.target.value)}>
+          <option value="size">Largest first</option>
+          <option value="conf">Most high confidence</option>
+        </select>
+      </div>
+      {list.length > 0 && (
+        <>
+          <div className="aa-sum num">{formatArea(sum * KM2_PER_ACRE, sum).km2} <span className="muted">· {formatArea(sum * KM2_PER_ACRE, sum).acres} in the list</span></div>
+          <table className="ctable aa-table">
+            <thead><tr><th>#</th><th>Place or centre</th><th>Area</th><th title="Share of pixels with high confidence">High</th></tr></thead>
+            <tbody>
+              {list.slice(0, shown).map((r, i) => {
+                const a = formatArea(r.km2, r.acres)
+                return (
+                  <tr key={r.id} aria-current={selectedRegionId === r.id || undefined} onClick={() => zoom(r)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') zoom(r) }} title="Zoom to this area">
+                    <td className="num muted">{i + 1}</td>
+                    <td className="aa-name">{placeLabel(places[r.id]) || <span className="mono">{r.lat.toFixed(4)}, {r.lon.toFixed(4)}</span>}</td>
+                    <td><span className="area-cell"><span className="k">{a.km2}</span><span className="a">{a.acres}</span></span></td>
+                    <td className="num muted">{r.pixels ? `${formatNumber((100 * r.high) / r.pixels)}%` : '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <div className="aa-more">
+            {shown < list.length && <button type="button" className="btn btn-sm" onClick={() => setShown(shown + PAGE)}>Show {Math.min(PAGE, list.length - shown)} more</button>}
+            <button type="button" className="btn btn-sm" onClick={() => download(`${run.id}_areas.csv`, hotspotsCsv(list, places), 'text/csv')}><Icon name="download" size={13} />CSV of this list</button>
+          </div>
+        </>
+      )}
+      {list.length === 0 && <div className="muted">{inView ? 'No area has its centre in this view. Zoom out or switch off "In this view".' : 'No area of this size.'}</div>}
+      <div className="foot">Click a row to zoom to it. Names come with the district lookup above; unnamed areas show their centre.{inView ? ' In this view counts areas whose centre is on screen.' : ''}</div>
+    </div>
+  )
+}
+
 export function RegionsView({ run }) {
   const rep = useReport(run)
-  const { mode, geo, top, places, regions } = useRunAreas(run)
+  const { mode, geo, places, regions } = useRunAreas(run)
+  const d = useDistricts(regions, mode, run.places)
+  const names = useMemo(() => ({ ...d.places, ...places }), [d.places, places])
   return withReport(rep, (r) => (
     <>
-      {geo?.status === 'ok' && <Districts regions={regions} mode={mode} run={run} />}
-      {geo?.status === 'ok' ? <Hotspots list={top} places={places} mode={mode} /> : geo?.status === 'error' ? <div className="sec"><div className="err-text">Areas file could not be read.</div></div> : <Loading />}
+      {geo?.status === 'ok' && <Districts d={d} mode={mode} />}
+      {geo?.status === 'ok' ? <AllAreas regions={regions} places={names} run={run} /> : geo?.status === 'error' ? <div className="sec"><div className="err-text">Areas file could not be read.</div></div> : <Loading />}
+      {mode === 'local' && geo?.status === 'ok' && <div className="sec"><div className="foot" style={{ marginTop: 0 }}>Place names: © OpenStreetMap contributors (nearest named place to the area centre).</div></div>}
       <RegionStats runId={run.id} pixelM={r.pixelSpacingM} />
     </>
   ))

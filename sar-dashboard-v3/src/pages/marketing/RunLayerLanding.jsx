@@ -3,7 +3,7 @@
 // demo data (heroMeta.json, built by scripts/build_landing_assets.py).
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { formatArea, formatNumber } from '../app/lib/units'
+import { formatArea, formatNumber, KM2_PER_ACRE } from '../app/lib/units'
 import meta from './heroMeta.json'
 import impact from './impactMeta.json'
 import './runlayer.css'
@@ -62,6 +62,7 @@ function Nav() {
       <nav>
         <a href="#how">How it works</a>
         <a href="#receive">What you get</a>
+        <a href="#check">How we check</a>
         <a href="#work">Work with us</a>
         <Link to="/docs">Docs</Link>
       </nav>
@@ -277,6 +278,110 @@ helm install nisar ./deploy/helm/nisar-pro --set persistence.size=200Gi`}</pre>
   )
 }
 
+// ── How we check the numbers ─────────────────────────────────────────────────────────────
+// Read at runtime from the same file the dashboard uses (public/reference/sentinel2_validation.json,
+// a copy of the InGARSS package result). Nothing here is typed in by hand.
+const PRODUCTS = [
+  { key: 'l_only', label: 'L-band', color: '#3987e5', shape: 'circle' },
+  { key: 's_only', label: 'S-band', color: '#d95926', shape: 'square' },
+  { key: 'fused', label: 'L + S', color: '#199e70', shape: 'diamond' },
+]
+const CHECKS = [
+  ['water_31aug', 'Water on 31 Aug'],
+  ['water_12sep', 'Water on 12 Sep'],
+  ['water_18oct', 'Water on 18 Oct'],
+  ['gain_31aug_to_12sep', 'Flood extent, 31 Aug → 12 Sep'],
+]
+const LO = 0.5 // dot plot domain 0.5–1.0: position, not length, so no zero baseline is needed
+const pos = (v) => `${((v - LO) / (1 - LO)) * 100}%`
+const f2 = (v) => (v == null ? '—' : v.toFixed(2))
+
+function Mark({ shape, color }) {
+  return <i className={`rl-mark ${shape}`} style={{ background: color }} aria-hidden="true" />
+}
+
+function Check() {
+  const [ref, setRef] = useState(null)
+  useEffect(() => {
+    let off = false
+    fetch('/reference/sentinel2_validation.json').then((r) => (r.ok ? r.json() : null)).then((d) => { if (!off) setRef(d) }).catch(() => {})
+    return () => { off = true }
+  }, [])
+  const thr = ref ? `ndwi_${Number(ref.primary_ndwi_threshold).toFixed(1)}` : null
+  const rows = ref ? CHECKS.map(([key, label]) => ({ key, label, t: ref.tests[key] })).filter((r) => r.t) : []
+  const water = rows.filter((r) => r.key.startsWith('water_') && r.key !== 'water_18oct').flatMap((r) => ['l_only', 's_only'].map((k) => r.t.results[thr]?.[k]?.f1)).filter((v) => v != null)
+  const gain = rows.find((r) => r.key.startsWith('gain_'))
+  const g = (k) => gain?.t.results[thr]?.[k]?.f1
+  return (
+    <section className="rl-sec" id="check">
+      <p className="rl-eyebrow">How we check the numbers</p>
+      <h2>Radar maps, checked against a second satellite.</h2>
+      <p className="rl-lead rl-narrow">
+        On the Bihar study scene we compared NISAR water with Sentinel-2 optical images taken close in time, only where the sky was clear.
+        The score is F1: 1.0 means the two maps agree on every pixel. It is agreement with another satellite, not proof on the ground.
+      </p>
+      {!ref && <div className="rl-check-wait">Loading the scores…</div>}
+      {ref && (
+        <>
+          <div className="rl-legend" aria-label="Legend">
+            {PRODUCTS.map((p) => <span key={p.key}><Mark {...p} />{p.label}</span>)}
+          </div>
+          <div className="rl-dots" role="group" aria-label="F1 agreement with Sentinel-2 per check and band">
+            <div className="rl-axis" aria-hidden="true">
+              <span />
+              <div className="rl-ticks">{[0.5, 0.6, 0.7, 0.8, 0.9, 1].map((v) => <span key={v} style={{ left: pos(v) }}>{v.toFixed(1)}</span>)}</div>
+            </div>
+            {rows.map(({ key, label, t }) => (
+              <div className="rl-drow" key={key}>
+                <div className="rl-dlabel">
+                  <b>{label}</b>
+                  <small>{t.dates}{t.time_gap ? ` · ${t.time_gap} apart` : ''} · {(({ km2, acres }) => `${km2} (${acres})`)(formatArea(t.scored_km2, t.scored_km2 / KM2_PER_ACRE))} scored</small>
+                </div>
+                <div className="rl-lanes">
+                  {PRODUCTS.map((p) => {
+                    const r = t.results[thr]?.[p.key]
+                    return (
+                      <div className="rl-lane" key={p.key}>
+                        <div className="rl-grid" aria-hidden="true">{[0.6, 0.7, 0.8, 0.9].map((v) => <i key={v} style={{ left: pos(v) }} />)}</div>
+                        {r?.f1 != null ? (
+                          <button type="button" className="rl-dot" style={{ left: pos(r.f1) }} aria-label={`${label}, ${p.label}: F1 ${f2(r.f1)}, IoU ${f2(r.iou)}, precision ${f2(r.precision)}, recall ${f2(r.recall)}`}>
+                            <Mark {...p} />
+                            <span className="rl-dval num">{f2(r.f1)}</span>
+                            <span className="rl-tip" role="tooltip"><b>{p.label} · {label}</b>F1 {f2(r.f1)} · IoU {f2(r.iou)}<br />Precision {f2(r.precision)} · recall {f2(r.recall)}</span>
+                          </button>
+                        ) : <span className="rl-none">no {p.label} pass that day</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <details className="rl-table">
+            <summary>Show the numbers as a table</summary>
+            <table>
+              <thead><tr><th>Check</th><th>Band</th><th>F1</th><th>IoU</th><th>Precision</th><th>Recall</th></tr></thead>
+              <tbody>
+                {rows.flatMap(({ key, label, t }) => PRODUCTS.map((p) => {
+                  const r = t.results[thr]?.[p.key]
+                  return r?.f1 != null && <tr key={key + p.key}><td>{label}</td><td>{p.label}</td><td>{f2(r.f1)}</td><td>{f2(r.iou)}</td><td>{f2(r.precision)}</td><td>{f2(r.recall)}</td></tr>
+                }))}
+              </tbody>
+            </table>
+            <p>Sentinel-2 water: {ref.reference}, NDWI above {Number(ref.primary_ndwi_threshold).toFixed(1)}. {ref.caution}</p>
+          </details>
+          <div className="rl-grid4 rl-check-notes">
+            <div className="rl-item"><h3>Water on a date agrees well</h3><p>F1 {f2(Math.min(...water))} to {f2(Math.max(...water))} for L- and S-band on 31 Aug and 12 Sep.</p></div>
+            <div className="rl-item"><h3>Flood extent is harder</h3><p>F1 {f2(g('l_only'))} (L) and {f2(g('s_only'))} (S). A change compares two maps, so errors of both dates add up, and the optical dates are not the radar dates.</p></div>
+            <div className="rl-item"><h3>What we do not claim</h3><p>L + S beats L-band, not S-band. One scene only (Bihar). Sentinel-1 results are not checked yet. No map is confirmed on the ground.</p></div>
+            <div className="rl-item"><h3>Check it yourself</h3><p>The package lists every file with its SHA-256 and one script re-runs every number. <a href={`${REPO}/tree/main/ingarss_2026`} target="_blank" rel="noreferrer">See the validation package ↗</a></p></div>
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
 function Work() {
   const steps = [
     ['Tell us your area', 'A district, a river reach or a whole state.'],
@@ -382,6 +487,7 @@ export default function RunLayerLanding() {
       <LayerStack />
       <Receive />
       <Beyond />
+      <Check />
       <Deploy />
       <Work />
       <WhyNow />

@@ -35,6 +35,16 @@ function stageFromLine(line) {
   return null
 }
 
+/** Keep ?run= and ?view= in the address bar, so a link or a reload opens the same place. */
+function syncUrl({ openId, view }) {
+  const url = new URL(window.location.href)
+  if (openId) url.searchParams.set('run', openId)
+  else url.searchParams.delete('run')
+  if (view && view !== 'map') url.searchParams.set('view', view)
+  else url.searchParams.delete('view')
+  if (url.href !== window.location.href) window.history.replaceState(null, '', url)
+}
+
 function abortable(key) {
   inflight.get(key)?.abort()
   const ctrl = new AbortController()
@@ -75,11 +85,14 @@ export const useRunStore = create((set, get) => ({
     if (mode === 'local') set({ config: await fetchConfig() })
     await get().refresh()
     // Open a run only when the link names one (?run=<id>). Otherwise start on the workspace home.
-    const wanted = new URLSearchParams(window.location.search).get('run')
+    const params = new URLSearchParams(window.location.search)
+    const wanted = params.get('run')
+    const wantedView = params.get('view')
     const { runs } = get()
     const target = runs.find((r) => r.id === wanted)
     if (target) get().open(target.id)
     else if (wanted) get().close()
+    if (VIEWS.includes(wantedView) && (target || !RUN_VIEWS.includes(wantedView))) get().setView(wantedView)
     if (mode === 'local') get().loadScenes()
     // Follow runs that were already going when the page loaded.
     if (mode === 'local') runs.filter((r) => ['queued', 'running'].includes(runStatus(r).kind)).forEach((r) => get().follow(r.id))
@@ -130,27 +143,25 @@ export const useRunStore = create((set, get) => ({
 
   open(id) {
     set((s) => ({ openId: id, view: RUN_VIEWS.includes(s.view) ? s.view : 'map' }))
-    const url = new URL(window.location.href)
-    url.searchParams.set('run', id)
-    window.history.replaceState(null, '', url)
+    syncUrl(get())
     get().loadReport(id)
   },
 
   /** Back to the workspace home: no run open, nothing drawn on the map. */
   close() {
     set((s) => ({ openId: null, view: s.view === 'processing' ? 'processing' : 'map' }))
-    const url = new URL(window.location.href)
-    url.searchParams.delete('run')
-    window.history.replaceState(null, '', url)
+    syncUrl(get())
   },
 
   showForm() {
     set({ view: 'processing' })
+    syncUrl(get())
   },
 
   setView(view) {
     if (!VIEWS.includes(view)) return
     set({ view })
+    syncUrl(get())
   },
 
   toggleLog(v) {
@@ -199,6 +210,7 @@ export const useRunStore = create((set, get) => ({
       return res.job_id
     }
     set({ openId: res.job_id, view: 'map' })
+    syncUrl(get())
     get().follow(res.job_id)
     return res.job_id
   },
@@ -222,8 +234,10 @@ export const useRunStore = create((set, get) => ({
         const wasActive = ['running', 'queued'].includes(runStatus(get().runs.find((r) => r.id === id)).kind)
         get().refresh().then(() => {
           if (get().openId === id) {
-            set((s) => ({ reports: { ...s.reports, [id]: undefined } }))
+            // Opened while it was running: report and areas did not exist yet. Load them now.
+            set((s) => ({ reports: { ...s.reports, [id]: undefined }, regions: { ...s.regions, [id]: undefined } }))
             get().loadReport(id)
+            get().loadRegions(id)
           }
         })
         if (wasActive) get().toast(ok ? 'Run finished.' : 'Run failed. Open the log for details.', ok ? 'ok' : 'error')

@@ -21,11 +21,16 @@ const STYLE = {
   version: 8,
   sources: {
     imagery: { type: 'raster', tiles: [`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`], tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community' },
+    // Elevation for 3D: Mapzen Terrain Tiles on AWS Open Data (free, no key; SRTM and others).
+    // Two sources, as MapLibre recommends: one for the terrain mesh, one for hill shading.
+    dem: { type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 15, attribution: 'Elevation: Mapzen Terrain Tiles (AWS Open Data)' },
+    demShade: { type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 15 },
     labels: { type: 'raster', tiles: [`${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`], tileSize: 256, maxzoom: 19, attribution: 'Boundaries and places © Esri' },
   },
   layers: [
     { id: 'background', type: 'background', paint: { 'background-color': '#0b0c0e' } },
     { id: 'imagery', type: 'raster', source: 'imagery', paint: { 'raster-brightness-max': 0.55, 'raster-contrast': 0.22, 'raster-saturation': -0.72, 'raster-fade-duration': 150 } },
+    { id: 'hillshade', type: 'hillshade', source: 'demShade', layout: { visibility: 'none' }, paint: { 'hillshade-shadow-color': 'rgba(0,0,0,0.55)', 'hillshade-highlight-color': 'rgba(255,255,255,0.10)', 'hillshade-accent-color': 'rgba(0,0,0,0.25)', 'hillshade-exaggeration': 0.45 } },
     { id: 'labels', type: 'raster', source: 'labels', paint: { 'raster-opacity': 0.5, 'raster-fade-duration': 150 } },
   ],
 }
@@ -71,7 +76,7 @@ export default function MapView() {
   const run = useRunStore((s) => s.runs.find((r) => r.id === s.openId))
   const regions = useRunStore((s) => (s.openId ? s.regions[s.openId] : null))
   const loadRegions = useRunStore((s) => s.loadRegions)
-  const { phase, layers, opacity, selectedRegionId, selectRegion, setCursor, resetForRun, setViewBounds, picking, preview, aoi, basemap, labels, facilities } = useMapStore()
+  const { phase, layers, opacity, selectedRegionId, selectRegion, setCursor, resetForRun, setViewBounds, picking, preview, aoi, basemap, labels, facilities, terrain, exaggeration } = useMapStore()
   const fitted = useRef(null)
   const classUrl = useRef(null)
 
@@ -110,6 +115,27 @@ export default function MapView() {
   useEffect(() => {
     if (map?.getLayer('labels')) map.setLayoutProperty('labels', 'visibility', labels ? 'visible' : 'none')
   }, [map, labels])
+
+  // 3D: terrain mesh + hill shading + sky, map tilted; right-drag (or Ctrl+drag) rotates and tilts.
+  // 2D stays exactly as before (flat, north up, no rotation).
+  useEffect(() => {
+    if (!map) return
+    if (terrain) {
+      map.setTerrain({ source: 'dem', exaggeration })
+      if (map.getLayer('hillshade')) map.setLayoutProperty('hillshade', 'visibility', 'visible')
+      map.setSky?.({ 'sky-color': '#0b0c0e', 'horizon-color': '#1b1d22', 'fog-color': '#0b0c0e', 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.4 })
+      map.setMaxPitch(80)
+      map.dragRotate.enable()
+      map.touchZoomRotate.enableRotation()
+      if (map.getPitch() < 30) map.easeTo({ pitch: 62, bearing: -18, duration: 1200 })
+    } else {
+      map.setTerrain(null)
+      if (map.getLayer('hillshade')) map.setLayoutProperty('hillshade', 'visibility', 'none')
+      map.dragRotate.disable()
+      map.touchZoomRotate.disableRotation()
+      if (map.getPitch() > 0 || map.getBearing() !== 0) map.easeTo({ pitch: 0, bearing: 0, duration: 800 })
+    }
+  }, [map, terrain, exaggeration])
 
   // New run: reset view state, fetch regions, fit bounds once.
   useEffect(() => {

@@ -45,7 +45,7 @@ function Spark({ periods, focusId }) {
 
 /** The run in focus (open run, else the latest finished one): its flood extent, the change from
  *  the previous period on the same frame and band, and its water loss. All from run summaries. */
-function FloodCard() {
+export function FloodCard() {
   const { runs, openId, setView, open } = useRunStore()
   const done = runs.filter((r) => runStatus(r).kind === 'completed')
   const focus = runs.find((r) => r.id === openId && runStatus(r).kind === 'completed') || done[0]
@@ -145,7 +145,7 @@ function RunCard({ run, on }) {
   )
 }
 
-function RunsCard() {
+export function RunsCard() {
   const { runs, openId, loaded, mode, showForm } = useRunStore()
   const list = useMemo(() => {
     const sorted = [...runs].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))

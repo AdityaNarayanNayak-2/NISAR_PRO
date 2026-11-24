@@ -198,3 +198,44 @@
 .rl-cloud span { font-size: 13px; color: var(--lo); }
 @media (max-width: 900px) { .rl-clouds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .rl-clouds { grid-template-columns: 1fr; } }
+
+/* How we check the numbers: dot plot, one lane per band, F1 0.5–1.0 */
+.rl-check-wait { margin-top: 32px; color: var(--lo); }
+.rl-legend { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 36px; color: var(--mid); font-size: 14px; }
+.rl-legend span { display: inline-flex; align-items: center; gap: 8px; }
+.rl-mark { display: inline-block; width: 10px; height: 10px; flex: none; }
+.rl-mark.circle { border-radius: 50%; }
+.rl-mark.square { border-radius: 2px; }
+.rl-mark.diamond { width: 9px; height: 9px; border-radius: 1px; transform: rotate(45deg); }
+.rl-dots { margin-top: 18px; }
+.rl-axis, .rl-drow { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 24px; }
+.rl-ticks { position: relative; height: 20px; margin-right: 44px; }
+.rl-ticks span { position: absolute; transform: translateX(-50%); color: var(--off); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rl-drow { padding: 16px 0; border-top: 1px solid var(--line); align-items: center; }
+.rl-dlabel b { display: block; font-size: 15px; font-weight: 600; }
+.rl-dlabel small { display: block; margin-top: 4px; color: var(--lo); font-size: 13px; line-height: 1.45; }
+.rl-lanes { display: grid; gap: 4px; margin-right: 44px; }
+.rl-lane { position: relative; height: 22px; }
+.rl-lane::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid rgba(255, 255, 255, .1); }
+.rl-grid i { position: absolute; top: 4px; bottom: 4px; border-left: 1px solid rgba(255, 255, 255, .05); }
+.rl-dot { position: absolute; top: 50%; transform: translate(-5px, -50%); display: inline-flex; align-items: center; gap: 8px; padding: 6px 0; border: 0; background: none; color: var(--hi); cursor: default; font: inherit; }
+.rl-dot .rl-mark { box-shadow: 0 0 0 2px var(--bg); }
+.rl-dval { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rl-tip { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 5; display: none; width: max-content; max-width: 260px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(18, 19, 22, .96); color: var(--mid); font-size: 12px; font-weight: 400; line-height: 1.5; text-align: left; }
+.rl-tip b { display: block; color: var(--hi); font-weight: 600; }
+.rl-dot:hover .rl-tip, .rl-dot:focus-visible .rl-tip { display: block; }
+.rl-none { position: absolute; left: 0; top: 50%; transform: translateY(-50%); padding-right: 8px; background: var(--bg); color: var(--off); font-size: 12px; }
+.rl-table { margin-top: 20px; color: var(--lo); font-size: 14px; }
+.rl-table summary { cursor: pointer; color: var(--mid); }
+.rl-table table { margin-top: 12px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.rl-table th, .rl-table td { padding: 6px 16px 6px 0; border-bottom: 1px solid var(--line); text-align: left; }
+.rl-table th { color: var(--off); font-weight: 500; }
+.rl-table p { max-width: 70ch; }
+.rl-check-notes { margin-top: 36px; }
+.rl-check-notes a { color: var(--hi); }
+@media (max-width: 760px) {
+  .rl-axis, .rl-drow { grid-template-columns: 1fr; gap: 10px; }
+  .rl-axis > span { display: none; }
+  .rl-ticks, .rl-lanes { margin-right: 40px; }
+}
+@media (max-width: 560px) { .rl-check-notes { grid-template-columns: 1fr; } }

@@ -56,6 +56,6 @@ export default function useDistricts(regions, mode, demoPlaces) {
       by.set(d, row)
     }
     const rows = [...by.values()].map((x) => ({ ...x, km2: x.acres * KM2_PER_ACRE, share: todo.total ? x.acres / todo.total : null })).sort((a, b) => b.acres - a.acres)
-    return { rows, asked, toAsk: todo.list.length, namedShare: todo.total ? namedAcres / todo.total : 0, done: asked >= todo.list.length }
+    return { rows, places, asked, toAsk: todo.list.length, namedShare: todo.total ? namedAcres / todo.total : 0, done: asked >= todo.list.length }
   }, [named, key, todo])
 }

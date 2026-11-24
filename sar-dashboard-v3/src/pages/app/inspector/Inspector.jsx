@@ -9,6 +9,7 @@ import ImpactView from './Impact'
 import WatchView from './Watch'
 import ProcessPanel from '../form/ProcessPanel'
 import Home from './Home'
+import { FloodCard, RunsCard } from '../shell/LeftStack'
 import Icon from '../ui/Icon'
 
 function Elapsed({ since }) {
@@ -99,10 +100,11 @@ export default function Inspector({ onClose }) {
   } else if (view === 'watch') {
     body = <div className="insp-scroll" ref={scroll}><WatchView /></div>
   } else if (!run) {
-    body = <div className="insp-scroll" ref={scroll}>{view === 'map' ? <Home /> : <PickRun />}</div>
+    body = <div className="insp-scroll" ref={scroll}>{view === 'map' ? <Home /> : <PickRun />}<div className="sheet-only sheet-cards"><RunsCard /></div></div>
   } else {
     body = (
       <div className="insp-scroll" ref={scroll}>
+        {kind === 'completed' && view === 'map' && <div className="sheet-only sheet-cards"><FloodCard /></div>}
         {kind === 'completed' && <Body run={run} />}
         {(kind === 'running' || kind === 'queued') && <Running run={run} onShowLog={onShowLog} />}
         {kind === 'failed' && <Failed run={run} onShowLog={onShowLog} />}
@@ -113,8 +115,10 @@ export default function Inspector({ onClose }) {
     <aside className="ws-insp" data-panel="inspector" aria-label={TITLES[view]}>
       <button type="button" className="sheet-grip" aria-label="Resize panel" onClick={() => {
         const el = document.querySelector('.ws')
-        const cur = getComputedStyle(el).getPropertyValue('--sheet-h').trim()
-        el.style.setProperty('--sheet-h', cur === '50dvh' ? 'calc(100dvh - 72px)' : cur === 'calc(100dvh - 72px)' ? '96px' : '50dvh')
+        const cur = getComputedStyle(el).getPropertyValue('--sheet-h').trim() || '45dvh'
+        // Three heights: peek, half (default), full.
+        const next = { '96px': '45dvh', '45dvh': 'calc(100dvh - 72px)' }[cur] || '96px'
+        el.style.setProperty('--sheet-h', next)
       }} />
       <div className="insp-head">
         <div className="t">

@@ -106,6 +106,9 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
 ### B. Map rendering (`io.rs`)
 - Full-scene PNGs (class overlay + both radar previews) are re-gridded to Web Mercator by
   `warp_png_to_web_mercator`; `georef_bbox` in the report is their bounds. GeoTIFFs stay on UTM.
+- 3D (map button "3D", `terrain` in `useMapStore`): MapLibre terrain from Mapzen Terrain Tiles on AWS
+  Open Data (terrarium, no key), hill shading, height ×1/×3/×10; run layers drape over it. Labelled as
+  SRTM terrain, not NISAR. 2D stays flat and north-up.
 - Radar previews are real linear power (do not square), percentile stretch on valid pixels only,
   transparent outside the swath. A full scene is drawn at full 80 m resolution (no downsampling
   below 4,800 px) and written as grey + alpha. The map draws image pixels sharp (nearest) from

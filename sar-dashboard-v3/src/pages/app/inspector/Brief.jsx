@@ -86,6 +86,7 @@ export function Hotspots({ list, places, mode, title = 'Largest areas', note, ch
     <div className="sec">
       <h3>{title} <span className="muted">top {list.length}</span></h3>
       {list.length === 0 && <div className="muted">No areas above the minimum size.</div>}
+      {list.length > 0 && <div className="conf-legend hot-key"><span>Bar:</span><span><i style={{ background: '#3d8df0' }} />high</span><span><i style={{ background: '#82b8f4' }} />medium confidence</span></div>}
       {list.map((r, i) => <HotspotRow key={r.id} r={r} rank={i + 1} place={places[r.id]} onCopy={copy} />)}
       {note && <div className="foot">{note}</div>}
       {children}

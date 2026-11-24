@@ -43,6 +43,7 @@ export default function NavPill({ onPick }) {
           { label: 'InSAR · paused', href: '/app/insar' },
           '-',
           { label: 'Documentation', href: '/docs' },
+          { label: 'Keyboard shortcuts  ?', onClick: () => window.dispatchEvent(new Event('nisar:shortcuts')) },
           { label: 'Source code', href: 'https://github.com/AdityaNarayanNayak-2/NISAR_PRO', external: true },
         ]}
       />

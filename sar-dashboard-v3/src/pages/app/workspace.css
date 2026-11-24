@@ -225,9 +225,9 @@
   .ws .ws-insp { z-index: var(--z-drawer); }
 }
 @media (max-width: 767px) {
-  .ws, .ws[data-insp], .ws[data-left] { --gap: 8px; --body-top: 108px; --L: var(--gap); --R: var(--gap); --B: calc(var(--sheet-h, 96px) + var(--gap) * 2); }
+  .ws, .ws[data-insp], .ws[data-left] { --gap: 8px; --body-top: 108px; --L: var(--gap); --R: var(--gap); --B: calc(var(--sheet-h, 45dvh) + var(--gap) * 2); }
   .ws .ws-log, .ws .hide-mobile, .ws .module-pill, .ws .ws-left, .ws .show-left { display: none; }
-  .ws .ws-insp { top: auto; left: var(--gap); right: var(--gap); bottom: var(--gap); width: auto; height: var(--sheet-h, 96px); transition: height var(--t-slow) var(--ease); animation: none; }
+  .ws .ws-insp { top: auto; left: var(--gap); right: var(--gap); bottom: var(--gap); width: auto; height: var(--sheet-h, 45dvh); transition: height var(--t-slow) var(--ease); animation: none; }
   .ws .sheet-grip { display: block; }
   .map-slots { grid-template-columns: auto 1fr; }
   .zoom, .timeline { display: none; }
@@ -242,6 +242,9 @@
 @media (max-width: 767px) { .sheet-tabs { display: flex; padding: 0 var(--s-3) var(--s-2); flex: none; } .sheet-tabs .seg { width: 100%; } .sheet-tabs .seg button { flex: 1; } }
 
 @media (min-width: 768px) { .sheet-only { display: none; } }
+/* Left-stack cards shown inside the mobile sheet (the left stack itself is hidden there). */
+@media (max-width: 767px) { .sheet-cards { padding: 0 var(--s-3) var(--s-3); display: grid; gap: var(--s-2); } }
+.sheet-cards .bento { position: static; width: auto; margin: 0; }
 
 /* ── workspace home ─────────────────────────────────────────────── */
 .home-hero { padding: var(--s-6) var(--s-5) var(--s-5); }
@@ -384,7 +387,11 @@
 /* map extras */
 .bottom-stack { grid-column: 2; grid-row: 3; align-self: end; justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(720px, 100%); }
 .timeline { width: 100%; padding: 8px 14px 4px; border-radius: 16px; }
-.tl-head { display: flex; gap: 10px; font-size: 11px; font-weight: 500; color: var(--text-mid); }
+.tl-head { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; font-weight: 500; color: var(--text-mid); white-space: nowrap; }
+.tl-head .tl-next { margin-left: auto; }
+.timeline { container-type: inline-size; }
+.timeline svg { display: block; }
+@container (max-width: 460px) { .tl-head .tl-next { display: none; } }
 .tl-axis { stroke: rgba(255, 255, 255, .25); }
 .tl-dot { fill: rgba(255, 255, 255, .8); stroke: #0b0f14; stroke-width: 2; }
 .tl-dot.hollow { fill: #0b0f14; stroke: rgba(255, 255, 255, .5); stroke-width: 1.2; }
@@ -769,3 +776,34 @@ kbd { padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line-strong)
 .queue-place .num { font-weight: 600; }
 .public-note h3 { margin-bottom: 6px; }
 .public-note p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-mid); }
+
+/* Regions: all areas list */
+.aa-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.aa-sort { height: 26px; padding: 0 8px; border-radius: var(--r-pill); border: 1px solid var(--line-strong); background: rgba(255, 255, 255, .03); color: var(--text-mid); font: 11px var(--font-sans); }
+.aa-sum { margin-bottom: 6px; font-size: 12px; }
+.aa-table td, .aa-table th { padding-top: 6px; padding-bottom: 6px; }
+.aa-table tbody tr { cursor: pointer; }
+.aa-table tbody tr:hover td, .aa-table tbody tr:focus-visible td { background: rgba(255, 255, 255, .04); }
+.aa-table tbody tr[aria-current="true"] .aa-name { color: #fff; font-weight: 600; }
+.aa-table tbody tr:focus-visible { outline: none; }
+.aa-table th:nth-child(2), .aa-table td.aa-name { text-align: left; }
+.aa-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aa-more { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.hot-key { margin: -4px 0 4px; font-size: 11px; color: var(--text-lo); }
+/* Between phone and wide desktop the command pill sits on the map's top row; the map controls
+   (layers, zoom) start below it so the two never overlap. */
+@media (min-width: 768px) and (max-width: 1359px) { .map-slots { top: calc(var(--body-top) + 54px); } }
+
+/* keyboard shortcuts dialog */
+.keys { margin: 0 0 4px; display: grid; gap: 8px; }
+.keys > div { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 12px; }
+.keys dt { display: flex; gap: 4px; margin: 0; }
+.keys dd { margin: 0; color: var(--text-mid); font-size: 13px; }
+kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--line-strong); background: rgba(255, 255, 255, .05); font: 500 11px var(--font-mono); color: var(--text-hi); }
+
+/* 3D terrain card (map, under the zoom stack) */
+.terrain-card { grid-column: 3; grid-row: 2; align-self: start; justify-self: end; width: 214px; margin-right: -2px; padding: 10px 12px; border-radius: 14px; }
+.terrain-card .tc-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.terrain-card .tc-l { font-size: 12px; color: var(--text-mid); }
+.terrain-card .tc-note { margin: 8px 0 0; font-size: 11px; line-height: 15px; color: var(--text-lo); }
+@media (max-width: 767px) { .terrain-card { display: none; } }

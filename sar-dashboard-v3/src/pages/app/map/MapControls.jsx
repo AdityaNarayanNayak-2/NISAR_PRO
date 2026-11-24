@@ -105,6 +105,23 @@ function Replay({ report }) {
   )
 }
 
+/** Shown in 3D only: vertical scale and an honest note about what the relief is. */
+function TerrainCard() {
+  const exaggeration = useMapStore((s) => s.exaggeration)
+  const setExaggeration = useMapStore((s) => s.setExaggeration)
+  return (
+    <div className="mctl terrain-card" data-map-ctl>
+      <div className="tc-row">
+        <span className="tc-l">Height</span>
+        <div className="seg sm" role="group" aria-label="Vertical scale">
+          {[1, 3, 10].map((x) => <button key={x} type="button" aria-pressed={exaggeration === x} onClick={() => setExaggeration(x)}>×{x}</button>)}
+        </div>
+      </div>
+      <p className="tc-note">Terrain from SRTM elevation tiles, not from NISAR. Heights × {exaggeration}. Right-drag to tilt and turn.</p>
+    </div>
+  )
+}
+
 export default function MapControls() {
   const run = useRunStore((s) => s.runs.find((r) => r.id === s.openId))
   const report = useRunStore((s) => (s.openId ? s.reports[s.openId]?.data : null))
@@ -112,6 +129,8 @@ export default function MapControls() {
   const setBasemap = useMapStore((s) => s.setBasemap)
   const labels = useMapStore((s) => s.labels)
   const toggleLabels = useMapStore((s) => s.toggleLabels)
+  const terrain = useMapStore((s) => s.terrain)
+  const setTerrain = useMapStore((s) => s.setTerrain)
   const hasReplay = !!(run?.artifacts?.active_preview && run?.artifacts?.baseline_preview && run?.bbox)
   // Narrow map: legend starts as a chip and replay moves to the top, so they never meet.
   const [narrow, setNarrow] = useState(false)
@@ -131,7 +150,9 @@ export default function MapControls() {
         {run?.bbox && <button type="button" aria-label="Fit to run" title="Fit to run" onClick={() => fitBbox(run.bbox)}>⤢</button>}
         <button type="button" aria-label={basemap === 'plain' ? 'Show satellite imagery' : 'Hide satellite imagery'} title={basemap === 'plain' ? 'Satellite basemap' : 'Plain basemap'} aria-pressed={basemap !== 'plain'} onClick={() => setBasemap(basemap === 'plain' ? 'satellite' : 'plain')}><Icon name="globe" size={15} /></button>
         <button type="button" aria-label={labels ? 'Hide place names' : 'Show place names'} title={labels ? 'Hide place names' : 'Show place names'} aria-pressed={labels} onClick={toggleLabels} className="lbl-btn">Aa</button>
+        <button type="button" aria-label={terrain ? 'Back to flat 2D map' : 'Show 3D terrain'} title={terrain ? '2D map' : '3D terrain (right-drag to tilt and turn)'} aria-pressed={terrain} onClick={() => setTerrain(!terrain)} className="lbl-btn">3D</button>
       </div>
+      {terrain && <TerrainCard />}
       {run?.artifacts?.overlay && <Legend report={report} narrow={narrow} />}
       <div className="bottom-stack">
         <div className="bs-row">

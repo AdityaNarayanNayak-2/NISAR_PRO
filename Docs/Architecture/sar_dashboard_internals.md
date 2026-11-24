@@ -37,18 +37,18 @@ controls, the timeline and the log stay inside it, and camera fits use it too
 | Command pill | place search (`/geocode/search`) or lat, lon; engine state |
 | Live Map | no run: what NISAR Pro does, how a run works. Run: "Send teams first" (top 5 areas, share held by the 10 largest), copy summary, "in this view" / drawn-area sum (whole scene in view: no repeat of the total), confidence split, notes and warnings |
 | Time Series | since the last period (flood extent, water loss, stable water: before, now, change, period lengths), flood extent per period (chart), periods as rows, water on each date |
-| Regions | flood extent by district (largest areas named until 95% of the summed area or 250 areas, by centre, OSM districts, share named shown), 10 largest areas, areas by size |
+| Regions | flood extent by district (largest areas named until 95% of the summed area or 250 areas, by centre, OSM districts, share named shown), all areas (sort by size or high-confidence share, filter ≥ 1 / ≥ 10 km² or in this view, 25 per page, CSV of the filtered list; click a row to zoom), areas by size |
 | Reports | situation report (page 2: A4 map with lat/lon grid, scale bar, pins, district table), CSV, KML and GPX waypoints, files, quality checks (7 checks from report fields, no single score), class table, threshold ruler and method, product facts |
 | Processing | scenes (this computer or NASA catalog), area, polarization, all detection settings with a live dB ruler, optional GUNW and water mask, exact command; progress of a running run |
 | Evaluation Hub | Sentinel-2 agreement (InGARSS study) when track/frame/dates match; else an empty state |
-| Timeline (map) | acquisitions of the frame; runs as spans, L lane and S lane; click to open; expected next pass (last date + 12 days, labelled expected, not a NASA schedule) |
+| Timeline (map) | acquisitions of the frame; runs as spans packed into lanes so overlapping periods never hide each other (L lanes next to the axis, S above), drawn at the real pixel width; click to open; expected next pass (last date + 12 days, labelled expected, not a NASA schedule) |
 | Map | numbered pins on the 10 largest areas; click a pin or area for the area card (place, km² and acres, confidence, centre in decimal, DMS and UTM); pass chip (date, UTC, age, amber after 7 days); legend presets All / Flood only / Water loss only; buttons for satellite and place names |
 
 ## Files
 
 ```
 pages/app/
-├── Workspace.jsx          shell, keyboard shortcuts, starts the store
+├── Workspace.jsx          shell, keyboard shortcuts (`?` lists them, Esc closes the run), starts the store
 ├── ReportPage.jsx         /app/report/:id — A4 situation report (print / PDF), report.css
 ├── InsarPaused.jsx        /app/insar
 ├── workspace.css          tokens + all workspace styles
@@ -120,3 +120,11 @@ names for each run's ten largest areas.
 - No number that is not in the run's files. Sums and shares are labelled "computed".
 - `threshold_db` is Otsu capped at the minimum change; the seed used is `min(seed, threshold_db)`.
 - Sentinel-2 numbers are "agreement", never "accuracy", and only for matching study dates.
+
+## Address bar, phones, busy gateway (2026-11-24)
+
+- `?run=<id>&view=<tab>` always mirrors the open run and tab (`syncUrl` in `useRunStore.js`), so a reload or a shared link opens the same place.
+- Phones (< 768 px): the left stack is hidden, so the bottom sheet shows its cards: the runs list on the home view and the flood extent card on Live Map (`.sheet-only.sheet-cards`). The sheet opens at 45 % of the screen; the grip cycles peek / half / full.
+- A run opened while it was processing loads its report and areas when it finishes (`follow` in the store).
+- The gateway limits only API paths, and outside public demo mode only new runs (`rate_limit.rs`). `getJson` retries a 429/503 twice after `Retry-After` before showing a plain message.
+- 3D terrain: the map's 3D button tilts the map over Mapzen Terrain Tiles (AWS Open Data, `raster-dem`, terrarium) with hill shading and a height control (×1 / ×3 / ×10; the Ganga plain is nearly flat). Run images and area outlines drape on the terrain. Right-drag tilts and turns in 3D only. The card says the relief is SRTM terrain, not NISAR.

@@ -1,6 +1,7 @@
 // Acquisition timeline for one track·frame: dots are acquisition dates, spans are runs.
-// L runs sit in the lane next to the axis, S runs in the lane above. Click a span to open it.
-import { useMemo, useState } from 'react'
+// Runs that overlap in time get their own lane (L lanes next to the axis, S lanes above).
+// Drawn at the real pixel width so the labels stay readable. Click a span to open it.
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRunStore } from '../stores/useRunStore'
 import { runStatus } from '../lib/gateway'
 import { runInfo } from '../lib/runInfo'
@@ -11,8 +12,33 @@ const DAY = 86400000
 const REPEAT_DAYS = 12
 const t = (iso) => Date.parse(`${iso}T00:00:00Z`)
 
+/** Width of an element in CSS pixels, kept up to date. */
+function useWidth() {
+  const ref = useRef(null)
+  const [w, setW] = useState(640)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width) || 640))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, w]
+}
+
+/** Greedy interval packing: each span takes the first lane whose last span ended by its start. */
+function packLanes(spans) {
+  const ends = []
+  return [...spans].sort((a, b) => a.from.localeCompare(b.from) || b.to.localeCompare(a.to)).map((s) => {
+    let lane = ends.findIndex((end) => end <= s.from)
+    if (lane < 0) { lane = ends.length; ends.push(s.to) } else ends[lane] = s.to
+    return { ...s, lane }
+  })
+}
+
 export default function Timeline() {
   const { runs, openId, open, scenes } = useRunStore()
+  const [box, boxW] = useWidth()
   const [tip, setTip] = useState(null)
   const [now] = useState(() => Date.now())
   const run = runs.find((r) => r.id === openId)
@@ -55,41 +81,48 @@ export default function Timeline() {
     return { dates: [...list, [next, null]], spans: shown, next }
   }, [key, runs, scenes, openId])
 
-  if (!data) return null
+  if (!data) return <div ref={box} hidden />
   const [track, frame] = key.split('/')
-  const W = 640
+  const W = Math.max(boxW, 240)
   const PAD = 28
   const t0 = t(data.dates[0][0])
   const t1 = t(data.dates[data.dates.length - 1][0])
   const span = Math.max(t1 - t0, DAY)
-  // Place by date, but keep dots at least 56 px apart.
+  // Place by date, but keep dots at least 48 px apart.
   const xs = []
   data.dates.forEach(([iso], i) => {
     const x = data.dates.length === 1 ? W / 2 : PAD + ((t(iso) - t0) / span) * (W - 2 * PAD)
-    xs.push(i === 0 ? x : Math.max(x, xs[i - 1] + 56))
+    xs.push(i === 0 ? x : Math.max(x, xs[i - 1] + 48))
   })
   const scale = xs[xs.length - 1] > W - PAD && xs.length > 1 ? (W - 2 * PAD) / (xs[xs.length - 1] - xs[0]) : 1
   const X = Object.fromEntries(data.dates.map(([iso], i) => [iso, PAD + (xs[i] - xs[0]) * scale + (data.dates.length === 1 ? W / 2 - PAD : 0)]))
-  const AXIS = 40
-  const LANE = { L: AXIS - 12, S: AXIS - 22 }
+  // Lanes: L runs packed next to the axis, S runs above them.
+  const L = packLanes(data.spans.filter((s) => s.band !== 'S'))
+  const nL = L.reduce((m, s) => Math.max(m, s.lane + 1), 0)
+  const S = packLanes(data.spans.filter((s) => s.band === 'S')).map((s) => ({ ...s, lane: s.lane + nL }))
+  const lanes = [...L, ...S]
+  const nLanes = lanes.reduce((m, s) => Math.max(m, s.lane + 1), 1)
+  const STEP = 9
+  const AXIS = 22 + nLanes * STEP
+  const H = AXIS + 28
   const hasRun = (iso) => data.spans.some((s) => s.from === iso || s.to === iso)
 
   return (
-    <div className="timeline mctl" data-map-ctl>
-      <div className="tl-head">Track {track} · Frame {frame}<span className="muted">{data.dates.length - 1} acquisitions</span><span className="tl-next" title="From the 12-day repeat of the last acquisition. Not a NASA schedule; check the NASA catalog in Processing.">next pass expected {formatShortDate(data.next)}{Date.parse(data.next) < now ? ', check catalog' : ''}</span></div>
-      <svg viewBox={`0 0 ${W} 70`} width="100%" height="70" role="group" aria-label="Acquisitions and runs">
+    <div className="timeline mctl" data-map-ctl ref={box}>
+      <div className="tl-head"><span className="tl-name">Track {track} · Frame {frame}</span><span className="muted">{data.dates.length - 1} acquisitions</span><span className="tl-next" title="From the 12-day repeat of the last acquisition. Not a NASA schedule; check the NASA catalog in Processing.">next pass expected {formatShortDate(data.next)}{Date.parse(data.next) < now ? ', check catalog' : ''}</span></div>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="group" aria-label="Acquisitions and runs">
         <line x1={PAD - 12} x2={X[data.dates[data.dates.length - 2][0]] + 6} y1={AXIS} y2={AXIS} className="tl-axis" />
-        {data.spans.map((s) => {
+        {lanes.map((s) => {
           const x1 = X[s.from], x2 = X[s.to]
-          const y = LANE[s.band] ?? LANE.L
+          const y = AXIS - 11 - s.lane * STEP
           const sel = s.id === openId
           return (
             <g key={s.id} className={`tl-span ${sel ? 'sel' : ''} ${s.kind}`} onClick={() => open(s.id)}
               onMouseEnter={() => setTip({ x: (x1 + x2) / 2, text: s.title })} onMouseLeave={() => setTip(null)}
               role="button" tabIndex={0} aria-label={`Open ${s.title}`} aria-current={sel}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(s.id) } }}>
-              <rect x={x1} y={y - 12} width={Math.max(x2 - x1, 4)} height={24} fill="transparent" />
-              <rect x={x1 + 5} y={y - 3} width={Math.max(x2 - x1 - 10, 4)} height={6} rx={3} className="bar" />
+              <rect x={x1} y={y - STEP / 2} width={Math.max(x2 - x1, 4)} height={STEP} fill="transparent" />
+              <rect x={x1 + 5} y={y - 2.5} width={Math.max(x2 - x1 - 10, 4)} height={5} rx={2.5} className="bar" />
             </g>
           )
         })}
@@ -107,7 +140,7 @@ export default function Timeline() {
             <text x={X[iso]} y={AXIS + 24} className="tl-band" textAnchor="middle">{[...bands].sort().join(' ')}</text>
           </g>
         ))}
-        {tip && <text x={tip.x} y={8} className="tl-tip" textAnchor="middle">{tip.text}</text>}
+        {tip && <text x={Math.min(Math.max(tip.x, 90), W - 90)} y={9} className="tl-tip" textAnchor="middle">{tip.text}</text>}
       </svg>
       {data.dates.length === 2 && <div className="muted tl-empty">A run needs two dates.</div>}
     </div>

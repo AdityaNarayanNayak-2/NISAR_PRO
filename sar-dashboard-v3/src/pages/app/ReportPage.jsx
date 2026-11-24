@@ -113,7 +113,15 @@ export default function ReportPage() {
   }, [top, state])
 
   if (state.status === 'loading') return <div className="rp-wait">Preparing the report…</div>
-  if (state.status === 'error') return <div className="rp-wait">{state.error}</div>
+  if (state.status === 'error') {
+    return (
+      <div className="rp-wait">
+        <p><b>The report could not be prepared.</b></p>
+        <p>{state.error}</p>
+        <p><button type="button" onClick={() => window.location.reload()}>Try again</button> · <a href="/app">Back to the map</a></p>
+      </div>
+    )
+  }
   const { run, report: r, mode, ref } = state
   const fx = formatArea(r.newWater.km2, r.newWater.acres)
   const pass = granuleTime(r.activeId)
