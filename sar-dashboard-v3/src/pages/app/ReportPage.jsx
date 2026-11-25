@@ -14,6 +14,7 @@ import { loadReference, testsForRun } from './lib/validation'
 import { formatArea, formatDate, formatDb, formatNumber } from './lib/units'
 import { paintClasses } from './lib/classRaster'
 import './report.css'
+import { site } from '../../lib/site.js'
 
 const LIGHT = 'https://tiles.openfreemap.org/styles/positron'
 
@@ -118,7 +119,7 @@ export default function ReportPage() {
       <div className="rp-wait">
         <p><b>The report could not be prepared.</b></p>
         <p>{state.error}</p>
-        <p><button type="button" onClick={() => window.location.reload()}>Try again</button> · <a href="/app">Back to the map</a></p>
+        <p><button type="button" onClick={() => window.location.reload()}>Try again</button> · <a href={site('/app')}>Back to the map</a></p>
       </div>
     )
   }

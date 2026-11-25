@@ -2,6 +2,8 @@
 //  local: a NISAR Pro gateway answers (installed app, or `vite dev` next to it)
 //  demo:  the public website; read-only runs shipped in /demo
 //  offline: neither answered
+import { site } from '../../../lib/site.js'
+
 const STORAGE_KEY = 'nisarpro_gateway_url'
 
 export function gatewayBase() {
@@ -27,7 +29,7 @@ const isAbsolute = (p) => /^(https?:|blob:|data:)/.test(p)
 export function gatewayUrl(path, mode = 'local') {
   if (!path) return null
   if (isAbsolute(path)) return path
-  if (mode === 'demo') return path
+  if (mode === 'demo') return site(path)
   return `${gatewayBase()}${path.startsWith('/') ? '' : '/'}${path.replace(/\/{2,}/g, '/')}`
 }
 
@@ -53,7 +55,7 @@ async function getJson(url, signal) {
 }
 
 export async function detectMode() {
-  const isPublicSite = typeof window !== 'undefined' && /\.pages\.dev$|nisarpro|nisar-pro/.test(window.location.hostname) && !import.meta.env?.VITE_GATEWAY_URL
+  const isPublicSite = typeof window !== 'undefined' && /\.pages\.dev$|\.github\.io$|\.gitlab\.io$|nisarpro|nisar-pro/.test(window.location.hostname) && !import.meta.env?.VITE_GATEWAY_URL
   if (!isPublicSite) {
     try {
       const ctrl = new AbortController()
@@ -64,7 +66,7 @@ export async function detectMode() {
     } catch { /* fall through to demo */ }
   }
   try {
-    await getJson('/demo/runs.json')
+    await getJson(site('/demo/runs.json'))
     return 'demo'
   } catch {
     return 'offline'
@@ -72,7 +74,7 @@ export async function detectMode() {
 }
 
 export async function fetchRuns(mode, signal) {
-  const list = mode === 'demo' ? await getJson('/demo/runs.json', signal) : await getJson(`${gatewayBase()}/jobs`, signal)
+  const list = mode === 'demo' ? await getJson(site('/demo/runs.json'), signal) : await getJson(`${gatewayBase()}/jobs`, signal)
   return Array.isArray(list) ? list : []
 }
 

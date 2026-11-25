@@ -2,10 +2,11 @@
 // It describes the study runs of NISAR track 98 / frame 14. A run gets it only when its
 // track, frame and dates match a test. Labels: agreement with optical labels, not accuracy.
 import { granuleTrackFrame } from './report'
+import { site } from '../../../lib/site.js'
 
 let cache = null
 export function loadReference() {
-  if (!cache) cache = fetch('/reference/sentinel2_validation.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  if (!cache) cache = fetch(site('/reference/sentinel2_validation.json')).then((r) => (r.ok ? r.json() : null)).catch(() => null)
   return cache
 }
 

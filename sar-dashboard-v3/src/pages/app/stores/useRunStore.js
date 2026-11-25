@@ -232,7 +232,15 @@ export const useRunStore = create((set, get) => ({
         streams.delete(id)
         const ok = line.includes('COMPLETED')
         const wasActive = ['running', 'queued'].includes(runStatus(get().runs.find((r) => r.id === id)).kind)
-        get().refresh().then(() => {
+        const settle = async () => {
+          // The gateway can report the run finished a moment before its report is listed. Retry briefly.
+          for (let i = 0; i < 4; i++) {
+            await get().refresh()
+            if (!ok || get().runs.find((r) => r.id === id)?.artifacts?.report) return
+            await new Promise((r) => setTimeout(r, 1500))
+          }
+        }
+        settle().then(() => {
           if (get().openId === id) {
             // Opened while it was running: report and areas did not exist yet. Load them now.
             set((s) => ({ reports: { ...s.reports, [id]: undefined }, regions: { ...s.regions, [id]: undefined } }))

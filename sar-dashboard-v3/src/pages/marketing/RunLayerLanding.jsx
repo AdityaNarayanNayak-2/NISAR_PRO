@@ -7,8 +7,9 @@ import { formatArea, formatNumber, KM2_PER_ACRE } from '../app/lib/units'
 import meta from './heroMeta.json'
 import impact from './impactMeta.json'
 import './runlayer.css'
+import { site } from '../../lib/site.js'
 
-const IMG = '/landing/hero'
+const IMG = site('/landing/hero')
 const MAIL = ['ishaan4488', 'gmail.com'].join('@')
 const s = meta.summary
 const FX = formatArea(s.new_water.km2, s.new_water.acres)
@@ -218,8 +219,8 @@ function Receive() {
       <p className="rl-eyebrow">What your office receives</p>
       <h2>Not a picture. Things your team can use.</h2>
       <div className="rl-shots">
-        <figure><img src="/landing/shots/live.webp" alt="NISAR Pro dashboard with numbered flood areas and an area card" loading="lazy" /><figcaption>Dashboard: numbered areas, area card with coordinates.</figcaption></figure>
-        <figure><img src="/landing/shots/districts.webp" alt="Flood extent by district table" loading="lazy" /><figcaption>Flood extent by district.</figcaption></figure>
+        <figure><img src={site('/landing/shots/live.webp')} alt="NISAR Pro dashboard with numbered flood areas and an area card" loading="lazy" /><figcaption>Dashboard: numbered areas, area card with coordinates.</figcaption></figure>
+        <figure><img src={site('/landing/shots/districts.webp')} alt="Flood extent by district table" loading="lazy" /><figcaption>Flood extent by district.</figcaption></figure>
       </div>
       <div className="rl-grid5">{items.map(([t, c]) => <div key={t} className="rl-item"><h3>{t}</h3><p>{c}</p></div>)}</div>
     </section>
@@ -304,7 +305,7 @@ function Check() {
   const [ref, setRef] = useState(null)
   useEffect(() => {
     let off = false
-    fetch('/reference/sentinel2_validation.json').then((r) => (r.ok ? r.json() : null)).then((d) => { if (!off) setRef(d) }).catch(() => {})
+    fetch(site('/reference/sentinel2_validation.json')).then((r) => (r.ok ? r.json() : null)).then((d) => { if (!off) setRef(d) }).catch(() => {})
     return () => { off = true }
   }, [])
   const thr = ref ? `ndwi_${Number(ref.primary_ndwi_threshold).toFixed(1)}` : null
@@ -464,7 +465,7 @@ function Final() {
 function About() {
   return (
     <section className="rl-sec rl-about">
-      <div className="rl-photo" aria-label="Aditya Narayan Nayak"><img src="/landing/aditya.jpg" alt="Aditya Narayan Nayak" onError={(e) => { e.currentTarget.style.display = 'none' }} /><span>AN</span></div>
+      <div className="rl-photo" aria-label="Aditya Narayan Nayak"><img src={site('/landing/aditya.jpg')} alt="Aditya Narayan Nayak" onError={(e) => { e.currentTarget.style.display = 'none' }} /><span>AN</span></div>
       <div>
         <p className="rl-eyebrow">About RunLayer Lab</p>
         <h2>You talk to the person who built it.</h2>

@@ -9,6 +9,7 @@ import { placeLabel } from '../lib/places'
 import { formatArea, formatNumber } from '../lib/units'
 import { mapHandle, freePadding } from '../map/mapHandle'
 import Icon from '../ui/Icon'
+import { site } from '../../../lib/site.js'
 
 export function InView({ regions }) {
   const { viewBounds, aoi, picking, startPicking, setAoi } = useMapStore()
@@ -134,7 +135,7 @@ export function TakeAway({ run, mode, list, places }) {
     <div className="sec">
       <h3>Report and files</h3>
       <div className="take">
-        <a className="btn btn-accent" href={`/app/report/${run.id}`} target="_blank" rel="noreferrer"><Icon name="report" size={14} />Situation report</a>
+        <a className="btn btn-accent" href={site(`/app/report/${run.id}`)} target="_blank" rel="noreferrer"><Icon name="report" size={14} />Situation report</a>
         <button type="button" className="btn" disabled={!list.length} onClick={() => download(`${run.id}_hotspots.csv`, hotspotsCsv(list, places), 'text/csv')}>Hotspots CSV</button>
         <button type="button" className="btn" disabled={!list.length} onClick={() => download(`${run.id}_hotspots.kml`, hotspotsKml(list, places, `NISAR Pro ${run.id}`), 'application/vnd.google-earth.kml+xml')}>Waypoints · KML</button>
         <button type="button" className="btn" disabled={!list.length} onClick={() => download(`${run.id}_hotspots.gpx`, hotspotsGpx(list, places), 'application/gpx+xml')}>Waypoints · GPX</button>

@@ -13,6 +13,7 @@ import { formatNumber, formatShortDate, formatArea } from '../lib/units'
 import { mapHandle, freePadding } from '../map/mapHandle'
 import useRunAreas from './useRunAreas'
 import Icon from '../ui/Icon'
+import { site } from '../../../lib/site.js'
 
 const KIND_COLOR = { health: '#f87171', school: '#fbbf24', emergency: '#c4b5fd', shelter: '#86efac' }
 
@@ -52,7 +53,7 @@ function Facilities({ run, mode, geo }) {
   const [all, setAll] = useState(false)
   const st = useAsync(async () => {
     if (mode === 'demo') {
-      const res = await fetch(`/demo/runs/${run.id}/facilities.json`)
+      const res = await fetch(site(`/demo/runs/${run.id}/facilities.json`))
       if (res.ok) return res.json()
     }
     return facilitiesInFlood(run.id, geo.data)

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { site } from '../../../lib/site.js'
 
 /** Button that opens a small menu. Closes on Esc, outside click or selection. */
 export default function Menu({ label, trigger, items, align = 'right', className = 'icon-btn' }) {
@@ -21,7 +22,7 @@ export default function Menu({ label, trigger, items, align = 'right', className
         <div className="menu" role="menu" style={{ top: 40, [align]: 0 }}>
           {items.filter(Boolean).map((it, i) =>
             it === '-' ? <hr key={i} /> : it.href ? (
-              <a key={i} role="menuitem" href={it.href} target={it.external ? '_blank' : undefined} rel="noreferrer" onClick={() => setOpen(false)}>{it.label}</a>
+              <a key={i} role="menuitem" href={site(it.href)} target={it.external ? '_blank' : undefined} rel="noreferrer" onClick={() => setOpen(false)}>{it.label}</a>
             ) : (
               <button key={i} type="button" role="menuitem" disabled={it.disabled} className={it.danger ? 'btn-danger' : ''} onClick={(e) => { e.stopPropagation(); setOpen(false); it.onClick?.() }}>{it.label}</button>
             ),
