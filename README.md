@@ -8,8 +8,8 @@ NISAR Pro compares two NISAR radar passes and maps flood extent, stable water an
 with every area in km² and acres, place names, field waypoints and a printable situation report.
 It runs on an ordinary laptop.
 
-[Website](https://main.nisar-pro.pages.dev/) ·
-[Live demo](https://main.nisar-pro.pages.dev/app) ·
+[Website](https://nisar-pro.pages.dev/) ·
+[Live demo](https://nisar-pro.pages.dev/app) ·
 [Windows installer](https://github.com/AdityaNarayanNayak-2/NISAR_PRO/releases/latest/download/NISAR-Pro-Setup.exe) ·
 [Linux](#linux) ·
 [Documentation](Docs/README.md) ·
@@ -20,7 +20,9 @@ It runs on an ordinary laptop.
 ![React](https://img.shields.io/badge/dashboard-React%2019%20·%20MapLibre-lightgrey.svg)
 ![IEEE InGARSS 2026](https://img.shields.io/badge/IEEE-InGARSS%202026-lightgrey.svg)
 
-![NISAR Pro dashboard: flood extent over the Ganga plain, Bihar, with numbered areas and an area card](sar-dashboard-v3/public/landing/shots/live.webp)
+[![NISAR Pro: flood extent over the Ganga plain, Bihar, the top areas numbered, then the one-page situation report](Docs/media/nisar_pro_preview.webp)](https://nisar-pro.pages.dev/app)
+
+<sub>L-band, 31 Aug → 12 Sep 2026: 1,166.21 km² (288,178 acres) of flood extent. Radar-detected, not confirmed on the ground. Click to open the live demo.</sub>
 
 </div>
 
