@@ -1,0 +1,4 @@
+# Windows builds link the C runtime statically, so the exes need no VCRUNTIME140.dll
+# (no Visual C++ Redistributable on the user's PC). Other targets are not affected.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

@@ -73,3 +73,24 @@ begin
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM sar_science_processor.exe /F', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Result := '';
 end;
+
+// After uninstall: offer to remove the user's data. Results (flood runs) are kept unless the
+// user says yes. %LOCALAPPDATA%\NISAR Pro holds the logs and the Edge app-window profile.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Results, LocalData: String;
+begin
+  if CurUninstallStep <> usPostUninstall then Exit;
+  Results := ExpandConstant('{app}\sar-gateway\results');
+  LocalData := ExpandConstant('{localappdata}\{#AppName}');
+  if DirExists(Results) and not UninstallSilent then
+    if MsgBox('Also delete your NISAR Pro results (flood runs, reports, maps)?' + #13#10 + Results,
+              mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      DelTree(Results, True, True, True);
+  if DirExists(LocalData) then
+    if UninstallSilent or (MsgBox('Also delete NISAR Pro logs and window settings?' + #13#10 + LocalData,
+              mbConfirmation, MB_YESNO) = IDYES) then
+      DelTree(LocalData, True, True, True);
+  RemoveDir(ExpandConstant('{app}\sar-gateway'));
+  RemoveDir(ExpandConstant('{app}'));
+end;

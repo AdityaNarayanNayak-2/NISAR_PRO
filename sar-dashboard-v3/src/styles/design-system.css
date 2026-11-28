@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import '@fontsource-variable/outfit';
+@import '@fontsource-variable/jetbrains-mono';
 
 /* ============================================
    2026 Enterprise Design System
@@ -44,8 +45,8 @@
   --shadow-glow-accent: 0 0 40px rgba(99, 102, 241, 0.3);
 
   /* Typography */
-  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'Outfit Variable', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'Fira Code', monospace;
 
   /* Spacing */
   --space-xs: 0.25rem;

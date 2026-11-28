@@ -210,37 +210,100 @@ fn read_index(dist: &std::path::Path) -> String {
     INDEX_HTML.get().cloned().unwrap_or_default()
 }
 
-async fn spa_fallback(uri: axum::http::Uri) -> axum::response::Response {
+/// Paths that belong to the API or to files. They never fall back to index.html, so a missing
+/// file or a wrong API route is a clear 404 instead of HTML (which a browser reports as a
+/// confusing MIME error and a blank page).
+const API_PREFIXES: &[&str] = &[
+    "api", "asf", "assets", "config", "context", "geocode", "healthz", "jobs", "metrics", "readyz",
+    "results", "scenes", "search", "stac", "system", "upload", "watch",
+];
+
+fn not_found() -> axum::response::Response {
+    (axum::http::StatusCode::NOT_FOUND, "not found").into_response()
+}
+
+/// Only extension-less GET/HEAD paths outside the API, asked for by a browser page load
+/// (Accept with text/html or */*, or no Accept), get index.html.
+fn wants_spa_page(method: &axum::http::Method, headers: &axum::http::HeaderMap, rel: &str) -> bool {
+    if method != axum::http::Method::GET && method != axum::http::Method::HEAD {
+        return false;
+    }
+    let first = rel.split('/').next().unwrap_or("");
+    if API_PREFIXES.contains(&first) {
+        return false;
+    }
+    let last = rel.rsplit('/').next().unwrap_or("");
+    if last.contains('.') {
+        return false;
+    }
+    match headers.get(axum::http::header::ACCEPT).and_then(|v| v.to_str().ok()) {
+        None => true,
+        Some(a) => a.contains("text/html") || a.contains("*/*"),
+    }
+}
+
+async fn spa_fallback(
+    method: axum::http::Method,
+    headers: axum::http::HeaderMap,
+    uri: axum::http::Uri,
+) -> axum::response::Response {
     let Some(dist) = DIST_DIR.get() else {
         let index = INDEX_HTML.get().cloned().unwrap_or_default();
         return axum::response::Html(index).into_response();
     };
-    let index = read_index(dist);
 
     let rel = uri.path().trim_start_matches('/');
     if rel.is_empty() {
-        return axum::response::Html(index).into_response();
+        return axum::response::Html(read_index(dist)).into_response();
     }
 
     let mut cand = dist.clone();
     for comp in std::path::Path::new(rel).components() {
         match comp {
             std::path::Component::Normal(c) => cand.push(c),
-            _ => return axum::response::Html(index).into_response(),
+            _ => return not_found(),
         }
     }
 
-    if cand.is_file() {
+    if (method == axum::http::Method::GET || method == axum::http::Method::HEAD) && cand.is_file() {
         if let Ok(bytes) = std::fs::read(&cand) {
             return ([(axum::http::header::CONTENT_TYPE, mime_for(&cand))], bytes).into_response();
         }
     }
 
-    // A missing hashed asset must fail loudly rather than silently serving HTML,
-    // which shows up in the browser as a blank page with no clue.
-    if rel.starts_with("assets/") {
-        return (axum::http::StatusCode::NOT_FOUND, "asset not found").into_response();
+    if wants_spa_page(&method, &headers, rel) {
+        return axum::response::Html(read_index(dist)).into_response();
+    }
+    not_found()
+}
+
+#[cfg(test)]
+mod spa_tests {
+    use super::wants_spa_page;
+    use axum::http::{header::ACCEPT, HeaderMap, HeaderValue, Method};
+
+    fn html() -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(ACCEPT, HeaderValue::from_static("text/html,application/xhtml+xml,*/*;q=0.8"));
+        h
     }
 
-    axum::response::Html(index).into_response()
+    #[test]
+    fn page_routes_fall_back() {
+        for p in ["app", "docs", "app/report/run-8fc6be56", "app/insar"] {
+            assert!(wants_spa_page(&Method::GET, &html(), p), "{p}");
+        }
+    }
+
+    #[test]
+    fn files_and_api_do_not() {
+        for p in ["does-not-exist.js", "NISAR_PRO/assets/index-x.js", "NISAR_PRO/icon.png",
+                  "api/health", "system/health", "jobs/nope/extra", "assets/x"] {
+            assert!(!wants_spa_page(&Method::GET, &html(), p), "{p}");
+        }
+        assert!(!wants_spa_page(&Method::POST, &html(), "app"));
+        let mut json = HeaderMap::new();
+        json.insert(ACCEPT, HeaderValue::from_static("application/json"));
+        assert!(!wants_spa_page(&Method::GET, &json, "app"));
+    }
 }

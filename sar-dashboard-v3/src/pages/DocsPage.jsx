@@ -11,7 +11,7 @@ const theme = {
     textDef: 'rgba(255,255,255,0.85)',
     textMuted: 'rgba(255,255,255,0.55)',
     accent: '#00E5CC',
-    mono: '"JetBrains Mono", monospace',
+    mono: '"JetBrains Mono Variable", "JetBrains Mono", monospace',
 }
 
 function Overview({ onOpen }) {

@@ -37,20 +37,29 @@ jobs:
           cache: npm
           cache-dependency-path: sar-dashboard-v3/package-lock.json
 
-      - name: Build dashboard
+      # Two builds: the Windows app is served by the gateway at "/", GitHub Pages at /NISAR_PRO/.
+      # A Pages build inside the app is a blank page (its /NISAR_PRO/ assets do not exist there).
+      - name: Build dashboard for the Windows app (base /)
         working-directory: sar-dashboard-v3
-        env:
-          GITHUB_PAGES: "true"
         run: |
           npm ci
-          npm run build
-          cp dist/index.html dist/404.html
+          env -u GITHUB_PAGES -u GITLAB_PAGES npm run build
+          if grep -q "/NISAR_PRO/" dist/index.html; then echo "::error::app dashboard was built with the Pages base"; exit 1; fi
+          mv dist dist-app
 
       - name: Upload dashboard artifact
         uses: actions/upload-artifact@v4
         with:
           name: dashboard-dist
-          path: sar-dashboard-v3/dist
+          path: sar-dashboard-v3/dist-app
+
+      - name: Build dashboard for GitHub Pages (base /NISAR_PRO/)
+        working-directory: sar-dashboard-v3
+        env:
+          GITHUB_PAGES: "true"
+        run: |
+          npm run build
+          cp dist/index.html dist/404.html
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -81,6 +90,13 @@ jobs:
         with:
           name: dashboard-dist
           path: sar-dashboard-v3/dist
+
+      - name: Check the dashboard base (release gate)
+        shell: pwsh
+        run: |
+          if (Select-String -Path "sar-dashboard-v3/dist/index.html" -Pattern "/NISAR_PRO/" -SimpleMatch -Quiet) {
+            Write-Error "sar-dashboard-v3/dist/index.html uses /NISAR_PRO/; the app needs base /"; exit 1
+          }
 
       - name: Build science processor
         working-directory: sar_science_processor
@@ -130,8 +146,20 @@ jobs:
           & $rc.FullName /nologo /fo launcher.res launcher.rc
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:NISAR_VERSION = $env:VERSION
-          rustc -O -C panic=abort --edition 2021 -C link-arg=launcher.res installer/launcher.rs -o "NISAR Pro.exe"
+          rustc -O -C panic=abort -C target-feature=+crt-static --edition 2021 -C link-arg=launcher.res installer/launcher.rs -o "NISAR Pro.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check the exes need no VC++ runtime (release gate)
+        shell: pwsh
+        run: |
+          $dumpbin = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -First 1
+          $bad = $false
+          foreach ($exe in @("NISAR Pro.exe", "sar-gateway/target/release/sar-gateway.exe", "sar_science_processor/target/release/sar_science_processor.exe")) {
+            $deps = & $dumpbin.FullName /nologo /dependents $exe
+            $deps | Write-Output
+            if ($deps -match "(?i)vcruntime|msvcp") { Write-Error "$exe still needs the VC++ runtime"; $bad = $true }
+          }
+          if ($bad) { exit 1 }
 
       - name: Assemble release folder
         shell: pwsh
@@ -157,7 +185,11 @@ jobs:
           Put your NISAR .h5 granules anywhere on this computer and select them in the dashboard.
           Results are saved in sar-gateway\results. Logs are in %LOCALAPPDATA%\NISAR Pro\logs.
 
-          NISAR granules are not included.
+          NISAR granules are not included. Granules and results stay on this computer.
+          The map background, place names, river/rain data and the NASA catalog use online
+          services and send them the map area you look at; they need internet.
+
+          Uninstall asks before deleting your results and %LOCALAPPDATA%\NISAR Pro.
           "@ | Set-Content "$release/README.txt"
           Compress-Archive -Path "$release" -DestinationPath "NISAR-Pro-windows-x64-portable.zip"
 

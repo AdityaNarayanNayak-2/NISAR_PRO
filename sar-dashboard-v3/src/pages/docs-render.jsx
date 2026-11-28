@@ -2,20 +2,11 @@ import { useEffect, useMemo, useRef } from 'react'
 import { marked } from 'marked'
 import { assetMap, slugify, shimMath } from './docs-md'
 
-function waitForKatex(timeout = 10000) {
-    return new Promise((resolve) => {
-        if (window.katex) return resolve(window.katex)
-        const started = Date.now()
-        const poll = setInterval(() => {
-            if (window.katex) {
-                clearInterval(poll)
-                resolve(window.katex)
-            } else if (Date.now() - started > timeout) {
-                clearInterval(poll)
-                resolve(null)
-            }
-        }, 120)
-    })
+// KaTeX ships with the app (no CDN), loaded only when a docs page has math.
+function waitForKatex() {
+    return Promise.all([import('katex'), import('katex/dist/katex.min.css')])
+        .then(([m]) => m.default || m)
+        .catch(() => null)
 }
 
 function renderMathInto(root, katex) {

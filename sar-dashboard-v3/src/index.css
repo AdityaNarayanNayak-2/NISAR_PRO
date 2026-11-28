@@ -55,6 +55,6 @@ body {
   place-items: center;
   color: #8e929b;
   background: #0b0c0e;
-  font: 11px/1.4 "JetBrains Mono", monospace;
+  font: 11px/1.4 "JetBrains Mono Variable", "JetBrains Mono", monospace;
   letter-spacing: .12em;
 }

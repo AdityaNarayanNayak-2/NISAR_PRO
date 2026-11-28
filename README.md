@@ -66,7 +66,20 @@ Water maps were checked against Sentinel-2 optical images on cloud-free pixels; 
 
 ## Install
 
-The app runs a local server and opens the dashboard at `http://localhost:3000` (on Windows in its own app window). Your data stays on your machine.
+The app runs a local server and opens the dashboard at `http://localhost:3000` (on Windows in its own app window). Your radar granules and results stay on your machine; processing never uploads them.
+
+Some views use free online services, and send them the map area or coordinates you are looking at (never the granules):
+
+| Service | Used for |
+|---|---|
+| Esri World Imagery, OpenFreeMap, OpenStreetMap | Map background and labels |
+| Mapzen Terrain Tiles (AWS Open Data) | 3D terrain |
+| OpenStreetMap Nominatim (through the local server) | Place names and place search |
+| OpenStreetMap Overpass | Facilities and buildings near the water (Impact) |
+| Open-Meteo (GloFAS, ERA5, forecast) | River flow and rain (Impact) |
+| NASA ASF | Catalog search and downloads, only when you use them |
+
+Without internet the map background is empty and those sections say so; detection, results, reports and files work offline. Fonts and math rendering ship with the app.
 No Rust, Node.js or Python needed.
 
 ### Windows
