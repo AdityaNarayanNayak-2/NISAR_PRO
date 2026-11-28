@@ -447,6 +447,13 @@ pub async fn start_job_as(state: crate::AppState, mut req: ProcessRequest, owner
             return Err(format!("Polarization must be HH, HV, VV or VH (got {p})."));
         }
     }
+    // v1 is the default: store it as none so v1 requests match older runs.
+    req.method = req.method.take().map(|m| m.trim().to_lowercase()).filter(|m| !m.is_empty() && m != "v1");
+    if let Some(m) = &req.method {
+        if m != "v2" {
+            return Err(format!("Method must be v1 or v2 (got {m})."));
+        }
+    }
     if let (Some(seed), Some(growth)) = (req.seed_threshold_db, req.growth_threshold_db) {
         if seed > growth {
             return Err(format!("Seed threshold ({seed} dB) must be at or below the growth threshold ({growth} dB)."));
@@ -523,6 +530,7 @@ fn processor_args(req: &ProcessRequest, output: &str) -> Vec<String> {
     if let Some(v) = req.min_area_pixels { push("--min-area-pixels", v.to_string()); }
     if let Some(v) = &req.radar_band { push("--radar-band", v.clone()); }
     if let Some(v) = &req.polarization { push("--polarization", v.clone()); }
+    if let Some(v) = &req.method { push("--method", v.clone()); }
     if let Some(v) = req.permanent_water_thresh_db { push("--permanent-water-thresh-db", v.to_string()); }
     if let Some(v) = req.swath_edge_erosion { push("--swath-edge-erosion", v.to_string()); }
     a

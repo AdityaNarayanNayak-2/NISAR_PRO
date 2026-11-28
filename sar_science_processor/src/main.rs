@@ -115,6 +115,15 @@ struct Cli {
     /// Permanent-water floor in dB; omitted uses the calibrated radar-band default
     #[arg(long, allow_hyphen_values = true)]
     permanent_water_thresh_db: Option<f32>,
+
+    /// Detection method: v1 (the default) or v2 (stable water must also be dark on the later date:
+    /// L-band -14 dB; other bands unchanged until checked). See scripts/dswx_check/README.md.
+    #[arg(long, default_value = "v1")]
+    method: String,
+
+    /// Method v2 cap in dB for stable water on the later date; given, it applies on any band and method
+    #[arg(long, allow_hyphen_values = true)]
+    active_water_max_db: Option<f32>,
 }
 
 /// Parse crop preset string into rectangular half-dimensions (km)
@@ -964,6 +973,15 @@ fn main() -> Result<()> {
             if let Some(threshold) = cli.permanent_water_thresh_db {
                 pipeline_opts.permanent_water_thresh_db = threshold;
             }
+            if !cli.method.eq_ignore_ascii_case("v1") && !cli.method.eq_ignore_ascii_case("v2") {
+                anyhow::bail!("--method must be v1 or v2, got {}", cli.method);
+            }
+            if cli.method.eq_ignore_ascii_case("v2") && band == sar_science_processor::flood_detect::RadarBand::LBand {
+                pipeline_opts.active_water_max_db = Some(-14.0);
+            }
+            if let Some(v) = cli.active_water_max_db {
+                pipeline_opts.active_water_max_db = Some(v);
+            }
 
             let (class_map, _delta_db, report) =
                 sar_science_processor::flood_detect::run_flood_detection_pipeline(
@@ -1115,7 +1133,7 @@ fn main() -> Result<()> {
             let acres_to_km2 = 0.004046856;
 
             // Generate full JSON report
-            let full_report = serde_json::json!({
+            let mut full_report = serde_json::json!({
                 "product": {
                     "active_id": active_filename,
                     "baseline_id": baseline_filename,
@@ -1200,6 +1218,11 @@ fn main() -> Result<()> {
                 "warnings": warnings
             });
 
+            if let Some(cap) = pipeline_opts.active_water_max_db {
+                // Only method v2 adds these, so v1 reports stay as they were.
+                full_report["method"]["method_version"] = serde_json::json!("v2");
+                full_report["method"]["active_water_max_db"] = serde_json::json!(cap);
+            }
             std::fs::write(&report_path, serde_json::to_string_pretty(&full_report)?)?;
             info!("  ✓ Flood mapping report: {}", report_path);
 

@@ -34,3 +34,19 @@ export const SERIES = [
   { key: 's_only', label: 'S-band' },
   { key: 'fused', label: 'L + S' },
 ]
+
+// NASA OPERA DSWx-S1 agreement for water on 12 Sep 2026 (public/reference/dswx_s1_agreement.json),
+// computed with the same pixels for NISAR L, NISAR S and our Sentinel-1 run. Agreement, not accuracy.
+let dswxCache = null
+export function loadDswx() {
+  if (!dswxCache) dswxCache = fetch(site('/reference/dswx_s1_agreement.json')).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  return dswxCache
+}
+
+/** The DSWx comparison when this run is the study frame and its later date is the DSWx date, else null. */
+export function dswxForRun(ref, report) {
+  if (!ref?.rows || !report) return null
+  const tf = report.trackFrame || granuleTrackFrame(report.activeId)
+  if (!tf || tf.track !== ref.track || tf.frame !== ref.frame || report.activeDate !== ref.date) return null
+  return ref
+}

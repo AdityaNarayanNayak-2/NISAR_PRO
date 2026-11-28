@@ -77,7 +77,7 @@ export default function ProcessPanel() {
   const [tab, setTab] = useState('local')
   const [busy, setBusy] = useState(false)
   const [touched, setTouched] = useState(false)
-  const [v, setV] = useState({ baseline: '', active: '', area: 'full', lat: NaN, lon: NaN, erosion: 40, pol: 'HH', ...DEFAULTS.l, minArea: 8, band: 'l', edited: false, gunw: '', mask: '', advanced: true })
+  const [v, setV] = useState({ baseline: '', active: '', area: 'full', lat: NaN, lon: NaN, erosion: 40, pol: 'HH', ...DEFAULTS.l, minArea: 8, band: 'l', edited: false, gunw: '', mask: '', advanced: true, method: 'v1' })
   const set = (k) => (val) => setV((o) => ({ ...o, [k]: val, edited: o.edited || ['seed', 'growth', 'minChange', 'floor'].includes(k) }))
 
   useEffect(() => { if (mode === 'local' && scenes == null) loadScenes() }, [mode, scenes, loadScenes])
@@ -125,6 +125,7 @@ export default function ProcessPanel() {
     if (v.minArea !== 8) b.min_area_pixels = v.minArea
     if (v.gunw) b.gunw_file = v.gunw
     if (v.mask) b.water_mask = v.mask
+    if (v.method === 'v2' && v.band === 'l') b.method = 'v2'
     return b
   }, [v, d])
 
@@ -139,6 +140,7 @@ export default function ProcessPanel() {
     if (body.min_area_pixels != null) a.push(`--min-area-pixels ${body.min_area_pixels}`)
     a.push(`--radar-band ${body.radar_band}`)
     if (body.polarization) a.push(`--polarization ${body.polarization}`)
+    if (body.method) a.push(`--method ${body.method}`)
     a.push(`--swath-edge-erosion ${body.swath_edge_erosion}`)
     return a.join(' \\\n  ')
   }, [body])
@@ -232,6 +234,17 @@ export default function ProcessPanel() {
 
         <div className="sec">
           <div className="form-step"><span className="n">4</span>Detection <span className="muted" style={{ fontWeight: 400 }}>{v.band.toUpperCase()}-band defaults</span></div>
+          {v.band === 'l' && <>
+            <div className="row-between" style={{ marginBottom: 6 }}>
+              <span className="muted">Method</span>
+              <div className="seg" role="group" aria-label="Method">
+                {['v1', 'v2'].map((m) => <button key={m} type="button" aria-pressed={v.method === m} onClick={() => set('method')(m)}>{m}</button>)}
+              </div>
+            </div>
+            <div className="hint" style={{ marginBottom: 10 }}>{v.method === 'v2'
+              ? 'v2: stable water must also be dark (−14 dB or less) on the later date. Flood extent is the same as v1. Closer to NASA DSWx-S1 and Sentinel-2 water in our checks.'
+              : 'v1: the method of the published results.'}</div>
+          </>}
           <DbRuler seed={v.seed} growth={v.growth} minChange={v.minChange} floor={v.floor} />
           {THR.map((t) => <Slider key={t.k} {...t} value={v[t.k]} onChange={set(t.k)} error={shown(t.k)} dflt={d[t.k]} />)}
           <Slider label="Smallest area" hint="Areas with fewer pixels are dropped as noise." value={v.minArea} onChange={set('minArea')} min={1} max={200} step={1} unit="px" error={shown('minArea')} dflt={8} />

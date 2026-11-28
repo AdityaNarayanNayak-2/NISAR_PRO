@@ -88,7 +88,9 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
 - Dashboard wording: "Flood extent" plus the note "Water detected by radar … Not confirmed on
   the ground." The InGARSS package keeps "newly detected water" (§10.4).
 - Sentinel-2 scores appear only in Validation, only for runs whose track/frame/dates match the
-  study (`public/reference/sentinel2_validation.json`, a copy), labelled as agreement.
+  study (`public/reference/sentinel2_validation.json`, a copy), labelled as agreement. Runs of that
+  frame ending 12 Sep 2026 also get agreement with NASA OPERA DSWx-S1 (`public/reference/dswx_s1_agreement.json`,
+  made by `scripts/dswx_check/`, see its README; L 0.739, S 0.809, Sentinel-1 0.815 F1).
 - `method.threshold_db` is Otsu capped at the minimum change, not the applied threshold. The seed
   used is `min(seed, threshold_db)`; label it that way.
 - Replay phases: `baseline`, `active`, `detected` (active at 0.65 + classes). Only `map/MapView.jsx`
@@ -161,6 +163,9 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
 - Engine detection flags (`--seed-threshold-db`, `--growth-threshold-db`, `--min-change-db`,
   `--min-area-pixels`, `--swath-edge-erosion`) are optional: omitted means the band default
   (`FloodDetectionOptions::for_band`), given means applied on any band.
+- `--method v2` (gateway request `method: "v2"`, Processing form "Method"): stable water must also be
+  ≤ −14 dB on the later date (L-band only; `--active-water-max-db` sets any cap). Flood extent is
+  unchanged. v1 is the default and stays byte-identical. Evidence and numbers: `scripts/dswx_check/README.md`.
 
 ## 6. How to Build & Verify
 
@@ -168,7 +173,7 @@ into `<id>_flood.png` (`io.rs` `save_flood_map_png`); the dashboard reads the cl
 ```bash
 cd sar_science_processor
 cargo test
-# All unit tests must pass (78 passed; 0 failed on 2026-11-23)
+# All unit tests must pass (79 passed; 0 failed on 2026-11-26)
 ```
 
 ### Compiling & Running Backend

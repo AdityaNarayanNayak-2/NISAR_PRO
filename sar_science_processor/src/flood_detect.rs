@@ -58,6 +58,10 @@ pub struct FloodDetectionOptions {
     pub swath_edge_erosion_pixels: usize,
     /// Radar band preset to map default values
     pub radar_band: RadarBand,
+    /// Method v2: stable water must also be dark on the later date (filtered dB at or below this
+    /// value). None (the default, method v1) keeps the v1 rule. See main.rs --method.
+    #[serde(default)]
+    pub active_water_max_db: Option<f32>,
 }
 
 impl FloodDetectionOptions {
@@ -74,6 +78,7 @@ impl FloodDetectionOptions {
                 otsu_bins: 256,
                 swath_edge_erosion_pixels: 3,
                 radar_band: RadarBand::LBand,
+                active_water_max_db: None,
             },
             RadarBand::SBand => Self {
                 min_change_db: -2.7,
@@ -85,6 +90,7 @@ impl FloodDetectionOptions {
                 otsu_bins: 256,
                 swath_edge_erosion_pixels: 3,
                 radar_band: RadarBand::SBand,
+                active_water_max_db: None,
             },
             RadarBand::CBand => Self {
                 min_change_db: -2.5,
@@ -96,6 +102,7 @@ impl FloodDetectionOptions {
                 otsu_bins: 256,
                 swath_edge_erosion_pixels: 3,
                 radar_band: RadarBand::CBand,
+                active_water_max_db: None,
             },
             RadarBand::XBand => Self {
                 min_change_db: -2.0,
@@ -107,6 +114,7 @@ impl FloodDetectionOptions {
                 otsu_bins: 256,
                 swath_edge_erosion_pixels: 3,
                 radar_band: RadarBand::XBand,
+                active_water_max_db: None,
             },
         }
     }
@@ -746,6 +754,25 @@ pub fn run_flood_detection_pipeline(
         &perm_water_mask,
     );
 
+    if let Some(cap) = opts.active_water_max_db {
+        // Method v2: stable water must also be dark on the later date. Checked against NASA OPERA
+        // DSWx-S1 and Sentinel-2 (scripts/dswx_check): L-band stable water that is brighter than
+        // this on the later date is mostly not water to either. New water (flood) is left alone:
+        // capping it too lowered flood-extent agreement with Sentinel-2 change. Runs after region
+        // growing, so the flood mask and Otsu are exactly as in v1.
+        let mut dropped = 0usize;
+        for (p, &a) in perm_water_mask.iter_mut().zip(active_db_filtered.iter()) {
+            if *p && !(a <= cap) {
+                *p = false;
+                dropped += 1;
+            }
+        }
+        info!(
+            "[FLOOD_PIPELINE] Method v2: stable water must be <= {:.1} dB on the later date; dropped {} px",
+            cap, dropped
+        );
+    }
+
     info!("[FLOOD_PIPELINE] Stage 6b: Morphological cleanup & size filtering...");
     crate::timing::lap("detect: region grow");
     let regions_count = morphological_cleanup(&mut flood_mask, opts.min_area_pixels);
@@ -1245,5 +1272,43 @@ mod speed_equivalence {
                 assert_eq!(erode_swath_boundary(&m, k), erode_by_passes(&m, k), "seed {seed} p {p} k {k}");
             }
         }
+    }
+
+    #[test]
+    fn test_method_v2_drops_bright_stable_water_only() {
+        // v2 (active_water_max_db) removes stable water that is not dark on the later date and
+        // leaves the flood (new water) mask exactly as in v1.
+        let (rows, cols) = (30, 30);
+        let land = Complex32::new(10.0, 0.0); // +10 dB
+        let mut baseline = Array2::<Complex32>::from_elem((rows, cols), land);
+        let mut active = baseline.clone();
+        for r in 2..10 {
+            for c in 2..10 {
+                baseline[[r, c]] = Complex32::new(0.045, 0.0); // -13.5 dB: under the -13 floor, over the -14 cap
+                active[[r, c]] = Complex32::new(0.045, 0.0);
+            }
+        }
+        for r in 2..10 {
+            for c in 18..26 {
+                baseline[[r, c]] = Complex32::new(0.02, 0.0); // -17 dB: water on both dates in v1 and v2
+                active[[r, c]] = Complex32::new(0.02, 0.0);
+            }
+        }
+        for r in 16..26 {
+            for c in 8..18 {
+                active[[r, c]] = Complex32::new(1.585, 0.0); // 8 dB drop, not dark: new water
+            }
+        }
+        let v1 = FloodDetectionOptions::for_band(RadarBand::LBand);
+        let mut v2 = v1.clone();
+        v2.active_water_max_db = Some(-14.0);
+        let (c1, _, s1) = run_flood_detection_pipeline(&active, Some(&baseline), None, None, &v1);
+        let (c2, _, s2) = run_flood_detection_pipeline(&active, Some(&baseline), None, None, &v2);
+        assert_eq!(c1[[5, 5]], 1, "v1 keeps -13.5 dB stable water");
+        assert_eq!(c2[[5, 5]], 0, "v2 drops -13.5 dB stable water");
+        assert_eq!((c1[[5, 21]], c2[[5, 21]]), (1, 1), "-17 dB stable water stays in both");
+        assert!(s1.total_flooded_pixels > 0);
+        assert_eq!(s1.total_flooded_pixels, s2.total_flooded_pixels, "v2 must not change the flood mask");
+        assert_eq!(c1[[20, 12]], c2[[20, 12]]);
     }
 }

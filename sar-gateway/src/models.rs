@@ -34,6 +34,9 @@ pub struct ProcessRequest {
     pub permanent_water_thresh_db: Option<f32>,
     pub swath_edge_erosion: Option<usize>,
     pub polarization: Option<String>,
+    /// Detection method: "v2" (stable water must also be dark on the later date, L-band) or none for v1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
     /// Run again even if an identical finished run exists.
     #[serde(default)]
     pub force: bool,

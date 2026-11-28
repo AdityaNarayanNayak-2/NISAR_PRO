@@ -2,7 +2,7 @@
 // Labelled as agreement with optical labels on cloud-free pixels, never as accuracy.
 import { useEffect, useState } from 'react'
 import { useRunStore } from '../stores/useRunStore'
-import { loadReference, testsForRun, SERIES } from '../lib/validation'
+import { loadReference, testsForRun, SERIES, loadDswx, dswxForRun } from '../lib/validation'
 import { formatArea, formatNumber } from '../lib/units'
 import Icon from '../ui/Icon'
 
@@ -49,15 +49,48 @@ function Test({ t, ndwi, band }) {
   )
 }
 
+const DSWX_ROWS = [['L', 'NISAR L-band'], ['S', 'NISAR S-band'], ['C', 'Sentinel-1 (same engine)']]
+
+function Dswx({ d, band }) {
+  const any = d.rows[band] || d.rows.L
+  const scored = formatArea(any.scored_km2, null), s2 = formatArea(any.s2_scored_km2, null)
+  const mine = d.rows[band]
+  return (
+    <div className="sec">
+      <h3>Agreement with NASA OPERA DSWx-S1</h3>
+      <p className="note" style={{ marginTop: 0 }}>Water on 12 Sep 2026 against NASA's own Sentinel-1 water product. {d.caution}</p>
+      <table className="ctable vt" style={{ marginTop: 10 }}>
+        <thead><tr><th>Map</th><th>F1</th><th>IoU</th><th>Precision</th><th>Recall</th></tr></thead>
+        <tbody>
+          {DSWX_ROWS.filter(([k]) => d.rows[k]).map(([k, label]) => (
+            <tr key={k} className={k === band ? 'mine' : ''}>
+              <td>{label}{k === band && <span className="muted"> · this band</span>}</td>
+              <Score v={d.rows[k].f1} /><Score v={d.rows[k].iou} /><Score v={d.rows[k].precision} /><Score v={d.rows[k].recall} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="foot">
+        Scored on {scored.km2} ({scored.acres}). Recall is high and precision lower: NISAR Pro maps more water than DSWx-S1, mostly in low-lying cropland.
+        {mine && <> Where Sentinel-2 could see the ground ({s2.km2}, {s2.acres}, 13 Sep), it also saw water in {formatNumber(100 * mine.only_ours_s2_water_share)}% of the water only this map found; F1 against Sentinel-2 there is {mine.ours_f1_vs_s2.toFixed(3)} for this map and {mine.dswx_f1_vs_s2.toFixed(3)} for DSWx-S1.</>}
+        {' '}Reference: {d.reference}.
+      </div>
+    </div>
+  )
+}
+
 export default function Validation({ run }) {
   const rep = useRunStore((s) => s.reports[run.id])
   const [ref, setRef] = useState(null)
   const [ndwi, setNdwi] = useState('ndwi_0.0')
+  const [dswxRef, setDswxRef] = useState(null)
   useEffect(() => { let off = false; loadReference().then((d) => { if (!off) setRef(d || false) }); return () => { off = true } }, [])
+  useEffect(() => { let off = false; loadDswx().then((d) => { if (!off) setDswxRef(d || false) }); return () => { off = true } }, [])
   if (!rep || rep.status !== 'ok' || ref === null) return <div className="sec"><div className="skel" /><div className="skel" /></div>
   const r = rep.data
   const tests = testsForRun(ref, r)
-  if (!tests.length) {
+  const dswx = dswxForRun(dswxRef, r)
+  if (!tests.length && !dswx) {
     return (
       <div className="empty-state">
         <Icon name="check" size={24} />
@@ -66,9 +99,10 @@ export default function Validation({ run }) {
       </div>
     )
   }
-  const thresholds = Object.keys(tests[0].data.results || {})
+  const thresholds = tests.length ? Object.keys(tests[0].data.results || {}) : []
   return (
     <>
+      {tests.length > 0 && <>
       <div className="sec">
         <h3>Agreement with Sentinel-2</h3>
         <p className="note" style={{ marginTop: 0 }}>{ref.caution} Reference: {ref.reference}. Scores are from the study run of these scenes (common L/S grid), not recomputed for this run.</p>
@@ -84,6 +118,8 @@ export default function Validation({ run }) {
         {tests.map((t) => <Test key={t.key} t={t} ndwi={ndwi} band={r.band} />)}
         <div className="foot">F1 and IoU: 1 = same water as Sentinel-2. {formatNumber(Number(ndwi.replace('ndwi_', '')), 1) === '0.0' ? 'NDWI 0.0 is the main threshold of the study.' : ''}</div>
       </div>
+      </>}
+      {dswx && <Dswx d={dswx} band={r.band} />}
     </>
   )
 }

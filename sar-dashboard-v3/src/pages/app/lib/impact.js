@@ -15,10 +15,46 @@ function once(key, fn) {
   return cache.get(key)
 }
 
+// Offline copy: every answer that loaded is kept in this browser (localStorage). When the
+// network fails (no Wi-Fi at a venue), the last saved answer is used and marked `_savedAt`.
+const SAVE_PREFIX = 'nisar.impact.'
+const saveKey = (url, init) => SAVE_PREFIX + url + (init?.body ? `|${String(init.body)}` : '')
+
 async function getJson(url, init) {
-  const res = await fetch(url, init)
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json()
+  const key = saveKey(url, init)
+  let data
+  try {
+    const res = await fetch(url, init)
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    data = await res.json()
+  } catch (e) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || 'null')
+      if (saved?.data) return Object.assign(saved.data, { _savedAt: saved.at })
+    } catch { /* no saved copy */ }
+    throw e
+  }
+  // GET answers only (small); the large OpenStreetMap POST answers are not kept.
+  if (!init?.body) try { localStorage.setItem(key, JSON.stringify({ at: new Date().toISOString(), data })) } catch { /* storage full: skip */ }
+  return data
+}
+
+/** Saved-copy note for a result of getJson (null when it came live). */
+export const savedNote = (d) => (d?.saved ? `No internet: saved copy from ${d.saved.slice(0, 10)}` : null)
+
+/**
+ * Local runs that are the Bihar reference runs reuse the website demo files (facilities,
+ * buildings): same band, dates and flood extent as the demo run. Otherwise null.
+ */
+export async function demoTwinId(rep, site) {
+  if (!rep?.band || !rep.baselineDate || !rep.activeDate || rep.newWater?.km2 == null) return null
+  const id = `bihar-${rep.band.toLowerCase()}-${rep.baselineDate}-${rep.activeDate}`
+  try {
+    const res = await fetch(site(`/demo/runs/${id}/report.json`))
+    if (!res.ok) return null
+    const km2 = (await res.json())?.areas?.total_flood_km2
+    return typeof km2 === 'number' && Math.abs(km2 - rep.newWater.km2) < 0.01 ? id : null
+  } catch { return null }
 }
 
 export const FACILITY_KINDS = [
@@ -181,7 +217,7 @@ export function riverFlow(lat, lon, start, end) {
   return once(`river:${lat.toFixed(3)},${lon.toFixed(3)}:${start}:${end}`, async () => {
     const c = await mainRiverCell(lat, lon)
     const d = await getJson(`${FLOOD}?latitude=${c.lat}&longitude=${c.lon}&daily=river_discharge&start_date=${start}&end_date=${end}`)
-    return { cellLat: d.latitude, cellLon: d.longitude, km: c.km, days: (d.daily?.time || []).map((t, i) => ({ t, v: d.daily.river_discharge[i] })) }
+    return { saved: d._savedAt || null, cellLat: d.latitude, cellLon: d.longitude, km: c.km, days: (d.daily?.time || []).map((t, i) => ({ t, v: d.daily.river_discharge[i] })) }
   })
 }
 
@@ -191,7 +227,7 @@ export function riverForecast(lat, lon) {
     const c = await mainRiverCell(lat, lon)
     const d = await getJson(`${FLOOD}?latitude=${c.lat}&longitude=${c.lon}&daily=river_discharge,river_discharge_median,river_discharge_max&past_days=7&forecast_days=30`)
     const t = d.daily?.time || []
-    return t.map((x, i) => ({ t: x, v: d.daily.river_discharge[i], med: d.daily.river_discharge_median?.[i], max: d.daily.river_discharge_max?.[i] }))
+    return Object.assign(t.map((x, i) => ({ t: x, v: d.daily.river_discharge[i], med: d.daily.river_discharge_median?.[i], max: d.daily.river_discharge_max?.[i] })), { saved: d._savedAt || null })
   })
 }
 
@@ -200,7 +236,7 @@ export function rainPast(lat, lon, start, end) {
   const la = lat.toFixed(3), lo = lon.toFixed(3)
   return once(`rain:${la},${lo}:${start}:${end}`, async () => {
     const d = await getJson(`${ARCHIVE}?latitude=${la}&longitude=${lo}&daily=precipitation_sum&start_date=${start}&end_date=${end}&timezone=Asia%2FKolkata`)
-    return (d.daily?.time || []).map((t, i) => ({ t, v: d.daily.precipitation_sum[i] }))
+    return Object.assign((d.daily?.time || []).map((t, i) => ({ t, v: d.daily.precipitation_sum[i] })), { saved: d._savedAt || null })
   })
 }
 
@@ -209,7 +245,7 @@ export function rainForecast(lat, lon) {
   const la = lat.toFixed(3), lo = lon.toFixed(3)
   return once(`rainfc:${la},${lo}`, async () => {
     const d = await getJson(`${FORECAST}?latitude=${la}&longitude=${lo}&daily=precipitation_sum,precipitation_probability_max&forecast_days=7&timezone=auto`)
-    return (d.daily?.time || []).map((t, i) => ({ t, v: d.daily.precipitation_sum[i], p: d.daily.precipitation_probability_max?.[i] }))
+    return Object.assign((d.daily?.time || []).map((t, i) => ({ t, v: d.daily.precipitation_sum[i], p: d.daily.precipitation_probability_max?.[i] })), { saved: d._savedAt || null })
   })
 }
 

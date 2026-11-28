@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRunStore } from '../stores/useRunStore'
 import { useMapStore } from '../stores/useMapStore'
-import { facilitiesInFlood, riverFlow, rainPast, rainForecast, riverForecast, FACILITY_KINDS, NEAR_M, addDays } from '../lib/impact'
+import { facilitiesInFlood, riverFlow, rainPast, rainForecast, riverForecast, FACILITY_KINDS, NEAR_M, addDays, savedNote, demoTwinId } from '../lib/impact'
 import { placeLabel } from '../lib/places'
 import { formatNumber, formatShortDate, formatArea } from '../lib/units'
 import { mapHandle, freePadding } from '../map/mapHandle'
@@ -48,7 +48,7 @@ function save(name, text) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function Facilities({ run, mode, geo }) {
+function Facilities({ run, mode, geo, rep }) {
   const setFacilities = useMapStore((s) => s.setFacilities)
   const [all, setAll] = useState(false)
   const st = useAsync(async () => {
@@ -56,8 +56,16 @@ function Facilities({ run, mode, geo }) {
       const res = await fetch(site(`/demo/runs/${run.id}/facilities.json`))
       if (res.ok) return res.json()
     }
-    return facilitiesInFlood(run.id, geo.data)
-  }, `${run.id}:${mode}:${geo.status}`)
+    try {
+      return await facilitiesInFlood(run.id, geo.data)
+    } catch (e) {
+      // No internet: a Bihar reference run can use the copy shipped with the website demo.
+      const twin = await demoTwinId(rep, site)
+      const res = twin && await fetch(site(`/demo/runs/${twin}/facilities.json`))
+      if (res?.ok) return { ...(await res.json()), saved: 'website copy' }
+      throw e
+    }
+  }, `${run.id}:${mode}:${geo.status}:${rep ? 1 : 0}`)
   useEffect(() => {
     setFacilities(st.status === 'ok' ? st.data.items : null)
     return () => setFacilities(null)
@@ -73,6 +81,7 @@ function Facilities({ run, mode, geo }) {
         const list = all ? d.items : d.items.slice(0, 12)
         return (
           <>
+            {d.saved && <p className="muted">No internet: copy shipped with the website demo (same run).</p>}
             <div className="fac-tiles">
               {FACILITY_KINDS.map((k) => (
                 <div key={k.key} className="fac-tile">
@@ -109,6 +118,29 @@ function Facilities({ run, mode, geo }) {
           </>
         )
       })()}
+    </div>
+  )
+}
+
+/** Building footprints at the flood extent. Demo runs and the matching local Bihar reference runs (counted offline from Microsoft footprints). */
+function Buildings({ run, mode, rep }) {
+  const st = useAsync(async () => {
+    const id = mode === 'demo' ? run.id : await demoTwinId(rep, site)
+    if (!id) return null
+    const res = await fetch(site(`/demo/runs/${id}/buildings.json`))
+    return res.ok ? res.json() : null
+  }, `${run.id}:${mode}:${rep ? 1 : 0}`)
+  if (st.status !== 'ok' || !st.data) return null
+  const b = st.data
+  return (
+    <div className="sec">
+      <h3>Buildings at the water <span className="muted">Microsoft footprints</span></h3>
+      <div className="kv-pair">
+        <div><span>In flood extent</span><b className="num">{formatNumber(b.inside)}</b><small>{formatNumber(b.high)} high · {formatNumber(b.medium)} medium</small></div>
+        <div><span>Within 80 m</span><b className="num">{formatNumber(b.within_80m)}</b><small>incl. inside</small></div>
+        <div><span>Within 240 m</span><b className="num">{formatNumber(b.within_240m)}</b><small>incl. inside</small></div>
+      </div>
+      <div className="foot">Counted at each footprint's centre on the run's 80 m flood pixels, out of {formatNumber(b.scene)} footprints in the scene. Exposure, not damage: the water is radar-detected and not confirmed on the ground, and villages on raised land often sit just outside it. Footprints are machine-mapped from imagery and miss or add some buildings. {b.source}.</div>
     </div>
   )
 }
@@ -181,6 +213,17 @@ function River({ spot, from, to }) {
     const peak = st.data.days.reduce((m, d) => (d.v != null && (!m || d.v > m.v) ? d : m), null)
     if (a != null && b != null) read = { a, b, peak }
   }
+  // Did the later pass catch the peak? Satellites pass on fixed dates; the river peak rarely waits for them.
+  let catchLine = null
+  if (read && read.peak.v > 0) {
+    const gap = Math.round((Date.parse(to) - Date.parse(read.peak.t)) / 86400000)
+    const pct = Math.round((100 * read.b) / read.peak.v)
+    catchLine = Math.abs(gap) <= 1 || pct >= 90
+      ? `Pass 2 saw the river at ${pct}% of its highest flow in this window (peak ${formatShortDate(read.peak.t)}). The map is likely close to the largest extent.`
+      : gap > 0
+        ? `Pass 2 came ${gap} days after the river peak, at ${pct}% of peak flow. The flood was likely larger on ${formatShortDate(read.peak.t)} than this map shows.`
+        : `Pass 2 came ${-gap} days before the river peak, at ${pct}% of peak flow. Water likely kept rising after this map.`
+  }
   return (
     <div className="sec">
       <h3>River flow <span className="muted">GloFAS model</span></h3>
@@ -195,7 +238,9 @@ function River({ spot, from, to }) {
               <div><span>Peak, {formatShortDate(read.peak.t)}</span><b className="num">{formatNumber(read.peak.v)}</b><small>m³/s</small></div>
             </div>
           )}
+          {savedNote(st.data) && <p className="muted">{savedNote(st.data)}</p>}
           <DayChart days={st.data.days} unit="m³/s" markers={[{ t: from, label: 'pass 1' }, { t: to, label: 'pass 2' }]} />
+          {catchLine && <p className="note">{catchLine} <span className="muted">From modelled river flow, ±30 days around the passes.</span></p>}
           <div className="foot">Daily river discharge simulated by GloFAS v4 (Copernicus) on the largest river cell within about 11 km of the area ({st.data.cellLat?.toFixed(3)}, {st.data.cellLon?.toFixed(3)}, {formatNumber(st.data.km, 1)} km away). A model, not a gauge reading; an independent view of how high the river was on the pass dates. Data: Open-Meteo, CC BY 4.0.</div>
         </>
       )}
@@ -220,6 +265,7 @@ function Rain({ spot, from, to }) {
             <div><span>14 days before pass 1</span><b className="num">{formatNumber(before)}</b><small>mm</small></div>
             <div><span>Between the passes</span><b className="num">{formatNumber(between)}</b><small>mm</small></div>
           </div>
+          {savedNote(st.data) && <p className="muted">{savedNote(st.data)}</p>}
           <DayChart days={days} kind="bar" unit="mm" markers={[{ t: from, label: 'pass 1' }, { t: to, label: 'pass 2' }]} />
           <div className="foot">Daily rain from the ERA5 reanalysis (about 25 km cells), summed in local days. Bright bars: between the passes. Rain upstream can flood a place without local rain. Data: Open-Meteo, CC BY 4.0.</div>
         </>
@@ -232,6 +278,16 @@ function Outlook({ spot }) {
   const rain = useAsync(() => rainForecast(spot.lat, spot.lon), `${spot.lat},${spot.lon}`)
   const river = useAsync(() => riverForecast(spot.lat, spot.lon), `${spot.lat},${spot.lon}`)
   const today = new Date().toISOString().slice(0, 10)
+  // A saved forecast is old news: offline, say so instead of showing it.
+  const stale = (rain.status === 'ok' && rain.data.saved) || (river.status === 'ok' && river.data.saved)
+  if (stale) {
+    return (
+      <div className="sec">
+        <h3>Next days <span className="muted">forecast from today</span></h3>
+        <p className="muted">The forecast needs internet. Connect to see the next days.</p>
+      </div>
+    )
+  }
   let trend = null
   if (river.status === 'ok') {
     const now = river.data.find((d) => d.t === today)?.v
@@ -267,6 +323,27 @@ function Outlook({ spot }) {
   )
 }
 
+/** Loads river and rain for all five places once, so this browser keeps a copy for use without internet. */
+function SaveOffline({ spots, from, to }) {
+  const [state, setState] = useState(null)
+  const go = async () => {
+    setState('saving')
+    const jobs = spots.flatMap((s) => [riverFlow(s.lat, s.lon, addDays(from, -30), addDays(to, 30)), rainPast(s.lat, s.lon, addDays(from, -14), to)])
+    const res = await Promise.allSettled(jobs)
+    const live = res.filter((r) => r.status === 'fulfilled' && !r.value?.saved).length
+    setState(live === jobs.length ? 'done' : `partial:${live}/${jobs.length}`)
+  }
+  return (
+    <div className="save-offline" style={{ marginTop: 10 }}>
+      <button type="button" className="chip sm" onClick={go} disabled={state === 'saving'}>
+        {state === 'saving' ? 'Saving…' : 'Save river and rain for use without internet'}
+      </button>
+      {state === 'done' && <span className="muted"> Saved for all {spots.length} places in this browser.</span>}
+      {state?.startsWith('partial') && <span className="muted"> Only {state.split(':')[1]} loaded live; try again with internet.</span>}
+    </div>
+  )
+}
+
 export default function ImpactView({ run }) {
   const { mode, geo, top, places } = useRunAreas(run)
   const rep = useRunStore((s) => s.reports[run.id])
@@ -282,7 +359,8 @@ export default function ImpactView({ run }) {
       <div className="sec intro">
         <p>Free public data around this run: what sits next to the water, how high the river was and how much rain fell. Not NISAR measurements; each section names its source.</p>
       </div>
-      <Facilities run={run} mode={mode} geo={geo} />
+      <Facilities run={run} mode={mode} geo={geo} rep={rep?.data} />
+      <Buildings run={run} mode={mode} rep={rep?.data} />
       {spot && from && to && (
         <>
           <div className="sec">
@@ -298,6 +376,7 @@ export default function ImpactView({ run }) {
               })}
             </div>
             <div className="foot">River and rain below are for the centre of the chosen area (the five largest).</div>
+            <SaveOffline spots={spots} from={from} to={to} />
           </div>
           <River spot={spot} from={from} to={to} />
           <Rain spot={spot} from={from} to={to} />
